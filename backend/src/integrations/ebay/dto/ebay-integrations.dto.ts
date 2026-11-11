@@ -7,6 +7,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   ValidateNested,
 } from 'class-validator';
 
@@ -108,9 +109,53 @@ export class EbayBulkPublishJobDto {
   @IsUUID(undefined, { each: true })
   storeIds!: string[];
 
+  /** Optional policy selection for each destination store. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(10)
+  @ValidateNested({ each: true })
+  @Type(() => EbayBulkPublishStorePolicyDto)
+  storePolicies?: EbayBulkPublishStorePolicyDto[];
+
+  /** Optional shared profile names applied to every selected listing/store target. */
+  @IsOptional()
+  @IsString()
+  requestedFulfillmentPolicyName?: string;
+
+  @IsOptional()
+  @IsString()
+  requestedPaymentPolicyName?: string;
+
+  @IsOptional()
+  @IsString()
+  requestedReturnPolicyName?: string;
+
   @IsOptional()
   @IsString()
   idempotencyKey?: string;
+}
+
+export class EbayBulkPublishStorePolicyDto {
+  @IsUUID()
+  storeId!: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^EBAY_[A-Z]+(?:_[A-Z]+)*$/)
+  marketplaceId?: string;
+
+  @IsOptional()
+  @IsString()
+  requestedFulfillmentPolicyName?: string;
+
+  @IsOptional()
+  @IsString()
+  requestedPaymentPolicyName?: string;
+
+  @IsOptional()
+  @IsString()
+  requestedReturnPolicyName?: string;
 }
 
 export class EbayReconnectBodyDto {

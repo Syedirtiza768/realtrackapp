@@ -225,7 +225,7 @@ export default function DetailModal({ id, onClose, onPublish }: Props) {
 
                 <div className="flex flex-wrap items-center gap-2">
                   <Link
-                    to={`/catalog/products/${data.id}/publish/ebay`}
+                    to={`/auto-parts/catalog/products/${data.id}/publish/ebay`}
                     className="text-xs font-medium text-[#E53238] hover:text-[#ff6b6f] underline-offset-2 hover:underline"
                   >
                     Publish to eBay (multi-store wizard)

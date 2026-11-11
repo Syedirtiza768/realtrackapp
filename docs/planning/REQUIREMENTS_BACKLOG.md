@@ -1,6 +1,6 @@
 # Requirements Backlog
 
-> **Note**: No formal requirements backlog currently exists for RealTrackApp. Feature requests are tracked ad-hoc via the codebase, git history, and the CHANGELOG.
+> **Note**: No formal requirements backlog currently exists for Omni Core. Feature requests are tracked ad-hoc via the codebase, git history, and the CHANGELOG.
 
 ## Current Prioritization Sources
 
@@ -22,7 +22,7 @@ When a new feature request or requirement is identified, it should be:
 ## Open Questions (Needs Decision)
 
 - Should non-eBay channels (Shopify/Amazon/Walmart) be completed or removed?
-- Should the project standardize on "RealTrackApp" or "ListingPro" branding?
+- User-facing branding is standardized on "Omni Core"; internal identifiers remain unchanged for compatibility.
 - Should JWT token revocation be implemented via blacklist or refresh rotation?
 - Should PostgreSQL partitioning be prioritized for high-volume tables?
 

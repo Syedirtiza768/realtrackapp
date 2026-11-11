@@ -53,7 +53,19 @@ export class StorageController {
     '.jpg',
     '.jpeg',
     '.gif',
+    '.bmp',
     '.heic',
+    '.avif',
+  ];
+  /** Original image extensions used when an optional WebP source is absent. */
+  private static readonly WEBP_FALLBACK_EXTS = [
+    '.png',
+    '.jpg',
+    '.jpeg',
+    '.gif',
+    '.bmp',
+    '.heic',
+    '.avif',
   ];
   /** Max concurrent on-demand sharp generations (protects CPU on t3.medium). */
   private static readonly MAX_VARIANT_GEN = 4;
@@ -427,6 +439,18 @@ export class StorageController {
       throw new NotFoundException('Missing S3 key');
     }
 
+    // Direct callers may still request the stored .jpg/.png URL. Redirect
+    // those requests to the sibling WebP object when it exists so the
+    // response URL and cache key match the representation being served.
+    const preferredKey = this.preferredWebpKey(s3Key);
+    if (
+      preferredKey !== s3Key &&
+      (await this.storageService.objectExists(preferredKey))
+    ) {
+      this.redirectToKey(preferredKey, res);
+      return;
+    }
+
     try {
       await this.streamObject(s3Key, res);
       return;
@@ -436,6 +460,16 @@ export class StorageController {
       if (!isMissing) {
         this.logger.warn(`S3 serve failed for key=${s3Key}: ${err?.message}`);
         throw new NotFoundException(`Image not found: ${s3Key}`);
+      }
+    }
+
+    // A WebP source is preferred but optional. If it is missing, redirect to
+    // the first available original sibling instead of returning a broken
+    // image or streaming a different representation under the .webp URL.
+    for (const fallbackKey of this.webpFallbackKeys(s3Key)) {
+      if (await this.storageService.objectExists(fallbackKey)) {
+        this.redirectToKey(fallbackKey, res);
+        return;
       }
     }
 
@@ -456,6 +490,115 @@ export class StorageController {
     }
 
     throw new NotFoundException(`Image not found: ${s3Key}`);
+  }
+
+  /**
+   * Public proxy for NAPA catalog images. The numeric ID is the only caller-
+   * controlled input; host, path, format, and size are fixed or allowlisted.
+   */
+  @Get('napa-image/:imageId')
+  @Public()
+  @SkipThrottle({ short: true, medium: true, long: true })
+  @HttpCode(HttpStatus.OK)
+  async serveNapaImage(
+    @Param('imageId') imageId: string,
+    @Query('preset') requestedPreset: string | undefined,
+    @Res() res: Response,
+  ) {
+    if (!/^\d{1,16}$/.test(imageId)) {
+      throw new NotFoundException('NAPA image not found');
+    }
+
+    const allowedPresets = new Set([
+      'webproof',
+      'webprooflarge',
+      'webproofxlarge',
+    ]);
+    const preset =
+      requestedPreset && allowedPresets.has(requestedPreset)
+        ? requestedPreset
+        : 'webprooflarge';
+    const imageUrl = new URL(
+      `https://media.napaonline.com/is/image/GenuinePartsCompany/${imageId}/`,
+    );
+    imageUrl.searchParams.set('format', 'webp');
+    imageUrl.searchParams.set('preset', preset);
+
+    try {
+      const upstream = await fetch(imageUrl, {
+        redirect: 'error',
+        signal: AbortSignal.timeout(15_000),
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; OmniCore-image-proxy/1.0)',
+          Accept: 'image/webp,image/*;q=0.8',
+        },
+      });
+      if (!upstream.ok) {
+        throw new NotFoundException('NAPA image unavailable');
+      }
+
+      const contentType = (upstream.headers.get('content-type') ?? '')
+        .split(';', 1)[0]
+        .trim()
+        .toLowerCase();
+      if (!['image/webp', 'image/jpeg', 'image/png'].includes(contentType)) {
+        throw new NotFoundException('NAPA image unavailable');
+      }
+
+      const contentLength = Number(upstream.headers.get('content-length') ?? 0);
+      if (contentLength > 8 * 1024 * 1024) {
+        throw new NotFoundException('NAPA image is too large');
+      }
+
+      const image = Buffer.from(await upstream.arrayBuffer());
+      if (image.length === 0 || image.length > 8 * 1024 * 1024) {
+        throw new NotFoundException('NAPA image unavailable');
+      }
+
+      res.set({
+        'Content-Type': contentType,
+        'Content-Length': String(image.length),
+        'Cache-Control': 'public, max-age=31536000, immutable',
+        'Access-Control-Allow-Origin': '*',
+        'X-Content-Type-Options': 'nosniff',
+      });
+      return res.status(HttpStatus.OK).send(image);
+    } catch (error) {
+      if (error instanceof NotFoundException) throw error;
+      this.logger.warn(`NAPA image fetch failed for id=${imageId}`);
+      throw new NotFoundException('NAPA image unavailable');
+    }
+  }
+
+  private preferredWebpKey(s3Key: string): string {
+    if (
+      StorageController.VARIANT_RE.test(s3Key) ||
+      /\.webp$/i.test(s3Key) ||
+      !/\.(?:jpe?g|png|gif|bmp|heic|avif)$/i.test(s3Key)
+    ) {
+      return s3Key;
+    }
+    return s3Key.replace(/\.[^./]+$/i, '.webp');
+  }
+
+  private webpFallbackKeys(s3Key: string): string[] {
+    if (!/\.webp$/i.test(s3Key) || StorageController.VARIANT_RE.test(s3Key)) {
+      return [];
+    }
+
+    const base = s3Key.slice(0, -'.webp'.length);
+    return StorageController.WEBP_FALLBACK_EXTS.map((ext) => base + ext);
+  }
+
+  private redirectToKey(s3Key: string, res: Response): void {
+    const encodedKey = s3Key
+      .split('/')
+      .map((segment) => encodeURIComponent(segment))
+      .join('/');
+    res.redirect(
+      HttpStatus.TEMPORARY_REDIRECT,
+      `/api/storage/serve/${encodedKey}`,
+    );
   }
 
   /**

@@ -21,6 +21,19 @@ export interface OpenAiChatRequest {
   maxTokens?: number;
   /** Whether to request JSON mode */
   jsonMode?: boolean;
+  /** Enable OpenRouter's cited web-search server tool for grounded lookups. */
+  webSearch?: boolean;
+  /** Per-request web-search limits; omit to use the shared defaults. */
+  webSearchOptions?: {
+    engine?: 'exa' | 'auto';
+    maxResults?: number;
+    maxUses?: number;
+    maxTotalResults?: number;
+    searchContextSize?: 'low' | 'medium' | 'high';
+    allowedDomains?: string[];
+  };
+  /** Cap reasoning on evidence-extraction calls that do not need long analysis. */
+  reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
   /** Optional metadata for logging */
   metadata?: Record<string, unknown>;
   /** Lane label for per-lane session cost tracking */
@@ -51,6 +64,16 @@ export interface OpenAiChatResponse {
   latencyMs: number;
   /** Estimated cost in USD */
   estimatedCostUsd: number;
+  /** Cited web sources returned when web search was enabled. */
+  citations?: OpenAiWebCitation[];
+  /** Number of server-side web searches reported by the provider. */
+  webSearchRequests?: number;
+}
+
+export interface OpenAiWebCitation {
+  url: string;
+  title?: string;
+  content?: string;
 }
 
 export interface OpenAiEmbeddingResponse {
@@ -129,12 +152,18 @@ export const OPENAI_PRICING: Record<string, { input: number; output: number }> =
   {
     // Production enrichment lanes (OpenRouter catalog pricing)
     'openai/gpt-4.1-mini': { input: 0.4, output: 1.6 },
+    'openai/gpt-6-luna': { input: 0.1, output: 0.5 },
+    // OpenRouter GPT-5.6 Luna used by the B&I image intake pilot.
+    'openai/gpt-5.6-luna': { input: 0.2, output: 1.2 },
+    'openai/gpt-5.6-luna-20260709': { input: 0.2, output: 1.2 },
     'google/gemini-2.5-flash': { input: 0.3, output: 2.5 },
     // Title/part verification lane — verify against OpenRouter's live rate
     // card before relying on this for real budgeting; 3.1 is preview-tier
     // and may not resolve on OpenRouter yet, hence the 2.5 fallback below.
     'google/gemini-3.1-flash-lite': { input: 0.25, output: 1.5 },
     'google/gemini-2.5-flash-lite': { input: 0.1, output: 0.4 },
+    // Fashion vision fallback (Jev-selected 2026-10-07)
+    'google/gemma-4-31b-it': { input: 0.09, output: 0.34 },
     'deepseek/deepseek-chat-v3-0324': { input: 0.27, output: 1.1 },
     'openai/gpt-4o-mini': { input: 0.15, output: 0.6 },
     // MiniMax M3 via OpenRouter (legacy default; vision is ~2x)

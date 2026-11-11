@@ -60,10 +60,12 @@ export class EbayCompatibilityReconciliationService {
     return { compatibleProducts: [] };
   }
 
-  normalize(payload?: EbayCompatibilityPayload | null): EbayCompatibilityPayload {
+  normalize(
+    payload?: EbayCompatibilityPayload | null,
+  ): EbayCompatibilityPayload {
     return {
       compatibleProducts: Array.isArray(payload?.compatibleProducts)
-        ? payload!.compatibleProducts
+        ? payload.compatibleProducts
         : [],
     };
   }
@@ -89,7 +91,9 @@ export class EbayCompatibilityReconciliationService {
     source: string,
   ): void {
     const expectedKeys = new Set(
-      expected.compatibleProducts.map((row) => this.rowKey(row)).filter(Boolean),
+      expected.compatibleProducts
+        .map((row) => this.rowKey(row))
+        .filter(Boolean),
     );
     const actualKeys = new Set(
       (actual?.compatibleProducts ?? [])
@@ -220,29 +224,30 @@ export class EbayCompatibilityReconciliationService {
       createdItem = true;
       await this.syncInventory(storeId, sku, payload);
 
-    const offerPayload: EbayOffer = {
-      sku,
-      marketplaceId: canonicalOffer.marketplaceId ?? offer.marketplaceId,
-      format: canonicalOffer.format ?? offer.format,
-      listingDescription:
-        canonicalOffer.listingDescription ?? offer.listingDescription,
-      availableQuantity:
-        canonicalOffer.availableQuantity ?? offer.availableQuantity,
-      categoryId: canonicalOffer.categoryId ?? offer.categoryId,
-      merchantLocationKey:
-        canonicalOffer.merchantLocationKey ?? offer.merchantLocationKey,
-      pricingSummary: canonicalOffer.pricingSummary ?? offer.pricingSummary,
-      listingPolicies,
-      tax: canonicalOffer.tax ?? offer.tax,
-      listingDuration: canonicalOffer.listingDuration ?? offer.listingDuration,
-      // eBay defaults this to true when omitted. The application owns the
-      // exact compatibility list, so catalog-derived fitment must be off.
-      includeCatalogProductDetails: false,
-      compatibility: expected,
-    };
-    if (canonicalOffer.listingPolicies) {
-      offerPayload.listingPolicies = canonicalOffer.listingPolicies;
-    }
+      const offerPayload: EbayOffer = {
+        sku,
+        marketplaceId: canonicalOffer.marketplaceId ?? offer.marketplaceId,
+        format: canonicalOffer.format ?? offer.format,
+        listingDescription:
+          canonicalOffer.listingDescription ?? offer.listingDescription,
+        availableQuantity:
+          canonicalOffer.availableQuantity ?? offer.availableQuantity,
+        categoryId: canonicalOffer.categoryId ?? offer.categoryId,
+        merchantLocationKey:
+          canonicalOffer.merchantLocationKey ?? offer.merchantLocationKey,
+        pricingSummary: canonicalOffer.pricingSummary ?? offer.pricingSummary,
+        listingPolicies,
+        tax: canonicalOffer.tax ?? offer.tax,
+        listingDuration:
+          canonicalOffer.listingDuration ?? offer.listingDuration,
+        // eBay defaults this to true when omitted. The application owns the
+        // exact compatibility list, so catalog-derived fitment must be off.
+        includeCatalogProductDetails: false,
+        compatibility: expected,
+      };
+      if (canonicalOffer.listingPolicies) {
+        offerPayload.listingPolicies = canonicalOffer.listingPolicies;
+      }
       const created = await this.inventoryApi.createOffer(storeId, {
         ...offerPayload,
       });
@@ -302,7 +307,9 @@ export class EbayCompatibilityReconciliationService {
       } catch (cleanupError: unknown) {
         this.logger.error(
           `Failed to clean up failed same-SKU recreation for ${sku}: ${
-            cleanupError instanceof Error ? cleanupError.message : String(cleanupError)
+            cleanupError instanceof Error
+              ? cleanupError.message
+              : String(cleanupError)
           }`,
         );
       }
@@ -383,10 +390,12 @@ export class EbayCompatibilityReconciliationService {
       categoryId: canonicalOffer.categoryId ?? sourceOffer.categoryId,
       merchantLocationKey:
         canonicalOffer.merchantLocationKey ?? sourceOffer.merchantLocationKey,
-      pricingSummary: canonicalOffer.pricingSummary ?? sourceOffer.pricingSummary,
+      pricingSummary:
+        canonicalOffer.pricingSummary ?? sourceOffer.pricingSummary,
       listingPolicies,
       tax: canonicalOffer.tax ?? sourceOffer.tax,
-      listingDuration: canonicalOffer.listingDuration ?? sourceOffer.listingDuration,
+      listingDuration:
+        canonicalOffer.listingDuration ?? sourceOffer.listingDuration,
       includeCatalogProductDetails: false,
       compatibility: expected,
     };
@@ -397,10 +406,17 @@ export class EbayCompatibilityReconciliationService {
     let createdFreshOfferId: string | null = null;
     let createdFreshItem = false;
     try {
-      await this.inventoryApi.createOrReplaceItem(storeId, freshSku, neutralItem);
+      await this.inventoryApi.createOrReplaceItem(
+        storeId,
+        freshSku,
+        neutralItem,
+      );
       createdFreshItem = true;
       await this.syncInventory(storeId, freshSku, expected);
-      const created = await this.inventoryApi.createOffer(storeId, offerPayload);
+      const created = await this.inventoryApi.createOffer(
+        storeId,
+        offerPayload,
+      );
       createdFreshOfferId = created.offerId;
       const published = await this.inventoryApi.publishOffer(
         storeId,
@@ -477,7 +493,9 @@ export class EbayCompatibilityReconciliationService {
           0,
         );
         const ownedOffer = createdFreshOfferId
-          ? freshOffers.offers.find((candidate) => candidate.offerId === createdFreshOfferId)
+          ? freshOffers.offers.find(
+              (candidate) => candidate.offerId === createdFreshOfferId,
+            )
           : null;
         if (ownedOffer?.offerId) {
           if (ownedOffer.status === 'PUBLISHED') {
@@ -491,7 +509,9 @@ export class EbayCompatibilityReconciliationService {
       } catch (cleanupErr: unknown) {
         this.logger.warn(
           `Fresh SKU cleanup failed for ${freshSku}: ${
-            cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr)
+            cleanupErr instanceof Error
+              ? cleanupErr.message
+              : String(cleanupErr)
           }`,
         );
       }
@@ -510,7 +530,9 @@ export class EbayCompatibilityReconciliationService {
       this.inventoryApi.getItem(storeId, sku),
       this.inventoryApi.getOffer(storeId, offerId),
     ]);
-    if (actualItem.product.title?.trim() !== expectedItem.product.title?.trim()) {
+    if (
+      actualItem.product.title?.trim() !== expectedItem.product.title?.trim()
+    ) {
       throw new BadRequestException(
         `Fresh-SKU title verification failed for ${sku}.`,
       );
@@ -629,7 +651,9 @@ export class EbayCompatibilityReconciliationService {
     item: EbayInventoryItem,
   ): EbayInventoryItem {
     const { packageWeightAndSize, ...base } = item;
-    const packagePayload: NonNullable<EbayInventoryItem['packageWeightAndSize']> = {};
+    const packagePayload: NonNullable<
+      EbayInventoryItem['packageWeightAndSize']
+    > = {};
     const weight = packageWeightAndSize?.weight;
     if (weight && Number.isFinite(weight.value) && weight.value > 0) {
       packagePayload.weight = weight;
@@ -648,7 +672,10 @@ export class EbayCompatibilityReconciliationService {
       : base;
   }
 
-  private async assertFreshSkuAvailable(storeId: string, sku: string): Promise<void> {
+  private async assertFreshSkuAvailable(
+    storeId: string,
+    sku: string,
+  ): Promise<void> {
     const [offers, itemExists] = await Promise.all([
       this.inventoryApi.getOffersBySku(storeId, sku, 100, 0),
       this.inventoryApi
@@ -660,10 +687,11 @@ export class EbayCompatibilityReconciliationService {
         }),
     ]);
     if (offers.total > 0 || offers.offers.length > 0 || itemExists) {
-      const offerIds = offers.offers
-        .map((offer) => offer.offerId)
-        .filter(Boolean)
-        .join(',') || 'none';
+      const offerIds =
+        offers.offers
+          .map((offer) => offer.offerId)
+          .filter(Boolean)
+          .join(',') || 'none';
       throw new BadRequestException(
         `Cannot recover with eBay SKU ${sku}: an inventory item or offer already exists; ` +
           `the replacement was not attempted (item=${itemExists}, offers=${offers.total}, offerIds=${offerIds}).`,
@@ -698,8 +726,14 @@ export class EbayCompatibilityReconciliationService {
   private neutralizeCatalogIdentifiers(
     item: EbayInventoryItem,
   ): EbayInventoryItem {
-    const { brand: _brand, mpn: _mpn, upc: _upc, ean: _ean, epid: _epid, ...productBase } =
-      item.product;
+    const {
+      brand: _brand,
+      mpn: _mpn,
+      upc: _upc,
+      ean: _ean,
+      epid: _epid,
+      ...productBase
+    } = item.product;
     const aspects = Object.fromEntries(
       Object.entries(item.product.aspects ?? {}).filter(([name]) => {
         const key = name.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -768,9 +802,9 @@ export class EbayCompatibilityReconciliationService {
     if (axios.isAxiosError(err)) return err.response?.status === 404;
     return Boolean(
       err &&
-        typeof err === 'object' &&
-        'response' in err &&
-        (err as { response?: { status?: number } }).response?.status === 404,
+      typeof err === 'object' &&
+      'response' in err &&
+      (err as { response?: { status?: number } }).response?.status === 404,
     );
   }
 }

@@ -14,7 +14,7 @@
 4. **Commit / triage the working tree.** A large number of modified files were uncommitted as of 2026-05-29; reconcile and commit in coherent chunks.
 5. **Raise test coverage on auth/RBAC and eBay publish/sync** — the riskiest, least-tested paths. Add e2e for login → permissioned route → 403/200.
 6. **Add permission checks to 4 unprotected settings routes** (`/settings/client`, `/settings/users`, `/settings/permissions`, `/settings/ai-routing`).
-7. **Standardize branding** (RealTrackApp vs ListingPro) across login, shell, DB.
+7. **Branding complete** — user-facing surfaces use Omni Core; internal identifiers remain unchanged.
 8. **Confirm DB hygiene** from prior audit: numeric price/quantity columns, missing FKs, channel-mapping table consolidation. Add migrations where needed.
 9. **Finish or clearly flag forgot-password** (add reset endpoint or hide UI).
 10. **Tenant isolation review**: ensure org-scoped queries are enforced.

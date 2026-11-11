@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
+import { CatalogProduct } from '../../../catalog-import/entities/catalog-product.entity.js';
 import { ConnectedEbayAccount } from '../entities/connected-ebay-account.entity.js';
 import { EbayAccountMarketplace } from '../entities/ebay-account-marketplace.entity.js';
 import { EbayMarketplaceConfigService } from './ebay-marketplace-config.service.js';
@@ -17,6 +18,7 @@ import {
 } from '../../../channels/ebay/ebay-listing-text.util.js';
 import { CatalogPublishResolverService } from './catalog-publish-resolver.service.js';
 import { VerticalsService } from '../../../verticals/verticals.service.js';
+import { isDedicatedFashionStore } from '../../../verticals/vertical.config.js';
 
 export type ValidationStatus = 'ready' | 'warnings' | 'blocked';
 
@@ -43,6 +45,8 @@ export class EbayListingValidationService {
     private readonly accountRepo: Repository<ConnectedEbayAccount>,
     @InjectRepository(EbayAccountMarketplace)
     private readonly mpRepo: Repository<EbayAccountMarketplace>,
+    @InjectRepository(CatalogProduct)
+    private readonly catalogRepo: Repository<CatalogProduct>,
   ) {}
 
   async validatePublish(params: {
@@ -71,6 +75,53 @@ export class EbayListingValidationService {
     if (!account) {
       errors.push('eBay account not found for organization');
       return { status: 'blocked', errors, warnings, requiredActions };
+    }
+
+    const catalogProduct = await this.catalogRepo.findOne({
+      where: [
+        { id: params.catalogProductId, organizationId: params.organizationId },
+        // Legacy automotive rows predate organization ownership.
+        { id: params.catalogProductId, organizationId: IsNull() },
+      ],
+    });
+    if (!catalogProduct) {
+      return {
+        status: 'blocked',
+        errors: ['Catalog product was deleted before publish could run.'],
+        warnings,
+        requiredActions: ['restore_or_recreate_catalog_product'],
+      };
+    }
+    const catalogStatus = catalogProduct.verticalValidationStatus
+      ?.trim()
+      .toLowerCase();
+    const reviewHoldErrors: string[] = [];
+    if (catalogProduct.manualReview) {
+      reviewHoldErrors.push(
+        'Catalog product requires manual review before it can be published.',
+      );
+    }
+    if (
+      catalogStatus &&
+      [
+        'needs_review',
+        'deleted',
+        'quarantined',
+        'blocked',
+        'rejected',
+      ].includes(catalogStatus)
+    ) {
+      reviewHoldErrors.push(
+        `Catalog product status "${catalogStatus}" prevents publishing.`,
+      );
+    }
+    if (reviewHoldErrors.length) {
+      return {
+        status: 'blocked',
+        errors: reviewHoldErrors,
+        warnings,
+        requiredActions: ['resolve_catalog_review_or_hold'],
+      };
     }
 
     if (account.connectionStatus === 'disabled') {
@@ -123,7 +174,10 @@ export class EbayListingValidationService {
 
     // Hydrate inventory location for native OAuth and SellerPundit accounts.
     // Native policy sync can return an empty location list for new B&I stores.
-    if (account.primaryStoreId) {
+    const isFashionStore = isDedicatedFashionStore(
+      account.primaryStore?.verticalConfig,
+    );
+    if (account.primaryStoreId && !isFashionStore) {
       try {
         const key = await this.inventoryApi.ensureMerchantLocation(
           account.primaryStoreId,
@@ -191,13 +245,29 @@ export class EbayListingValidationService {
         );
         requiredActions.push('map_return_policy');
       }
-      if (!mpRow.defaultInventoryLocationKey && !overrideValue('merchantLocationKey')) {
+      const locationKey =
+        overrideValue('merchantLocationKey') ||
+        mpRow.defaultInventoryLocationKey?.trim();
+      if (!locationKey) {
         errors.push(
           isSellerpundit
             ? 'Default inventory location is required — needed when SellerPundit publish falls back to direct eBay. Sync policies from eBay or map a merchant location key.'
             : 'Default inventory location is required — sync policies from eBay or map a merchant location key.',
         );
         requiredActions.push('map_inventory_location');
+      } else if (isFashionStore && account.connectionStatus === 'active') {
+        try {
+          await this.inventoryApi.ensureMerchantLocation(
+            account.primaryStoreId,
+            locationKey,
+          );
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          errors.push(
+            `Could not verify Fashion inventory location "${locationKey}": ${message}`,
+          );
+          requiredActions.push('map_inventory_location');
+        }
       }
     }
 

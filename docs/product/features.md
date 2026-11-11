@@ -21,7 +21,7 @@ Derived from the route table (`src/App.tsx`), backend modules, and the prior
 | AI listing generation | (in editor) | `listings` (`listing-generation.controller`) | Partial | OpenAI-backed; verify quality/limits |
 | Listings v2 (cached) | — | `listings` (`listings-v2.controller`) | Partial | Redis cache interceptor |
 | Export rules | — | `listings` (`export-rule.controller`) | Partial | Route on `/api/api/export-rules` ⚠️ |
-| Catalog manager / search | `/catalog`, `/sku/:id` | `catalog-import` | Implemented | Faceted automotive search |
+| Catalog manager / search | `/catalog`, `/sku/:id` | `catalog-import` | Implemented | Faceted automotive search; quick **Has Price** filter; every column header sortable (asc/desc) via `GET /listings/search?sort=<col>_<asc\|desc>` |
 | Catalog CSV/bulk import | `/catalog/import` | `catalog-import` | Implemented | BullMQ; memory-heavy |
 | Motors filters view | `/catalog/motors-filters` | `catalog-import` | Implemented | Motors-specific facets |
 | Compliance audits | (catalog) | `catalog-import` (`compliance.controller`) | Partial | `catalog.compliance` |
@@ -76,5 +76,5 @@ Detailed business/feature narrative (sales-oriented) is preserved in
 
 ## Branding note
 
-The app shell shows "RealTrackApp"; the login screen / DB name use "ListingPro".
+The app shell and login use "Omni Core"; the internal database name remains `listingpro`.
 Standardize before external use. (Tracked in known-gaps.)

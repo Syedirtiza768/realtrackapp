@@ -179,7 +179,7 @@ export default function ListingEditor() {
                 await createListing(body);
             }
             setSaveSuccess(true);
-            setTimeout(() => navigate('/catalog'), 1200);
+            setTimeout(() => navigate('/auto-parts/catalog'), 1200);
         } catch (err) {
             const status = err && typeof err === 'object' && 'status' in err ? (err as { status: number }).status : 0;
             if (status === 409) {
@@ -239,7 +239,7 @@ export default function ListingEditor() {
                 </div>
                 <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                     <button
-                        onClick={() => navigate(`/listings/${routeId}/history`)}
+                        onClick={() => navigate(`/auto-parts/listings/${routeId}/history`)}
                         className={`flex items-center gap-2 px-3 sm:px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-sm ${!isEditMode ? 'hidden' : ''}`}
                     >
                         <Eye size={16} /> History

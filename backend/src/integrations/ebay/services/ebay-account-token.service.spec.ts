@@ -306,6 +306,9 @@ describe('EbayAccountTokenService', () => {
       expect(url).toContain('client_id=test-id');
       expect(url).toContain('state=my-state');
       expect(url).toContain('sell.inventory');
+      expect(new URL(url).searchParams.get('redirect_uri')).toBe(
+        'https://app.example.com/callback',
+      );
     });
 
     it('uses sandbox host for sandbox environment', () => {

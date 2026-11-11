@@ -1,0 +1,232 @@
+{
+  "selection": "12 longest stored descriptions among broad FEBEST title/SKU/item-specifics matches; 11 unique SKUs; biased toward long HTML, not a random or representative quality sample",
+  "snapshot_sha256": "3f026af3bfbafe8f89fabbdc727409fa78bbfda2efc363c971bcdabf87f9f4f6",
+  "metrics": [
+    {
+      "id": "0b8166be-e6b1-48a1-8224-9cc8e3e5c53d",
+      "sku": "88430-182422X",
+      "title": "Anello di tenuta asse anteriore FEBEST 91-06 Toyota Corolla 88430-182422X",
+      "title_characters": 73,
+      "html_characters": 8664,
+      "visible_words": 445,
+      "intro_words": 40,
+      "html_fitment_rows": 96,
+      "image_count": 1,
+      "specific_keys": 10,
+      "status": "ended",
+      "structured_compatibility": {
+        "compatibleProducts": []
+      },
+      "synced_at": "2026-08-16T17:27:50.179+00:00"
+    },
+    {
+      "id": "13f9a8a7-2847-4e5a-a5be-9ac90bbf3723",
+      "sku": "3226-ESC",
+      "title": "FEBEST 1999-2013 Cadillac Escalade Pitman Arm 3226-ESC",
+      "title_characters": 54,
+      "html_characters": 6846,
+      "visible_words": 343,
+      "intro_words": 40,
+      "html_fitment_rows": 59,
+      "image_count": 2,
+      "specific_keys": 8,
+      "status": "active",
+      "structured_compatibility": {
+        "compatibleProducts": []
+      },
+      "synced_at": "2026-09-06T17:41:00.555+00:00"
+    },
+    {
+      "id": "5a8cd126-f7ca-4222-bc4a-8ad3f93061b3",
+      "sku": "ADSHB-A4IIIR-KIT",
+      "title": "FEBEST 2000-2017 Audi A4 Dust Cover Kit Amortisseur ADSHB-A4IIIR-KIT",
+      "title_characters": 68,
+      "html_characters": 6567,
+      "visible_words": 351,
+      "intro_words": 39,
+      "html_fitment_rows": 62,
+      "image_count": 1,
+      "specific_keys": 9,
+      "status": "out_of_stock",
+      "structured_compatibility": null,
+      "synced_at": "2026-08-23T03:21:24.121+00:00"
+    },
+    {
+      "id": "89ea8c2f-c7c8-4325-aa3b-6568f4754b43",
+      "sku": "88570-165",
+      "title": "FEBEST 2013-2016 Audi RS5 Retainer Clip 88570-165",
+      "title_characters": 49,
+      "html_characters": 7027,
+      "visible_words": 338,
+      "intro_words": 32,
+      "html_fitment_rows": 70,
+      "image_count": 1,
+      "specific_keys": 5,
+      "status": "ended",
+      "structured_compatibility": null,
+      "synced_at": "2026-08-16T17:27:50.179+00:00"
+    },
+    {
+      "id": "a4a42e0f-c969-49d7-a7db-1808e7cf9a43",
+      "sku": "88570-164",
+      "title": "FEBEST 2010-2014 Porsche Cayenne clip di fissaggio 88570-164",
+      "title_characters": 60,
+      "html_characters": 6723,
+      "visible_words": 335,
+      "intro_words": 31,
+      "html_fitment_rows": 61,
+      "image_count": 1,
+      "specific_keys": 9,
+      "status": "ended",
+      "structured_compatibility": null,
+      "synced_at": "2026-08-16T17:27:50.179+00:00"
+    },
+    {
+      "id": "b7f8a406-5e27-478b-8abd-f1cd649029cb",
+      "sku": "3220-001",
+      "title": "Febest 1999-2014 Cadillac Escalade Ball Joint Front Lower Arm 3220-001",
+      "title_characters": 70,
+      "html_characters": 7596,
+      "visible_words": 356,
+      "intro_words": 32,
+      "html_fitment_rows": 76,
+      "image_count": 2,
+      "specific_keys": 8,
+      "status": "active",
+      "structured_compatibility": {
+        "compatibleProducts": []
+      },
+      "synced_at": "2026-09-06T14:13:18.879+00:00"
+    },
+    {
+      "id": "be28b391-2d39-434d-885f-e88f8a03cd23",
+      "sku": "88430-182422X",
+      "title": "FEBEST 91-06 Toyota Corolla Front Axle Sealing Ring 88430-182422X",
+      "title_characters": 65,
+      "html_characters": 8482,
+      "visible_words": 420,
+      "intro_words": 36,
+      "html_fitment_rows": 96,
+      "image_count": 1,
+      "specific_keys": 6,
+      "status": "active",
+      "structured_compatibility": {
+        "compatibleProducts": []
+      },
+      "synced_at": "2026-09-13T03:33:29.882+00:00"
+    },
+    {
+      "id": "c7eaea3d-107c-4b85-b075-b1c906d18385",
+      "sku": "88570-105",
+      "title": "FEBEST 1971-1973 Toyota Carina Retainer Clip 88570-105",
+      "title_characters": 54,
+      "html_characters": 7287,
+      "visible_words": 399,
+      "intro_words": 44,
+      "html_fitment_rows": 64,
+      "image_count": 1,
+      "specific_keys": 9,
+      "status": "ended",
+      "structured_compatibility": null,
+      "synced_at": "2026-08-16T17:27:50.179+00:00"
+    },
+    {
+      "id": "d5a89475-e266-4c0e-8e61-d5a598424705",
+      "sku": "95GAY-33430707C",
+      "title": "Guarnizione olio albero motore FEBEST 2005-2011 VOLVO V50 95GAY-33430707C",
+      "title_characters": 73,
+      "html_characters": 7612,
+      "visible_words": 387,
+      "intro_words": 36,
+      "html_fitment_rows": 78,
+      "image_count": 1,
+      "specific_keys": 10,
+      "status": "ended",
+      "structured_compatibility": null,
+      "synced_at": "2026-08-16T17:27:50.179+00:00"
+    },
+    {
+      "id": "ed5a95f2-4c39-4271-859a-49f92e1370bc",
+      "sku": "2385B-001",
+      "title": "FEBEST 2003-2017 Porsche Cayenne Bullone ruota 2385B-001",
+      "title_characters": 56,
+      "html_characters": 7132,
+      "visible_words": 342,
+      "intro_words": 36,
+      "html_fitment_rows": 63,
+      "image_count": 1,
+      "specific_keys": 10,
+      "status": "active",
+      "structured_compatibility": null,
+      "synced_at": "2026-09-06T17:40:48.934+00:00"
+    },
+    {
+      "id": "eee9755c-87af-4de9-9963-49414d689102",
+      "sku": "2074-FLAVF-KIT",
+      "title": "FEBEST 2007-2012 Dodge Caliber Brake Caliper Bolt 2074-FLAVF-KIT",
+      "title_characters": 64,
+      "html_characters": 6477,
+      "visible_words": 326,
+      "intro_words": 44,
+      "html_fitment_rows": 52,
+      "image_count": 2,
+      "specific_keys": 11,
+      "status": "ended",
+      "structured_compatibility": null,
+      "synced_at": "2026-08-16T17:27:50.179+00:00"
+    },
+    {
+      "id": "f8322e79-a6c7-42a3-be1b-0953a2e8cd60",
+      "sku": "01640-008",
+      "title": "Bobina accensione FEBEST 2005-2020 Toyota Yaris 01640-008",
+      "title_characters": 57,
+      "html_characters": 6816,
+      "visible_words": 338,
+      "intro_words": 38,
+      "html_fitment_rows": 61,
+      "image_count": 1,
+      "specific_keys": 10,
+      "status": "out_of_stock",
+      "structured_compatibility": null,
+      "synced_at": "2026-09-06T17:40:39.711+00:00"
+    }
+  ],
+  "image_checks": [
+    {
+      "id": "13f9a8a7-2847-4e5a-a5be-9ac90bbf3723",
+      "sku": "3226-ESC",
+      "url": "https://i.ebayimg.com/00/s/NDAwWDQwOQ==/z/KfIAAeSwuMVqAZBq/$_1.JPG?set_id=8800005007",
+      "http_status": 200,
+      "mime": "image/jpeg",
+      "dimensions": [
+        400,
+        391
+      ],
+      "bytes": 40844
+    },
+    {
+      "id": "b7f8a406-5e27-478b-8abd-f1cd649029cb",
+      "sku": "3220-001",
+      "url": "https://i.ebayimg.com/00/s/NDAwWDUzOA==/z/6XMAAeSwYIpqHIfx/$_1.JPG?set_id=8800005007",
+      "http_status": 200,
+      "mime": "image/jpeg",
+      "dimensions": [
+        400,
+        298
+      ],
+      "bytes": 10794
+    },
+    {
+      "id": "be28b391-2d39-434d-885f-e88f8a03cd23",
+      "sku": "88430-182422X",
+      "url": "https://i.ebayimg.com/00/s/MTYwMFgxNjAw/z/cMUAAeSw9yVp4K~n/$_1.JPG?set_id=8800005007",
+      "http_status": 200,
+      "mime": "image/jpeg",
+      "dimensions": [
+        400,
+        400
+      ],
+      "bytes": 25674
+    }
+  ]
+}

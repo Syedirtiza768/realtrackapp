@@ -1,6 +1,9 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { User } from '../auth/entities/user.entity.js';
-import { CatalogWorkspaceService } from './catalog-workspace.service.js';
+import {
+  CatalogWorkspaceService,
+  resolvePublicationStatus,
+} from './catalog-workspace.service.js';
 
 describe('CatalogWorkspaceService', () => {
   const user = { id: 'user-1' } as User;
@@ -47,6 +50,8 @@ describe('CatalogWorkspaceService', () => {
           .fn()
           .mockResolvedValue(options?.manageAllTeams ?? false),
       } as never,
+      {} as never,
+      {} as never,
       {} as never,
       {} as never,
     );
@@ -131,4 +136,63 @@ describe('CatalogWorkspaceService', () => {
       expect(productRepo.save).not.toHaveBeenCalled();
     },
   );
+
+  it('marks catalog rows published from a live channel, ebay item id, or listing record', () => {
+    expect(
+      resolvePublicationStatus({
+        verticalValidationStatus: 'approved',
+        manualReview: false,
+        ebayItemId: null,
+        publications: [{ listingStatus: 'published' }],
+      }),
+    ).toBe('published');
+    expect(
+      resolvePublicationStatus({
+        verticalValidationStatus: 'needs_review',
+        manualReview: false,
+        ebayItemId: '128080630052',
+        publications: [],
+      }),
+    ).toBe('published');
+    expect(
+      resolvePublicationStatus({
+        verticalValidationStatus: 'approved',
+        manualReview: false,
+        ebayItemId: null,
+        publications: [],
+      }),
+    ).toBe('unpublished');
+    expect(
+      resolvePublicationStatus({
+        verticalValidationStatus: 'quarantined',
+        manualReview: false,
+        ebayItemId: '128080630052',
+        publications: [{ listingStatus: 'published' }],
+      }),
+    ).toBe('blocked');
+  });
+
+  it('treats ebay item ids as published in catalog status SQL', () => {
+    const { service } = makeService({ manageAllTeams: true });
+    const sql = (
+      service as unknown as {
+        publishedSql: (scope: {
+          organizationId: string;
+          accessibleStoreIds?: string[];
+        }) => string;
+      }
+    ).publishedSql({ organizationId: 'org-2' });
+    expect(sql).toContain('p.ebay_item_id IS NOT NULL');
+    expect(sql).toContain('pub.vertical is null');
+    expect(sql).toContain('lr."ebayListingId" is not null');
+    const emptyStoreSql = (
+      service as unknown as {
+        publishedSql: (scope: {
+          organizationId: string;
+          accessibleStoreIds?: string[];
+        }) => string;
+      }
+    ).publishedSql({ organizationId: 'org-2', accessibleStoreIds: [] });
+    expect(emptyStoreSql).not.toContain('1 = 0');
+  });
 });

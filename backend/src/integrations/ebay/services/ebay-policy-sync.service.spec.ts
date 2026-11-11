@@ -41,10 +41,22 @@ describe('EbayPolicySyncService', () => {
   };
   let inventoryApi: { ensureMerchantLocation: jest.Mock };
   let ebayAuth: { getAccessToken: jest.Mock; getApiBaseUrlForStore: jest.Mock };
+  let trx: { delete: jest.Mock; create: jest.Mock; save: jest.Mock };
+  let transaction: jest.Mock;
 
   beforeEach(() => {
     accountRepo = createRepo<ConnectedEbayAccount>();
     policyRepo = createRepo<EbayBusinessPolicy>();
+    // Policies are replaced atomically via policyRepo.manager.transaction.
+    trx = {
+      delete: jest.fn().mockResolvedValue(undefined),
+      create: jest.fn((_entity: unknown, data: object) => ({ ...data })),
+      save: jest.fn((row: object) => Promise.resolve(row)),
+    };
+    transaction = jest.fn((work: (manager: typeof trx) => Promise<unknown>) =>
+      work(trx),
+    );
+    (policyRepo as unknown as { manager: unknown }).manager = { transaction };
     mpRepo = createRepo<EbayAccountMarketplace>();
     tokens = { getValidAccessToken: jest.fn().mockResolvedValue('token') };
     sellAccount = {
@@ -124,10 +136,24 @@ describe('EbayPolicySyncService', () => {
       });
 
       const result = await svc.syncPolicies('acct-1', 'org-1');
-      expect(result).toBeDefined();
+      expect(result).toMatchObject({ ok: true, synced: 3 });
+      expect(transaction).toHaveBeenCalledTimes(1);
+      expect(trx.delete).toHaveBeenCalledWith(expect.anything(), {
+        ebayAccountId: 'acct-1',
+        marketplaceId: 'EBAY_US',
+      });
+      expect(trx.save).toHaveBeenCalledTimes(3);
+      expect(mpRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          marketplaceId: 'EBAY_US',
+          defaultFulfillmentPolicyId: 'fp-1',
+          defaultPaymentPolicyId: 'pp-1',
+          defaultReturnPolicyId: 'rp-1',
+        }),
+      );
     });
 
-    it('handles policy fetch failure gracefully', async () => {
+    it('rethrows a policy fetch failure without replacing stored policies', async () => {
       accountRepo.findOne = jest.fn().mockResolvedValue({
         id: 'acct-1',
         organizationId: 'org-1',
@@ -137,11 +163,17 @@ describe('EbayPolicySyncService', () => {
       mpRepo.find = jest
         .fn()
         .mockResolvedValue([{ marketplaceId: 'EBAY_US', enabled: true }]);
-      ebayAuth.getAccessToken.mockRejectedValue(new Error('token expired'));
+      sellAccount.listFulfillmentPolicies.mockRejectedValue(
+        new Error('token expired'),
+      );
 
-      // syncPolicies catches errors internally and returns error result
-      const result = await svc.syncPolicies('acct-1', 'org-1');
-      expect(result).toBeDefined();
+      // The API fetch runs before the delete+insert transaction, so a failed
+      // fetch must leave the existing policy rows untouched.
+      await expect(svc.syncPolicies('acct-1', 'org-1')).rejects.toThrow(
+        'token expired',
+      );
+      expect(transaction).not.toHaveBeenCalled();
+      expect(mpRepo.save).not.toHaveBeenCalled();
     });
   });
 });

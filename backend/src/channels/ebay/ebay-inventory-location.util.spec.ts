@@ -110,11 +110,66 @@ describe('ebay-inventory-location.util', () => {
     expect(key).toBe('AE_Dubai');
   });
 
-  it('honors explicit key hint when present', () => {
+  it('normalizes the legacy default key to AE_Dubai', () => {
+    const key = resolvePreferredMerchantLocationKey(
+      mockConfig() as never,
+      { locationKey: 'default', config: {} },
+      'default',
+    );
+    expect(key).toBe('AE_Dubai');
+  });
+
+  it('normalizes a persisted USA default to AE_Dubai', () => {
+    const key = resolvePreferredMerchantLocationKey(
+      mockConfig() as never,
+      { locationKey: 'USA', config: {} },
+      'USA',
+    );
+    expect(key).toBe('AE_Dubai');
+  });
+
+  it('keeps AE_Dubai as the absolute fallback for a legacy value', () => {
+    const key = resolvePreferredMerchantLocationKey(
+      mockConfig({
+        EBAY_DEFAULT_MERCHANT_LOCATION_KEY: 'AE_AbuDhabi',
+      }) as never,
+      { locationKey: 'warehouse-1', config: {} },
+      'USA',
+    );
+    expect(key).toBe('AE_Dubai');
+  });
+
+  it('ignores a default key hint when selecting an existing location', () => {
     const key = pickPreferredInventoryLocationKey(
       [{ merchantLocationKey: 'AE_Dubai' }, { merchantLocationKey: 'default' }],
       'default',
     );
-    expect(key).toBe('default');
+    expect(key).toBe('AE_Dubai');
+  });
+
+  it('never selects a US location when no UAE location exists', () => {
+    const key = pickPreferredInventoryLocationKey([
+      {
+        merchantLocationKey: 'USA',
+        location: {
+          address: { city: 'Houston', country: 'US', postalCode: '77001' },
+        },
+      },
+      {
+        merchantLocationKey: 'US_77001',
+        location: { address: { country: 'US', postalCode: '77001' } },
+      },
+    ]);
+    expect(key).toBeUndefined();
+  });
+
+  it('never selects a key named AE_Dubai when its address is US', () => {
+    const key = pickPreferredInventoryLocationKey([
+      {
+        merchantLocationKey: 'AE_Dubai',
+        location: { address: { city: 'Houston', country: 'US' } },
+      },
+    ]);
+    expect(key).toBeUndefined();
   });
 });

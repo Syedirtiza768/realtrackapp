@@ -89,24 +89,39 @@ const PERMANENT_MARKERS = [
   'is not defined',
 ];
 
-/** UI-facing bucket for a failed listing's `enrichmentLastFailureReason`. */
-export type FailureUiClass = 'code_bug' | 'needs_data' | 'system';
+/** UI-facing bucket for why an enrichment failure needs operator attention. */
+export type FailureUiClass =
+  | 'code_bug'
+  | 'needs_data'
+  | 'needs_review'
+  | 'system';
 
 /**
  * Markers within a `permanent_*`/`client_error_*` reason string that mean
- * "the submitted data was incomplete/invalid," not "the code broke." Lets
+ * "the submitted data was incomplete/invalid," not "the code broke." HTTP
+ * status markers alone are intentionally excluded: a 400 can also mean that
+ * uploaded photos failed to verify the entered part number. Lets
  * the inventory UI tell ops "add the missing photo" apart from "file an
  * engineering ticket" without a human reading the raw reason string.
  */
 const DATA_GAP_REASON_MARKERS = [
-  'client_error_400',
-  'client_error_422',
   'missing_required',
   'no_images',
   'listing_has_no_sku',
+  'listing has no oem/part number',
+  'partnumber is required',
   'cannot_enrich',
   'validation_failed',
   'cannot_exceed',
+  'upload at least two clear part photos',
+  'photos must include both a label/part-number close-up and an overall part shot',
+  'add the missing photo type',
+];
+
+const PHOTO_IDENTITY_REVIEW_MARKERS = [
+  'photos did not confirm this part number',
+  'photo label text does not confirm the supplied part number',
+  'part number could not be verified from photos',
 ];
 
 /**
@@ -119,8 +134,10 @@ const DATA_GAP_REASON_MARKERS = [
  */
 export function classifyFailureForUi(
   reason: string | null | undefined,
+  imageCount?: number,
 ): FailureUiClass | null {
   if (!reason) return null;
+  const normalizedReason = reason.toLowerCase();
   if (
     reason.startsWith('permanent_cannot_read_propert') ||
     reason.startsWith('permanent_is_not_a_function') ||
@@ -128,7 +145,18 @@ export function classifyFailureForUi(
   ) {
     return 'code_bug';
   }
-  if (DATA_GAP_REASON_MARKERS.some((marker) => reason.includes(marker))) {
+  if (
+    PHOTO_IDENTITY_REVIEW_MARKERS.some((marker) =>
+      normalizedReason.includes(marker),
+    )
+  ) {
+    return imageCount !== undefined && imageCount < 2
+      ? 'needs_data'
+      : 'needs_review';
+  }
+  if (
+    DATA_GAP_REASON_MARKERS.some((marker) => normalizedReason.includes(marker))
+  ) {
     return 'needs_data';
   }
   return 'system';
@@ -145,6 +173,13 @@ export class EnrichmentRetryService {
     private readonly inventoryQueue: Queue,
   ) {}
 
+  getFailureUiClass(
+    reason: string | null | undefined,
+    imageCount?: number,
+  ): FailureUiClass | null {
+    return classifyFailureForUi(reason, imageCount);
+  }
+
   /**
    * Classify an enrichment error as transient (retriable) or permanent.
    *
@@ -159,6 +194,15 @@ export class EnrichmentRetryService {
     const normalizedMessage = rawMessage.toLowerCase();
 
     const httpStatus = this.extractHttpStatus(err);
+
+    // Billing failures require funding/configuration, not repeated AI spend.
+    if (httpStatus === 402 || /^402\b/.test(rawMessage) || /insufficient credits|requires more credits/i.test(rawMessage)) {
+      return {
+        classification: 'permanent',
+        reason: `provider_billing_402: ${rawMessage.slice(0, 200)}`,
+        originalError: rawMessage,
+      };
+    }
 
     // HTTP 429 is always transient (rate limit)
     if (httpStatus === 429) {

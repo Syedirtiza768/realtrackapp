@@ -38,6 +38,7 @@ import {
   UpdateFashionDraftDto,
 } from './fashion.dto.js';
 import { VerticalsService } from './verticals.service.js';
+import { IMAGE_UPLOAD_MULTER_OPTIONS } from '../storage/upload-limits.js';
 import { FashionListingsService } from './fashion-listings.service.js';
 import { FashionUsersService } from './fashion-users.service.js';
 import { FashionImageAnalysisService } from './fashion-image-analysis.service.js';
@@ -210,13 +211,14 @@ export class FashionController {
   @HttpCode(HttpStatus.CREATED)
   @RequirePermissions('fashion.access', 'fashion.listings.create')
   @ApiConsumes('multipart/form-data')
-  @UseInterceptors(FilesInterceptor('files', 24))
+  @UseInterceptors(FilesInterceptor('files', 24, IMAGE_UPLOAD_MULTER_OPTIONS))
   uploadPhotos(
     @CurrentUser() user: User,
     @UploadedFiles() files: Express.Multer.File[],
     @Query('organizationId') organizationId?: string,
+    @Query('sku') sku?: string,
   ) {
-    return this.fashionImages.uploadPhotos(user, files, organizationId);
+    return this.fashionImages.uploadPhotos(user, files, organizationId, sku);
   }
 
   @Post('listings/analyze-images')

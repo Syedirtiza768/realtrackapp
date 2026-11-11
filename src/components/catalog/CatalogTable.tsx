@@ -6,6 +6,8 @@ import { conditionLabel } from '../../types/search';
 import TeamBadge from './TeamBadge';
 import ListingStatusCell from './ListingStatusCell';
 import OptimizedImage from '../ui/OptimizedImage';
+import SortHeader from '../ui/SortHeader';
+import { nextSortMode, sortDirectionFor, type SortColumn } from './catalogSort';
 
 interface Props {
   items: SearchItem[];
@@ -71,9 +73,11 @@ export default function CatalogTable({
   const colCount =
     11 + (onToggleSelect ? 1 : 0) + (onDelete ? 1 : 0); // includes serial #
 
-  const toggleDateSort = () => {
-    onSortChange(sortMode === 'newest' ? 'title_asc' : 'newest');
-  };
+  const headerFor = (column: SortColumn) => ({
+    caps: true,
+    direction: sortDirectionFor(sortMode, column),
+    onClick: () => onSortChange(nextSortMode(sortMode, column)),
+  });
 
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/40">
@@ -96,25 +100,16 @@ export default function CatalogTable({
                 </th>
               )}
               <th className="w-12 px-3 py-3 text-center">#</th>
-              <th className="px-3 py-3">SKU / Identifier</th>
-              <th className="w-16 px-3 py-3">Image</th>
-              <th className="px-3 py-3">Title</th>
-              <th className="px-3 py-3">Team</th>
-              <th className="px-3 py-3">Condition</th>
-              <th className="px-3 py-3 text-center">Stock</th>
-              <th className="px-3 py-3 text-right">Price</th>
-              <th className="px-3 py-3">
-                <button
-                  type="button"
-                  onClick={toggleDateSort}
-                  className="inline-flex items-center gap-1 hover:text-slate-700 dark:hover:text-slate-200"
-                >
-                  Date Added
-                  {sortMode === 'newest' && <span aria-hidden>↓</span>}
-                </button>
-              </th>
-              <th className="px-3 py-3">Status</th>
-              <th className="w-10 px-3 py-3 text-center">eBay</th>
+              <th className="px-3 py-3"><SortHeader label="SKU / Identifier" {...headerFor('sku')} /></th>
+              <th className="w-16 px-3 py-3"><SortHeader label="Image" {...headerFor('image')} /></th>
+              <th className="px-3 py-3"><SortHeader label="Title" {...headerFor('title')} /></th>
+              <th className="px-3 py-3"><SortHeader label="Team" {...headerFor('team')} /></th>
+              <th className="px-3 py-3"><SortHeader label="Condition" {...headerFor('condition')} /></th>
+              <th className="px-3 py-3"><SortHeader label="Stock" align="center" {...headerFor('stock')} /></th>
+              <th className="px-3 py-3"><SortHeader label="Price" align="right" {...headerFor('price')} /></th>
+              <th className="px-3 py-3"><SortHeader label="Date Added" {...headerFor('date')} /></th>
+              <th className="px-3 py-3"><SortHeader label="Status" {...headerFor('status')} /></th>
+              <th className="w-10 px-3 py-3"><SortHeader label="eBay" align="center" {...headerFor('ebay')} /></th>
               {onDelete && <th className="w-10 px-3 py-3 text-center"> </th>}
             </tr>
           </thead>

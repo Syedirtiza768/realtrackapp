@@ -303,7 +303,7 @@ export default function IngestionManager() {
 
         saveJson(STORAGE_KEYS.ingestionListingSeed, seed);
 
-        navigate('/listings/new', {
+        navigate('/auto-parts/listings/new', {
             state: {
                 ingestionSeed: seed,
             },

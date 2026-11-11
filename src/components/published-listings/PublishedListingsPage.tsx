@@ -423,7 +423,7 @@ export default function PublishedListingsPage() {
                       </td>
                       <td className="p-3 max-w-xs">
                         <Link
-                          to={`/published-listings/${item.id}`}
+                          to={`/auto-parts/published-listings/${item.id}`}
                           className="font-medium text-slate-900 dark:text-white hover:text-emerald-500 line-clamp-2"
                         >
                           {item.title}

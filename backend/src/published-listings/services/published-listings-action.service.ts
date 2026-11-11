@@ -8,6 +8,11 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../../auth/entities/user.entity.js';
 import { EbayInventoryApiService } from '../../channels/ebay/ebay-inventory-api.service.js';
+import { EbayTradingApiService } from '../../channels/ebay/ebay-trading-api.service.js';
+import {
+  formatEbayApiError,
+  formatEbayOverseasWarehouseBlockError,
+} from '../../channels/ebay/ebay-api-error.util.js';
 import { EbayPublishService } from '../../channels/ebay/ebay-publish.service.js';
 import { ListingActionLogWriterService } from '../../integrations/ebay/services/listing-action-log-writer.service.js';
 import { EbayListingChannel } from '../../integrations/ebay/entities/ebay-listing-channel.entity.js';
@@ -30,6 +35,7 @@ export class PublishedListingsActionService {
     @InjectRepository(EbayListingChannel)
     private readonly channelRepo: Repository<EbayListingChannel>,
     private readonly inventoryApi: EbayInventoryApiService,
+    private readonly tradingApi: EbayTradingApiService,
     private readonly ebayPublish: EbayPublishService,
     private readonly health: PublishedListingsHealthService,
     private readonly audit: PublishedListingsAuditService,
@@ -110,6 +116,32 @@ export class PublishedListingsActionService {
     return null;
   }
 
+  private async runEbayOperation<T>(
+    listing: EbayPublishedListing,
+    operation: string,
+    work: () => Promise<T>,
+  ): Promise<T> {
+    try {
+      return await work();
+    } catch (error: unknown) {
+      const policyMessage = formatEbayOverseasWarehouseBlockError(error);
+      const message =
+        policyMessage ??
+        formatEbayApiError(
+          error,
+          error instanceof Error ? error.message : 'eBay revise failed',
+        );
+      this.logger.warn(
+        'Published listing action ' +
+          operation +
+          ' failed for SKU ' +
+          listing.sku +
+          ': ' +
+          message,
+      );
+      throw new BadRequestException(message);
+    }
+  }
   async revise(
     id: string,
     organizationId: string,
@@ -133,13 +165,80 @@ export class PublishedListingsActionService {
 
     const storeId = listing.storeId;
 
+    // Migrated/new Trading API listings have no Inventory API offer id. Route
+    // their edits directly to ReviseFixedPriceItem so the app remains a
+    // supported editor after Seller Hub migration.
+    if (!listing.offerId && listing.ebayItemId) {
+      await this.runEbayOperation(listing, 'revise Trading listing', () =>
+        this.tradingApi.reviseFixedPriceItem(
+          storeId,
+          listing.ebayItemId!,
+          {
+            ...(dto.title != null ? { title: dto.title } : {}),
+            ...(dto.description != null ? { description: dto.description } : {}),
+            ...(dto.price != null
+              ? { price: dto.price, currency: listing.currency ?? 'USD' }
+              : {}),
+            ...(dto.quantity != null ? { quantity: dto.quantity } : {}),
+            ...(dto.imageUrls != null ? { imageUrls: dto.imageUrls } : {}),
+            ...(dto.itemSpecifics != null
+              ? { itemSpecifics: dto.itemSpecifics }
+              : {}),
+          },
+          listing.marketplaceId,
+        ),
+      );
+
+      await this.runEbayOperation(listing, 'sync revised Trading listing', () =>
+        this.sync.syncListingById(listing.id, organizationId),
+      );
+      const refreshed = await this.listingRepo.findOneByOrFail({ id });
+      await this.audit.writeRevision({
+        organizationId,
+        publishedListingId: listing.id,
+        ebayAccountId: listing.ebayAccountId,
+        userId: user.id,
+        actionType: 'revise',
+        ebayItemId: listing.ebayItemId,
+        beforeValue: before,
+        afterValue: {
+          title: refreshed.title,
+          description: refreshed.description,
+          price: refreshed.price,
+          quantityAvailable: refreshed.quantityAvailable,
+          imageUrls: refreshed.imageUrls,
+          itemSpecifics: refreshed.itemSpecifics,
+        },
+        apiResult: 'success',
+      });
+      await this.actionLog.write({
+        organizationId,
+        userId: user.id,
+        ebayAccountId: listing.ebayAccountId,
+        marketplaceId: listing.marketplaceId,
+        action: 'published_listing.revise',
+        beforeSnapshot: before,
+        afterSnapshot: {
+          title: refreshed.title,
+          price: refreshed.price,
+          quantityAvailable: refreshed.quantityAvailable,
+        },
+        result: 'success',
+      });
+      return refreshed;
+    }
+
     if (
       dto.title != null ||
       dto.description != null ||
       dto.imageUrls != null ||
       dto.itemSpecifics != null
     ) {
-      const current = await this.inventoryApi.getItem(storeId, listing.sku);
+      const current = await this.runEbayOperation(
+        listing,
+        'read inventory item',
+        () => this.inventoryApi.getItem(storeId, listing.sku!),
+      );
       const updatedItem = {
         ...current,
         product: {
@@ -150,16 +249,20 @@ export class PublishedListingsActionService {
           ...(dto.itemSpecifics != null ? { aspects: dto.itemSpecifics } : {}),
         },
       };
-      await this.inventoryApi.createOrReplaceItem(
-        storeId,
-        listing.sku,
-        updatedItem,
+      await this.runEbayOperation(listing, 'write inventory item', () =>
+        this.inventoryApi.createOrReplaceItem(
+          storeId,
+          listing.sku!,
+          updatedItem,
+        ),
       );
 
       if (listing.offerId && dto.description != null) {
-        await this.inventoryApi.updateOffer(storeId, listing.offerId, {
-          listingDescription: dto.description,
-        });
+        await this.runEbayOperation(listing, 'update listing description', () =>
+          this.inventoryApi.updateOffer(storeId, listing.offerId!, {
+            listingDescription: dto.description,
+          }),
+        );
       }
     }
 
@@ -170,29 +273,33 @@ export class PublishedListingsActionService {
           'Listing has no offer ID for price/qty update — sync Inventory offers for this SKU first',
         );
       }
-      await this.inventoryApi.bulkUpdatePriceQuantity(storeId, [
-        {
-          offers: [
-            {
-              offerId,
-              ...(dto.price != null
-                ? {
-                    price: {
-                      value: String(dto.price),
-                      currency: listing.currency ?? 'USD',
-                    },
-                  }
-                : {}),
-              ...(dto.quantity != null
-                ? { availableQuantity: dto.quantity }
-                : {}),
-            },
-          ],
-        },
-      ]);
+      await this.runEbayOperation(listing, 'update price/quantity', () =>
+        this.inventoryApi.bulkUpdatePriceQuantity(storeId, [
+          {
+            offers: [
+              {
+                offerId,
+                ...(dto.price != null
+                  ? {
+                      price: {
+                        value: String(dto.price),
+                        currency: listing.currency ?? 'USD',
+                      },
+                    }
+                  : {}),
+                ...(dto.quantity != null
+                  ? { availableQuantity: dto.quantity }
+                  : {}),
+              },
+            ],
+          },
+        ]),
+      );
     }
 
-    await this.sync.syncListingById(listing.id, organizationId);
+    await this.runEbayOperation(listing, 'sync revised listing', () =>
+      this.sync.syncListingById(listing.id, organizationId),
+    );
 
     const refreshed = await this.listingRepo.findOneByOrFail({ id });
 
@@ -252,7 +359,7 @@ export class PublishedListingsActionService {
     if (!listing) throw new NotFoundException('Published listing not found');
     if (!listing.offerId) {
       throw new BadRequestException(
-        'Listing has no offer ID — cannot update policies',
+        'Trading API listing policy editing is not enabled yet; update policies in Seller Hub',
       );
     }
 
@@ -334,7 +441,9 @@ export class PublishedListingsActionService {
     );
 
     // Sync the local record to pick up the updated listingPolicies
-    await this.sync.syncListingById(listing.id, organizationId);
+    await this.runEbayOperation(listing, 'sync revised listing', () =>
+      this.sync.syncListingById(listing.id, organizationId),
+    );
 
     const refreshed = await this.listingRepo.findOneByOrFail({ id });
 
@@ -374,7 +483,18 @@ export class PublishedListingsActionService {
     });
     if (!listing) throw new NotFoundException('Published listing not found');
     if (!listing.offerId) {
-      throw new BadRequestException('Listing has no offer ID');
+      if (!listing.ebayItemId) {
+        throw new BadRequestException('Listing has no eBay item ID');
+      }
+      await this.tradingApi.endFixedPriceItem(
+        listing.storeId,
+        listing.ebayItemId,
+        listing.marketplaceId,
+      );
+      listing.listingStatus = 'ended';
+      listing.lastSyncedAt = new Date();
+      await this.listingRepo.save(listing);
+      return listing;
     }
 
     await this.inventoryApi.withdrawOffer(listing.storeId, listing.offerId);
@@ -419,7 +539,9 @@ export class PublishedListingsActionService {
     });
     if (!listing) throw new NotFoundException('Published listing not found');
     if (!listing.offerId) {
-      throw new BadRequestException('Listing has no offer ID');
+      throw new BadRequestException(
+        'Trading API listings cannot be relisted in place; create a new listing after ending it',
+      );
     }
 
     const result = await this.inventoryApi.publishOffer(

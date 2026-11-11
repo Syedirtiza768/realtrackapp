@@ -2,7 +2,7 @@
 
 # Security Checklist
 
-Operational security baseline for RealTrackApp. Re-run before each production
+Operational security baseline for Omni Core. Re-run before each production
 deploy.
 
 ## Secrets & config

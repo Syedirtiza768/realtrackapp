@@ -5,16 +5,19 @@ import { useAuth } from '../../auth/AuthContext';
 import { fetchWithAuth } from '../../../lib/authApi';
 import FeedbackPanel from '../../ui/FeedbackPanel';
 import CatalogActiveFilterTags from './CatalogActiveFilterTags';
+import CatalogQuickFilterBar from './CatalogQuickFilterBar';
 import CatalogFilterControls, { activeFilterCount } from './CatalogFilterControls';
 import CatalogMobileFilterDrawer from './CatalogMobileFilterDrawer';
 import CatalogProductQuickView from './CatalogProductQuickView';
 import CatalogPublishJobPanel, { isTerminalPublishJob, type CatalogPublishJob } from './CatalogPublishJobPanel';
 import BusinessIndustrialPublishModal, { type BusinessIndustrialAccount } from './BusinessIndustrialPublishModal';
+import FashionPublishModal from './FashionPublishModal';
 import CatalogResultsTable from './CatalogResultsTable';
 import { bulkCatalog, downloadCatalogCsv, filtersToParams, getCatalog, getCatalogFacets, getCatalogSuggestions, getCatalogSummary, paramsToFilters } from './catalogApi';
 import type { CatalogConfig } from './catalogTypes';
 import type { CatalogFacets, CatalogFilters, CatalogItem, CatalogResponse, CatalogSort, CatalogSummary, FacetBucket, ProductVertical } from './catalogTypes';
 import { EMPTY_CATALOG_FILTERS } from './catalogTypes';
+import { getStoreProfiles, type StoreProfiles } from '../../../lib/multiStoreApi';
 
 type Props = { config: CatalogConfig };
 type Account = BusinessIndustrialAccount;
@@ -24,6 +27,69 @@ type PendingAction = 'export' | 'team' | 'policies' | 'delete' | null;
 const PAGE_SIZES = [25, 50, 100, 250, 500];
 const messageOf = (error: unknown) => error instanceof Error ? error.message : 'Unable to complete request.';
 const verticalSlug = (vertical: ProductVertical) => vertical === 'business_industrial' ? 'business-industrial' : vertical;
+const EMPTY_STORE_PROFILES: StoreProfiles = { shippingProfiles: [], returnProfiles: [], paymentProfiles: [] };
+
+function profileCount(profiles: StoreProfiles) {
+  return profiles.shippingProfiles.length + profiles.returnProfiles.length + profiles.paymentProfiles.length;
+}
+
+function mergeProfileOptions<T extends { id: string; name: string }>(groups: T[][]) {
+  const byName = new Map<string, T>();
+  for (const group of groups) {
+    for (const profile of group) {
+      const key = profile.name.trim().toLocaleLowerCase();
+      if (key && !byName.has(key)) byName.set(key, profile);
+    }
+  }
+  return [...byName.values()].sort((left, right) => left.name.localeCompare(right.name));
+}
+
+async function loadAccountProfiles(account: Account): Promise<StoreProfiles> {
+  let storeProfiles: StoreProfiles = EMPTY_STORE_PROFILES;
+  try {
+    storeProfiles = await getStoreProfiles(account.storeId);
+  } catch {
+    /* Fall back to the B&I policy endpoint below. */
+  }
+
+  if (!account.marketplaceId) return storeProfiles;
+
+  try {
+    const result = await fetchWithAuth<{
+      policies?: Array<{ id: string; policyType?: string; ebayPolicyId?: string; name?: string }>;
+    }>('/api/business-industrial/ebay/accounts/' + encodeURIComponent(account.id) + '/policies?marketplaceId=' + encodeURIComponent(account.marketplaceId));
+    const policies = result.policies || [];
+    const toOption = (policy: { id: string; ebayPolicyId?: string; name?: string }) => ({
+      id: policy.id,
+      name: policy.name || policy.ebayPolicyId || policy.id,
+      ebayPolicyId: policy.ebayPolicyId || policy.id,
+    });
+    return {
+      shippingProfiles: mergeProfileOptions([
+        storeProfiles.shippingProfiles,
+        policies.filter((policy) => policy.policyType === 'fulfillment').map((policy) => ({ ...toOption(policy), carrier: '', service: '', costType: '' })),
+      ]),
+      returnProfiles: mergeProfileOptions([
+        storeProfiles.returnProfiles,
+        policies.filter((policy) => policy.policyType === 'return').map(toOption),
+      ]),
+      paymentProfiles: mergeProfileOptions([
+        storeProfiles.paymentProfiles,
+        policies.filter((policy) => policy.policyType === 'payment').map(toOption),
+      ]),
+    };
+  } catch {
+    return storeProfiles;
+  }
+}
+
+function mergeStoreProfiles(groups: StoreProfiles[]): StoreProfiles {
+  return {
+    shippingProfiles: mergeProfileOptions(groups.map((group) => group.shippingProfiles)),
+    returnProfiles: mergeProfileOptions(groups.map((group) => group.returnProfiles)),
+    paymentProfiles: mergeProfileOptions(groups.map((group) => group.paymentProfiles)),
+  };
+}
 
 function readState(config: CatalogConfig, searchParams: URLSearchParams): WorkspaceState {
   const urlFilters = paramsToFilters(searchParams);
@@ -53,8 +119,10 @@ function updateItem(response: CatalogResponse | null, item: CatalogItem) {
   return { ...response, items: response.items.map((current) => current.id === item.id ? item : current) };
 }
 
-function primaryButtonClass(isBusinessIndustrial: boolean) {
-  return isBusinessIndustrial ? 'bg-cyan-600 hover:bg-cyan-700' : 'bg-blue-600 hover:bg-blue-700';
+function primaryButtonClass(vertical: ProductVertical) {
+  if (vertical === 'business_industrial') return 'bg-cyan-600 hover:bg-cyan-700';
+  if (vertical === 'fashion') return 'bg-pink-600 hover:bg-pink-700';
+  return 'bg-blue-600 hover:bg-blue-700';
 }
 
 export default function CatalogWorkspace({ config }: Props) {
@@ -77,13 +145,15 @@ export default function CatalogWorkspace({ config }: Props) {
   const [messageTone, setMessageTone] = useState<'info' | 'success' | 'error' | 'warning'>('info');
   const [bulkFailures, setBulkFailures] = useState<Array<{ id: string; error?: string }>>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [bulkProfiles, setBulkProfiles] = useState<StoreProfiles | undefined>(undefined);
+  const [bulkProfilesLoading, setBulkProfilesLoading] = useState(false);
   const [job, setJob] = useState<CatalogPublishJob | null>(null);
   const [publishSelection, setPublishSelection] = useState<{ ids: string[]; item?: CatalogItem } | null>(null);
   const [teamTarget, setTeamTarget] = useState('');
   const [shippingProfile, setShippingProfile] = useState('');
   const [paymentProfile, setPaymentProfile] = useState('');
   const [returnProfile, setReturnProfile] = useState('');
-  const [showFilters, setShowFilters] = useState(false);
+  const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [refreshNonce, setRefreshNonce] = useState(0);
   const refreshedJobs = useRef<Set<string>>(new Set());
@@ -92,13 +162,17 @@ export default function CatalogWorkspace({ config }: Props) {
   const canExport = permissions.includes(config.vertical + '.catalog.export');
   const canDelete = permissions.includes(config.vertical + '.catalog.delete');
   const canAssignTeam = permissions.includes(config.vertical + '.catalog.assign_team');
-  const canManagePolicies = permissions.includes(config.vertical + '.catalog.manage_policies');
+  // Fashion shipping/payment/return policies are chosen per destination in the publish modal.
+  const canManagePolicies = config.vertical !== 'fashion' && permissions.includes(config.vertical + '.catalog.manage_policies');
   const selectedCount = selected.size;
   const isBusinessIndustrial = config.vertical === 'business_industrial';
+  const isFashion = config.vertical === 'fashion';
   const catalogDescription = isBusinessIndustrial
     ? 'Search, review, assign teams, and manage Business & Industrial inventory.'
-    : `Search, review, assign teams, and manage ${config.label.toLowerCase()} inventory.`;
-  const addLabel = isBusinessIndustrial ? 'Add Equipment' : `Add ${config.label} item`;
+    : isFashion
+      ? 'Search, review, and manage Fashion garments, footwear, and accessories.'
+      : `Search, review, assign teams, and manage ${config.label.toLowerCase()} inventory.`;
+  const addLabel = config.addLabel || (isBusinessIndustrial ? 'Add Equipment' : `Add ${config.label} item`);
   const filterCount = activeFilterCount(state.filters);
   const hasActiveQuery = Boolean(state.q) || filtersSignature !== JSON.stringify(EMPTY_CATALOG_FILTERS);
   const notify = (text: string, tone: typeof messageTone = 'info') => {
@@ -166,6 +240,33 @@ export default function CatalogWorkspace({ config }: Props) {
   }, [config.vertical, activeOrganizationId]);
 
   useEffect(() => {
+    if (!isBusinessIndustrial) {
+      setBulkProfiles(undefined);
+      setBulkProfilesLoading(false);
+      return undefined;
+    }
+    const connectedAccounts = accounts.filter((account) => account.storeId);
+    if (!connectedAccounts.length) {
+      setBulkProfiles(EMPTY_STORE_PROFILES);
+      setBulkProfilesLoading(false);
+      return undefined;
+    }
+    let cancelled = false;
+    setBulkProfilesLoading(true);
+    void Promise.all(connectedAccounts.map((account) => loadAccountProfiles(account)))
+      .then((groups) => {
+        if (!cancelled) setBulkProfiles(mergeStoreProfiles(groups));
+      })
+      .catch(() => {
+        if (!cancelled) setBulkProfiles(EMPTY_STORE_PROFILES);
+      })
+      .finally(() => {
+        if (!cancelled) setBulkProfilesLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [accounts, isBusinessIndustrial]);
+
+  useEffect(() => {
     if (!job || isTerminalPublishJob(job.status)) return undefined;
     let cancelled = false;
     const poll = async () => {
@@ -230,7 +331,12 @@ export default function CatalogWorkspace({ config }: Props) {
 
   const openPublish = (ids: string[], item?: CatalogItem) => {
     if (!ids.length) return;
-    const blocked = data?.items.filter((row) => ids.includes(row.id) && (row.publicationStatus === 'blocked' || row.verticalValidationStatus !== 'approved')) ?? [];
+    // B&I publishing is operator-controlled for now; the backend flag remains
+    // the authoritative, reversible switch for whether unapproved records may
+    // actually be enqueued.
+    const blocked = config.vertical === 'business_industrial'
+      ? []
+      : data?.items.filter((row) => ids.includes(row.id) && (row.publicationStatus === 'blocked' || row.verticalValidationStatus !== 'approved')) ?? [];
     if (blocked.length) {
       notify(`${blocked.length} selected record(s) still need compliance approval before publishing.`, 'warning');
       return;
@@ -281,7 +387,7 @@ export default function CatalogWorkspace({ config }: Props) {
           {summary ? <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">{summary.total.toLocaleString()} products · {summary.withImages.toLocaleString()} with images · {summary.published.toLocaleString()} published</p> : null}
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <button type="button" onClick={() => setShowFilters(true)} className={toolbarButton + ' lg:hidden'} aria-expanded={showFilters} aria-controls="catalog-mobile-filters">
+          <button type="button" onClick={() => setAdvancedFiltersOpen(true)} className={toolbarButton + ' lg:hidden'} aria-expanded={advancedFiltersOpen} aria-controls="catalog-advanced-filters">
             <SlidersHorizontal size={14} aria-hidden="true" /> Filters{filterCount ? ` (${filterCount})` : ''}
           </button>
           <button type="button" onClick={refresh} disabled={loading} className={toolbarButton}>
@@ -298,7 +404,7 @@ export default function CatalogWorkspace({ config }: Props) {
               <Shield size={14} aria-hidden="true" /> {pendingAction === 'policies' ? 'Updating…' : 'Edit Policies'}
             </button>
           ) : null}
-          <button type="button" onClick={() => navigate(config.editorUrl())} className={`inline-flex min-h-11 items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-medium text-white ${primaryButtonClass(isBusinessIndustrial)}`}>
+          <button type="button" onClick={() => navigate(config.editorUrl())} className={`inline-flex min-h-11 items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-medium text-white ${primaryButtonClass(config.vertical)}`}>
             <PlusCircle size={14} aria-hidden="true" /> {addLabel}
           </button>
         </div>
@@ -310,15 +416,17 @@ export default function CatalogWorkspace({ config }: Props) {
           <input
             value={state.input}
             onChange={(event) => setState((current) => ({ ...current, input: event.target.value }))}
-            placeholder="Search SKU, title, brand, MPN, category, attributes…"
+            placeholder={config.searchPlaceholder || 'Search SKU, title, brand, MPN, category, attributes…'}
             className={`min-h-11 w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-base shadow-sm outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-white sm:text-sm ${isBusinessIndustrial ? 'focus:border-cyan-500' : 'focus:border-blue-500'}`}
             aria-label="Search catalog"
             list="catalog-suggestions"
           />
           <datalist id="catalog-suggestions">{suggestions.map((suggestion) => <option key={suggestion.label} value={suggestion.value}>{suggestion.label}</option>)}</datalist>
         </div>
-        <button type="submit" className={`min-h-11 rounded-lg px-4 py-2 text-sm font-medium text-white sm:shrink-0 ${primaryButtonClass(isBusinessIndustrial)}`}>Search</button>
+        <button type="submit" className={`min-h-11 rounded-lg px-4 py-2 text-sm font-medium text-white sm:shrink-0 ${primaryButtonClass(config.vertical)}`}>Search</button>
       </form>
+
+      <CatalogQuickFilterBar config={config} facets={facets} filters={state.filters} onChange={setFilters} onAdvancedClick={() => setAdvancedFiltersOpen(true)} loading={facets === null && !facetsError} />
 
       {recentSearches.length && !state.q ? (
         <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
@@ -354,9 +462,8 @@ export default function CatalogWorkspace({ config }: Props) {
       ) : null}
       {job ? <CatalogPublishJobPanel job={job} onClose={() => setJob(null)} /> : null}
 
-      <div className="flex items-start gap-4">
-        <CatalogFilterControls config={config} filters={state.filters} facets={facets} facetsError={facetsError} onChange={setFilters} onReset={resetFilters} />
-        <div className="min-w-0 flex-1 space-y-3">
+      <div className="min-w-0 space-y-3">
+
           {selectedCount ? (
             <div className="flex flex-wrap items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 p-3 dark:border-blue-900 dark:bg-blue-950/20">
               <span className="mr-2 text-sm font-medium text-blue-900 dark:text-blue-100">{selectedCount} selected on this page</span>
@@ -376,9 +483,29 @@ export default function CatalogWorkspace({ config }: Props) {
                 <details className="text-xs">
                   <summary className="cursor-pointer rounded bg-white px-2 py-1.5 font-medium text-slate-700 shadow-sm">Policies</summary>
                   <div className="mt-2 flex flex-wrap gap-1 rounded bg-white p-2 shadow">
-                    <input value={shippingProfile} onChange={(event) => setShippingProfile(event.target.value)} placeholder="Shipping" className="w-24 rounded border px-2 py-1" />
-                    <input value={paymentProfile} onChange={(event) => setPaymentProfile(event.target.value)} placeholder="Payment" className="w-24 rounded border px-2 py-1" />
-                    <input value={returnProfile} onChange={(event) => setReturnProfile(event.target.value)} placeholder="Returns" className="w-24 rounded border px-2 py-1" />
+                    {bulkProfilesLoading ? <span className="px-1 py-1 text-slate-500">Loading all profiles…</span> : bulkProfiles && profileCount(bulkProfiles) > 0 ? <>
+                      <label className="flex items-center gap-1">
+                        <span className="sr-only">Shipping profile</span>
+                        <select value={shippingProfile} onChange={(event) => setShippingProfile(event.target.value)} className="max-w-52 rounded border px-2 py-1" aria-label="Shipping profile">
+                          <option value="">Leave shipping unchanged</option>
+                          {bulkProfiles.shippingProfiles.map((profile) => <option key={profile.id} value={profile.name}>{profile.name}</option>)}
+                        </select>
+                      </label>
+                      <label className="flex items-center gap-1">
+                        <span className="sr-only">Payment profile</span>
+                        <select value={paymentProfile} onChange={(event) => setPaymentProfile(event.target.value)} className="max-w-52 rounded border px-2 py-1" aria-label="Payment profile">
+                          <option value="">Leave payment unchanged</option>
+                          {bulkProfiles.paymentProfiles.map((profile) => <option key={profile.id} value={profile.name}>{profile.name}</option>)}
+                        </select>
+                      </label>
+                      <label className="flex items-center gap-1">
+                        <span className="sr-only">Return profile</span>
+                        <select value={returnProfile} onChange={(event) => setReturnProfile(event.target.value)} className="max-w-52 rounded border px-2 py-1" aria-label="Return profile">
+                          <option value="">Leave returns unchanged</option>
+                          {bulkProfiles.returnProfiles.map((profile) => <option key={profile.id} value={profile.name}>{profile.name}</option>)}
+                        </select>
+                      </label>
+                    </> : <span className="px-1 py-1 text-amber-700">No synced profiles or policies found.</span>}
                     <button type="button" disabled={pendingAction === 'policies'} onClick={() => void runBulk('policies')} className="rounded bg-slate-900 px-2 py-1 text-white disabled:opacity-50">{pendingAction === 'policies' ? 'Applying…' : 'Apply'}</button>
                   </div>
                 </details>
@@ -411,6 +538,9 @@ export default function CatalogWorkspace({ config }: Props) {
             canPublish={canPublish}
             hasActiveQuery={hasActiveQuery}
             catalogTotal={summary?.total ?? null}
+            sort={state.sort}
+            filters={state.filters}
+            facets={facets}
             emptyActionLabel={addLabel}
             onEmptyAction={() => navigate(config.editorUrl())}
             onRetry={refresh}
@@ -419,6 +549,8 @@ export default function CatalogWorkspace({ config }: Props) {
             onView={setActiveItem}
             onEdit={editItem}
             onPublish={(item) => openPublish([item.id], item)}
+            onSort={(sort) => setState((current) => ({ ...current, page: 0, sort }))}
+            onFilterChange={setFilters}
           />
 
           <div className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 sm:flex-row sm:items-center sm:justify-between">
@@ -426,17 +558,17 @@ export default function CatalogWorkspace({ config }: Props) {
             <span className="text-center text-xs text-slate-500">Page {state.page + 1} of {pageCount}{data ? <span className="hidden sm:inline">{` · showing ${showingFrom.toLocaleString()}–${showingTo.toLocaleString()}`}</span> : ''}</span>
             <button type="button" disabled={!hasNext || loading} onClick={() => setState((current) => ({ ...current, page: current.page + 1 }))} className="min-h-11 rounded px-3 py-1.5 font-medium text-slate-600 disabled:opacity-40 dark:text-slate-300">Next</button>
           </div>
-        </div>
       </div>
 
-      <CatalogMobileFilterDrawer open={showFilters} onClose={() => setShowFilters(false)} filterCount={filterCount}>
-        <div id="catalog-mobile-filters">
+      <CatalogMobileFilterDrawer open={advancedFiltersOpen} onClose={() => setAdvancedFiltersOpen(false)} filterCount={filterCount} variant="all">
+        <div id="catalog-advanced-filters">
           <CatalogFilterControls compact config={config} filters={state.filters} facets={facets} facetsError={facetsError} onChange={setFilters} onReset={resetFilters} />
         </div>
       </CatalogMobileFilterDrawer>
 
       <CatalogProductQuickView config={config} item={activeItem} organizationId={activeOrganizationId} canPublish={canPublish} onClose={() => setActiveItem(null)} onSaved={saveItem} onPublish={(item) => openPublish([item.id], item)} />
       {isBusinessIndustrial ? <BusinessIndustrialPublishModal open={Boolean(publishSelection)} item={publishSelection?.item} listingIds={publishSelection?.ids || []} accounts={accounts} organizationId={activeOrganizationId} onClose={() => setPublishSelection(null)} onSubmitted={handlePublishSubmitted} /> : null}
+      {isFashion ? <FashionPublishModal open={Boolean(publishSelection)} listingIds={publishSelection?.ids || []} accounts={accounts} organizationId={activeOrganizationId} onClose={() => setPublishSelection(null)} onSubmitted={handlePublishSubmitted} /> : null}
     </div>
   );
 }

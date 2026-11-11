@@ -16,7 +16,7 @@ import { CreateWarehouseInventory1791100000000 } from '../../migrations/17911000
  */
 export const STOCK_IT_URL = process.env.STOCK_IT_DATABASE_URL;
 
-export async function createStockTestDb(): Promise<{
+export async function createStockTestDb(additionalEntities: Function[] = []): Promise<{
   ds: DataSource;
   schema: string;
   close: () => Promise<void>;
@@ -31,7 +31,7 @@ export async function createStockTestDb(): Promise<{
     type: 'postgres',
     url: STOCK_IT_URL,
     schema,
-    entities: STOCK_ENTITIES,
+    entities: [...STOCK_ENTITIES, ...additionalEntities],
     extra: { max: 20, options: `-c search_path=${schema},public` },
   });
   await ds.initialize();
@@ -72,22 +72,22 @@ export async function createStockTestDb(): Promise<{
 
 /** Seeds an org with one warehouse, one bin and one item. */
 export async function seedBasics(ds: DataSource) {
-  const [{ id: orgId }] = await ds.query(
+  const [{ id: orgId }] = await ds.query<Array<{ id: string }>>(
     `INSERT INTO organizations (name) VALUES ('Test org') RETURNING id`,
   );
-  const [{ id: warehouseId }] = await ds.query(
+  const [{ id: warehouseId }] = await ds.query<Array<{ id: string }>>(
     `INSERT INTO warehouses (organization_id, code, name, is_default) VALUES ($1, 'MAIN', 'Main', true) RETURNING id`,
     [orgId],
   );
-  const [{ id: locationId }] = await ds.query(
+  const [{ id: locationId }] = await ds.query<Array<{ id: string }>>(
     `INSERT INTO warehouse_locations (organization_id, warehouse_id, code) VALUES ($1, $2, 'A-01') RETURNING id`,
     [orgId, warehouseId],
   );
-  const [{ id: catalogProductId }] = await ds.query(
+  const [{ id: catalogProductId }] = await ds.query<Array<{ id: string }>>(
     `INSERT INTO catalog_products (sku, quantity, organization_id) VALUES ('SKU-1', 0, $1) RETURNING id`,
     [orgId],
   );
-  const [{ id: itemId }] = await ds.query(
+  const [{ id: itemId }] = await ds.query<Array<{ id: string }>>(
     `INSERT INTO inventory_items (organization_id, sku, catalog_product_id) VALUES ($1, 'SKU-1', $2) RETURNING id`,
     [orgId, catalogProductId],
   );

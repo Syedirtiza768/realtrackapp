@@ -20,6 +20,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { useUploadPipelineFile, type PipelineUploadProfileInput } from '../../lib/pipelineApi';
+import type { ProductVertical } from '../../lib/verticalsApi';
 import {
   PIPELINE_GRIDX_REQUIRED_HEADERS,
   PIPELINE_GRIDX_SAMPLE_PATH,
@@ -148,6 +149,10 @@ const BulkUploadCard = forwardRef<BulkUploadHandle, { onJobCreated: (jobId: stri
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [dragOver, setDragOver] = useState(false);
     const [condition, setCondition] = useState<PipelineConditionLabel>('Used');
+    const [vertical, setVertical] = useState<ProductVertical>('automotive');
+    const [importMode, setImportMode] = useState<
+      'legacy_gridx' | 'pre_enriched_febest_v1'
+    >('legacy_gridx');
     const [teamId, setTeamId] = useState('');
     const [storeId, setStoreId] = useState('');
     const [profiles, setProfiles] = useState<ProfileSelection>(EMPTY_PROFILE_SELECTION);
@@ -199,6 +204,7 @@ const BulkUploadCard = forwardRef<BulkUploadHandle, { onJobCreated: (jobId: stri
         ? {
             marketplace,
             storeId: selectedStoreId,
+            importMode,
             shippingProfileName: profiles.shippingProfileName,
             returnProfileName: profiles.returnProfileName,
             paymentProfileName: profiles.paymentProfileName,
@@ -223,13 +229,13 @@ const BulkUploadCard = forwardRef<BulkUploadHandle, { onJobCreated: (jobId: stri
           return;
         }
         try {
-          const result = await upload(file, selectedTeamId, condition, profileInput);
+          const result = await upload(file, selectedTeamId, condition, profileInput, vertical);
           if (result?.job?.id) onJobCreated(result.job.id);
         } catch {
           // hook sets error
         }
       },
-      [upload, selectedTeamId, condition, profileInput, canUpload, onJobCreated],
+      [upload, selectedTeamId, condition, profileInput, vertical, canUpload, onJobCreated],
     );
 
     const handleFile = useCallback(async (file: File) => {
@@ -243,6 +249,30 @@ const BulkUploadCard = forwardRef<BulkUploadHandle, { onJobCreated: (jobId: stri
         const XLSX = await import('xlsx');
         const buffer = await file.arrayBuffer();
         const wb = XLSX.read(buffer, { type: 'array' });
+        if (importMode === 'pre_enriched_febest_v1') {
+          const requiredSheets = ['Manifest', 'Products', 'Fitments'];
+          const missingSheets = requiredSheets.filter((sheet) => !wb.SheetNames.includes(sheet));
+          if (missingSheets.length > 0) {
+            setPendingFile(null);
+            setFormatError(
+              `FEBEST workbook is missing required sheets: ${missingSheets.join(', ')}`,
+            );
+            return;
+          }
+          const rows = XLSX.utils.sheet_to_json(wb.Sheets.Products, {
+            header: 1,
+            defval: '',
+          }) as unknown[][];
+          const headerRow = (rows[0] ?? []) as unknown[];
+          const pnIdx = headerRow.findIndex((h) => String(h ?? '').trim() === 'SKU / MPN');
+          const partNums = pnIdx >= 0
+            ? rows.slice(1).map((row) => String((row as unknown[])[pnIdx] ?? '').trim()).filter(Boolean)
+            : [];
+          setExtractedPartNumbers([...new Set(partNums)]);
+          setFormatError(null);
+          setPendingFile(file);
+          return;
+        }
         const sheetName =
           wb.SheetNames.find((n) => !/instruction/i.test(n)) || wb.SheetNames[0];
         const rows = sheetName
@@ -282,7 +312,7 @@ const BulkUploadCard = forwardRef<BulkUploadHandle, { onJobCreated: (jobId: stri
           `Could not read file. Use the GridX sample input. (${err instanceof Error ? err.message : String(err)})`,
         );
       }
-    }, []);
+    }, [importMode]);
 
     const startUpload = useCallback(() => {
       if (pendingFile) {
@@ -338,6 +368,40 @@ const BulkUploadCard = forwardRef<BulkUploadHandle, { onJobCreated: (jobId: stri
                   Marketplace: {marketplace} — {PIPELINE_MARKETPLACE_LABELS[marketplace]}
                 </p>
               )}
+            </label>
+            <label className="block text-sm">
+              <span className="font-medium text-slate-600 dark:text-slate-300">Import mode</span>
+              <select
+                value={importMode}
+                onChange={(e) => {
+                  setImportMode(e.target.value as 'legacy_gridx' | 'pre_enriched_febest_v1');
+                  setPendingFile(null);
+                  setFormatError(null);
+                  setExtractedPartNumbers([]);
+                }}
+                className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800"
+              >
+                <option value="legacy_gridx">Legacy GridX enrichment</option>
+                <option value="pre_enriched_febest_v1">Pre-enriched FEBEST v1</option>
+              </select>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                The server validates the exact FEBEST three-sheet schema before enqueueing.
+              </p>
+            </label>
+            <label className="block text-sm">
+              <span className="font-medium text-slate-600 dark:text-slate-300">Product vertical</span>
+              <select
+                value={vertical}
+                onChange={(e) => setVertical(e.target.value as ProductVertical)}
+                className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800"
+              >
+                <option value="automotive">Automotive</option>
+                <option value="business_industrial">Business &amp; Industrial</option>
+                <option value="fashion">Fashion</option>
+              </select>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                Choose the eBay selling vertical for this upload.
+              </p>
             </label>
             <label className="block text-sm">
               <span className="font-medium text-slate-600 dark:text-slate-300">Condition</span>
@@ -436,7 +500,9 @@ const BulkUploadCard = forwardRef<BulkUploadHandle, { onJobCreated: (jobId: stri
                     : 'Drag and drop your file here or click to browse'}
                 </p>
                 <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                  GridX CSV/XLSX up to 50MB — headers must match the sample
+                  {importMode === 'pre_enriched_febest_v1'
+                    ? 'FEBEST v1 XLSX — exact Manifest, Products, and Fitments sheets required'
+                    : 'GridX CSV/XLSX up to 50MB — headers must match the sample'}
                 </p>
               </>
             )}

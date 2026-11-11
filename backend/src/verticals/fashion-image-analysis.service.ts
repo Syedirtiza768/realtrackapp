@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  Logger,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'node:crypto';
 import { User } from '../auth/entities/user.entity.js';
@@ -12,13 +8,18 @@ import { ImageProcessorService } from '../storage/image-processor.service.js';
 import { OpenAiService } from '../common/openai/openai.service.js';
 import { AiRunLogService } from '../common/openai/ai-run-log.service.js';
 import { ModelRouter } from '../common/openai/model-router.js';
+import { sanitizeJson } from '../common/openai/json-sanitizer.js';
+import type { OpenAiChatResponse } from '../common/openai/openai.types.js';
+import type { RouteSelection } from '../common/openai/ai-routing-policy.types.js';
 import { EbayTaxonomyApiService } from '../channels/ebay/ebay-taxonomy-api.service.js';
+import { truncateEbayTitle } from '../channels/ebay/ebay-listing-text.util.js';
 import type { ProductAttributes } from './vertical.types.js';
 import {
   applyFashionAnalysisMeta,
   buildFashionListingContent,
   mergeFashionSuggestions,
   normalizeFashionCategoryFamily,
+  normalizeFashionDepartment,
   suggestFashionSku,
   validateFashionAttributes,
 } from './fashion.config.js';
@@ -26,6 +27,11 @@ import type {
   AnalyzeFashionImagesDto,
   GenerateFashionListingDto,
 } from './fashion.dto.js';
+import { suggestFashionMeasurementTemplate } from './fashion-measurements.js';
+import {
+  fashionSkuStem,
+  keyFromServeUrl,
+} from './fashion-storage-keys.util.js';
 
 const MAX_PHOTOS = 24;
 const MAX_VISION_IMAGES = 12;
@@ -36,12 +42,22 @@ const ACCEPTED_TYPES = new Set([
   'image/webp',
   'image/jpg',
 ]);
-const PROMPT_VERSION = 'fashion-image-identification-v1';
+const PROMPT_VERSION = 'fashion-image-identification-v2';
+/**
+ * Chosen by Jev (OpenRouter ~typesafe/jev-latest, /alpha/decisions; confidence 0.95) from a
+ * labelled 5-garment benchmark across 20 vision models on 2026-10-07: every label read
+ * correctly in 5 of 5 runs, 100% strict JSON, ~$1.2-1.7 per 1,000 items. Jev picked the
+ * fallback with low confidence (0.29): it omits fields rather than misreading labels.
+ * gpt-6-luna-pro was rejected as fallback after reading "100% WOOL" as "100% Acrylic".
+ * See docs/decisions.md.
+ */
+const DEFAULT_FASHION_AI_MODEL = 'google/gemini-3.1-flash-lite';
+const DEFAULT_FASHION_AI_FALLBACK_MODEL = 'google/gemma-4-31b-it';
 
 const VISION_SYSTEM_PROMPT = `You identify photographed fashion inventory for an e-commerce listing draft. Analyze every submitted image together as one garment or accessory, including readable brand, size, and care labels.
 
 Return JSON only:
-{"itemType":string|null,"productType":string|null,"categoryFamily":"clothing"|"footwear"|"accessories"|null,"categorySearchQuery":string|null,"brand":string|null,"department":string|null,"size":string|null,"sizeSystem":string|null,"sizeType":string|null,"color":string|null,"secondaryColor":string|null,"pattern":string|null,"style":string|null,"material":string|null,"composition":string|null,"fabricType":string|null,"sleeveLength":string|null,"neckline":string|null,"closure":string|null,"length":string|null,"fit":string|null,"chestMeasurement":string|null,"waistMeasurement":string|null,"hipMeasurement":string|null,"lengthMeasurement":string|null,"inseamMeasurement":string|null,"measurementsUnit":string|null,"measurements":string|null,"wear":string|null,"stains":string|null,"holes":string|null,"pilling":string|null,"fading":string|null,"repairs":string|null,"missingComponents":string|null,"otherDefects":string|null,"conditionDetails":string|null,"conditionLabel":"NEW"|"USED"|"UNKNOWN"|null,"shoeSize":string|null,"shoeSizeSystem":string|null,"width":string|null,"footwearType":string|null,"accessoryType":string|null,"accessoryDimensions":string|null,"accessoryMaterial":string|null,"title":string|null,"description":string|null,"visibleText":string[],"warnings":string[],"conflicts":string[],"multipleDifferentItems":boolean,"reviewPhotoSet":boolean}
+{"itemType":string|null,"productType":string|null,"categoryFamily":"clothing"|"footwear"|"accessories"|null,"categorySearchQuery":string|null,"brand":string|null,"department":string|null,"size":string|null,"sizeSystem":string|null,"sizeType":string|null,"color":string|null,"secondaryColor":string|null,"pattern":string|null,"style":string|null,"material":string|null,"composition":string|null,"fabricType":string|null,"sleeveLength":string|null,"neckline":string|null,"closure":string|null,"length":string|null,"fit":string|null,"chestMeasurement":string|null,"waistMeasurement":string|null,"hipMeasurement":string|null,"lengthMeasurement":string|null,"inseamMeasurement":string|null,"measurementsUnit":string|null,"measurements":string|null,"wear":string|null,"stains":string|null,"holes":string|null,"pilling":string|null,"fading":string|null,"repairs":string|null,"missingComponents":string|null,"otherDefects":string|null,"conditionDetails":string|null,"conditionLabel":"NEW"|"USED"|"UNKNOWN"|null,"shoeSize":string|null,"shoeSizeSystem":string|null,"width":string|null,"footwearType":string|null,"accessoryType":string|null,"accessoryDimensions":string|null,"accessoryMaterial":string|null,"countryOfManufacture":string|null,"features":string[],"season":string|null,"occasion":string|null,"theme":string|null,"vintage":"Yes"|"No"|null,"garmentCare":string|null,"title":string|null,"description":string|null,"visibleText":string[],"warnings":string[],"conflicts":string[],"multipleDifferentItems":boolean,"reviewPhotoSet":boolean}
 
 Rules:
 - Treat output as editable suggestions, not facts.
@@ -50,7 +66,18 @@ Rules:
 - Leave unavailable information null.
 - If evidence conflicts, list it in conflicts and leave the field null.
 - Do not infer exact physical measurements from ordinary photos.
-- Do not convert between sizing systems. Preserve the original label value.
+- Do not convert between sizing systems. Preserve the original label value exactly as printed (for example "LG" stays "LG", Lacoste "4" stays "4").
+- Fill every field the photos or labels support; a field left null is typed by hand later. Leave a field null only when nothing visible supports it.
+- material is the fiber (for example Wool, Merino Wool, Cotton, Cashmere) and only from a label; knit or woven construction belongs in fabricType.
+- sizeType is one of "Regular", "Petite", "Plus", "Big & Tall", "Tall", "Maternity"; use "Regular" for standard adult sizes unless the label says otherwise.
+- countryOfManufacture only from a "Made in" label, as the country name (for example "China").
+- garmentCare only from readable care symbols or text (for example "Machine Washable", "Dry Clean Only", "Hand Wash Only"). "Care on reverse" is not a care instruction; leave garmentCare null.
+- features lists visible features such as "Pockets", "Logo", "Buttons", "Hooded", "Lined".
+- season ("Fall", "Winter", "Spring", "Summer") and occasion ("Casual", "Business", "Formal", "Activewear", "Outdoor") may be inferred from the garment type and fabric weight.
+- vintage is "Yes" only when labels or construction clearly indicate an older garment; otherwise "No".
+- conditionLabel is "NEW" only when original retail tags are attached; a garment without retail tags is "USED".
+- department is one of "Men", "Women", "Unisex Adults", "Boys", "Girls", "Unisex Kids", "Baby", or null when no label or cut makes it clear.
+- title is an eBay title of at most 80 characters: brand, department, item type, key material, color, size. No marketing words.
 - Do not identify a person or infer sensitive personal characteristics from photos that contain models.
 - If photos appear to contain multiple different items, set multipleDifferentItems and reviewPhotoSet to true. Do not split them into multiple records.
 - This is not automotive or industrial identification. Never return vehicle make, model, year, VIN, engine, fitment, OEM part numbers, voltage, or industrial specifications.`;
@@ -76,6 +103,7 @@ export class FashionImageAnalysisService {
     user: User,
     files: Express.Multer.File[] | undefined,
     organizationId?: string,
+    sku?: string,
   ) {
     const org = await this.userOrgs.resolveOrganizationId(
       user.id,
@@ -90,7 +118,8 @@ export class FashionImageAnalysisService {
         `Upload at most ${MAX_PHOTOS} photos for one Fashion item.`,
       );
 
-    const uploaded: Array<{ url: string; s3Key: string; filename: string }> = [];
+    const uploaded: Array<{ url: string; s3Key: string; filename: string }> =
+      [];
     const errors: string[] = [];
     for (const file of files) {
       const filename = file.originalname || 'photo';
@@ -100,12 +129,18 @@ export class FashionImageAnalysisService {
             'Unsupported file type. Use JPEG, PNG, or WebP photos.',
           );
         if (!file.buffer || file.size > MAX_FILE_BYTES)
-          throw new Error('Each photo must be present and no larger than 20 MB.');
+          throw new Error(
+            'Each photo must be present and no larger than 20 MB.',
+          );
         const canonical = await this.imageProcessor.convertBufferToWebp(
           file.buffer,
         );
+        // With a SKU, photos are traceable as <SKU>-<timestamp>-<id>.webp (Fashion quick capture).
+        const stem = fashionSkuStem(sku);
         const s3Key = this.storage.buildDurableKey(
-          `fashion/intake/${org.organizationId}/${randomUUID()}.webp`,
+          stem
+            ? `fashion/intake/${org.organizationId}/${stem}-${Date.now()}-${randomUUID().split('-')[0]}.webp`
+            : `fashion/intake/${org.organizationId}/${randomUUID()}.webp`,
         );
         await this.storage.putObject(s3Key, canonical.buffer, 'image/webp');
         void this.storage.queueVariantGeneration(s3Key);
@@ -133,6 +168,14 @@ export class FashionImageAnalysisService {
     organizationId?: string,
   ) {
     await this.userOrgs.resolveOrganizationId(user.id, organizationId);
+    return this.analyzeImages(dto);
+  }
+
+  /**
+   * Organization access must already be established by the caller
+   * (the HTTP route above, or the background intake job for a stored product).
+   */
+  async analyzeImages(dto: AnalyzeFashionImagesDto) {
     const imageUrls = uniqueUrls(dto.imageUrls);
     if (!imageUrls.length)
       throw new BadRequestException(
@@ -155,51 +198,20 @@ export class FashionImageAnalysisService {
       },
       'default',
     );
-    const model =
-      this.config.get<string>('FASHION_AI_MODEL') || route.model;
-
     try {
-      this.modelRouter.assertAllowed(model);
-      const response = await this.openai.chat({
-        model,
-        costLane: route.lane,
-        imageUrls: visionUrls,
-        systemPrompt: VISION_SYSTEM_PROMPT,
-        userPrompt: JSON.stringify({
-          imageCount: imageUrls.length,
-          instruction:
-            'These photos belong to one Fashion item unless they clearly show unrelated garments. Read labels when they are visible. Do not invent missing details.',
-        }),
-        jsonMode: true,
-        temperature: 0.1,
-        maxTokens: 2500,
-      });
-      try {
-        await this.aiRunLogs.logRun({
-          sku: dto.sku,
-          partType: 'fashion_garment',
-          marketplace: dto.marketplaceId || 'US',
-          lane: route.lane,
-          model: response.model,
-          promptVersion: PROMPT_VERSION,
-          routingPolicyVersion: route.policyVersion,
-          inputTokens: response.usage.promptTokens,
-          outputTokens: response.usage.completionTokens,
-          costUsd: response.estimatedCostUsd,
-          latencyMs: response.latencyMs,
-        });
-      } catch (error) {
-        this.logger.warn(
-          `Unable to write Fashion image AI audit log: ${error instanceof Error ? error.message : error}`,
-        );
-      }
-
-      const candidate = asRecord(response.content);
+      const candidate = await this.identify(dto, imageUrls.length, visionUrls, route);
       const suggested = suggestedAttributes(candidate);
       const family = normalizeFashionCategoryFamily(
         suggested.categoryFamily || currentAttributes.categoryFamily,
       );
       suggested.categoryFamily = family;
+      if (!stringValue(currentAttributes.sizeChartTemplate)) {
+        const template = suggestFashionMeasurementTemplate(
+          stringValue(candidate.itemType) || stringValue(candidate.productType),
+          family,
+        );
+        if (template) suggested.sizeChartTemplate = template.id;
+      }
       const merged = mergeFashionSuggestions({
         current: currentAttributes,
         suggested,
@@ -214,9 +226,15 @@ export class FashionImageAnalysisService {
         warnings.push(
           'These photos may show more than one Fashion item. Review the photo set. The system will not split them into multiple records.',
         );
-      if (!stringValue(candidate.brand))
+      // Only warn about values nobody has provided yet (the operator may have entered them).
+      if (!stringValue(candidate.brand) && !dto.currentBrand?.trim())
         warnings.push('Brand was not confirmed from a readable label.');
-      if (!stringValue(candidate.size) && !stringValue(candidate.shoeSize))
+      if (
+        !stringValue(candidate.size) &&
+        !stringValue(candidate.shoeSize) &&
+        !stringValue(currentAttributes.size) &&
+        !stringValue(currentAttributes.shoeSize)
+      )
         warnings.push('A printed size was not confirmed from the labels.');
 
       const category = await this.suggestCategory(
@@ -230,9 +248,12 @@ export class FashionImageAnalysisService {
             .join(' '),
         dto.marketplaceId,
       );
+      const aiTitle = stringValue(candidate.title);
       const listing = buildFashionListingContent({
         brand: dto.currentBrand || stringValue(candidate.brand),
-        title: dto.titleConfirmed ? dto.currentTitle : stringValue(candidate.title),
+        title: dto.titleConfirmed
+          ? dto.currentTitle
+          : aiTitle && truncateEbayTitle(aiTitle),
         attributes: merged.attributes,
       });
       const attributes = applyFashionAnalysisMeta(merged.attributes, {
@@ -252,7 +273,9 @@ export class FashionImageAnalysisService {
         warnings: [...new Set([...warnings, ...validated.warnings])],
         validationErrors: validated.errors,
         multipleItems,
-        reviewPhotoSet: multipleItems || Boolean(candidate.reviewPhotoSet),
+        // The editor's alert is specifically "more than one garment"; some models also set
+        // reviewPhotoSet on ordinary single-garment sets, which raised false alarms.
+        reviewPhotoSet: multipleItems,
         category,
         brand: dto.currentBrand?.trim() || stringValue(candidate.brand),
         conditionLabel: stringValue(candidate.conditionLabel),
@@ -262,7 +285,8 @@ export class FashionImageAnalysisService {
         description: dto.descriptionConfirmed
           ? dto.currentDescription || listing.description
           : listing.description,
-        suggestedSku: dto.sku?.trim() || suggestFashionSku(stringValue(candidate.itemType)),
+        suggestedSku:
+          dto.sku?.trim() || suggestFashionSku(stringValue(candidate.itemType)),
         visibleText: stringArray(candidate.visibleText),
       };
     } catch (error) {
@@ -317,7 +341,9 @@ export class FashionImageAnalysisService {
       conditionLabel: dto.conditionLabel,
     });
     return {
-      title: dto.titleConfirmed ? dto.title?.trim() || content.title : content.title,
+      title: dto.titleConfirmed
+        ? dto.title?.trim() || content.title
+        : content.title,
       description: dto.descriptionConfirmed
         ? dto.description || content.description
         : content.description,
@@ -325,6 +351,96 @@ export class FashionImageAnalysisService {
       errors: validated.errors,
       warnings: validated.warnings,
     };
+  }
+
+  /** Primary model first, then the fallback; FASHION_AI_FALLBACK_MODEL=none disables it. */
+  private fashionModels(): string[] {
+    const primary =
+      this.config.get<string>('FASHION_AI_MODEL')?.trim() ||
+      DEFAULT_FASHION_AI_MODEL;
+    const configuredFallback = this.config
+      .get<string>('FASHION_AI_FALLBACK_MODEL')
+      ?.trim();
+    const fallback =
+      configuredFallback === undefined || configuredFallback === ''
+        ? DEFAULT_FASHION_AI_FALLBACK_MODEL
+        : configuredFallback.toLowerCase() === 'none'
+          ? null
+          : configuredFallback;
+    return [...new Set([primary, fallback].filter((m): m is string => !!m))];
+  }
+
+  /**
+   * Run the vision call, falling back to the next model when a reply errors, is cut off
+   * at the token limit, or contains no usable JSON. Previously an unparseable reply was
+   * reported as a "suggested" analysis with every field empty.
+   */
+  private async identify(
+    dto: AnalyzeFashionImagesDto,
+    imageCount: number,
+    visionUrls: string[],
+    route: RouteSelection,
+  ): Promise<JsonRecord> {
+    const failures: string[] = [];
+    for (const model of this.fashionModels()) {
+      try {
+        this.modelRouter.assertAllowed(model);
+        const response = await this.openai.chat({
+          model,
+          costLane: route.lane,
+          imageUrls: visionUrls,
+          systemPrompt: VISION_SYSTEM_PROMPT,
+          userPrompt: JSON.stringify({
+            imageCount,
+            instruction:
+              'These photos belong to one Fashion item unless they clearly show unrelated garments. Read labels when they are visible. Do not invent missing details.',
+          }),
+          jsonMode: true,
+          temperature: 0.1,
+          maxTokens: 2500,
+        });
+        await this.logRun(dto, route, response);
+        if (response.finishReason === 'length')
+          throw new Error('the reply was cut off before the JSON finished');
+        const candidate = asRecord(response.content);
+        if (!Object.keys(candidate).length)
+          throw new Error('the reply did not contain a JSON analysis');
+        return candidate;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        failures.push(`${model}: ${message}`);
+        this.logger.warn(`Fashion image analysis with ${model} failed: ${message}`);
+      }
+    }
+    throw new Error(
+      `Image analysis is unavailable (${failures.join('; ')}). Photos are kept. Continue manually.`,
+    );
+  }
+
+  private async logRun(
+    dto: AnalyzeFashionImagesDto,
+    route: RouteSelection,
+    response: OpenAiChatResponse,
+  ) {
+    try {
+      await this.aiRunLogs.logRun({
+        sku: dto.sku,
+        partType: 'fashion_garment',
+        marketplace: dto.marketplaceId || 'US',
+        lane: route.lane,
+        model: response.model,
+        promptVersion: PROMPT_VERSION,
+        routingPolicyVersion: route.policyVersion,
+        inputTokens: response.usage.promptTokens,
+        outputTokens: response.usage.completionTokens,
+        costUsd: response.estimatedCostUsd,
+        latencyMs: response.latencyMs,
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Unable to write Fashion image AI audit log: ${error instanceof Error ? error.message : error}`,
+      );
+    }
   }
 
   private async visionUrls(imageUrls: string[]): Promise<string[]> {
@@ -345,7 +461,11 @@ export class FashionImageAnalysisService {
   private async suggestCategory(query: string | null, marketplaceId?: string) {
     const q = query?.trim() || '';
     if (!q)
-      return { categoryId: null as string | null, categoryName: null as string | null, query: null };
+      return {
+        categoryId: null as string | null,
+        categoryName: null as string | null,
+        query: null,
+      };
     try {
       const treeId = marketplaceId
         ? await this.taxonomy.getDefaultCategoryTreeId(marketplaceId)
@@ -367,13 +487,16 @@ export class FashionImageAnalysisService {
 }
 
 function uniqueUrls(values: string[] | undefined): string[] {
-  return [...new Set((values ?? []).map((value) => value.trim()).filter(Boolean))];
+  return [
+    ...new Set((values ?? []).map((value) => value.trim()).filter(Boolean)),
+  ];
 }
 
 function asRecord(value: unknown): JsonRecord {
   if (typeof value === 'string') {
     try {
-      return asRecord(JSON.parse(value));
+      // Tolerates ```json fences and leading prose that some models add despite json_object mode.
+      return asRecord(sanitizeJson(value));
     } catch {
       return {};
     }
@@ -395,7 +518,10 @@ function stringValue(value: unknown): string | null {
 
 function stringArray(value: unknown): string[] {
   return Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === 'string' && Boolean(item.trim()))
+    ? value.filter(
+        (item): item is string =>
+          typeof item === 'string' && Boolean(item.trim()),
+      )
     : [];
 }
 
@@ -445,23 +571,23 @@ function suggestedAttributes(candidate: JsonRecord): ProductAttributes {
     'accessoryType',
     'accessoryDimensions',
     'accessoryMaterial',
+    'countryOfManufacture',
+    'season',
+    'occasion',
+    'theme',
+    'vintage',
+    'garmentCare',
   ];
   const attributes: ProductAttributes = { ...nested };
   for (const key of keys) {
     const value = stringValue(candidate[key]);
     if (value) attributes[key] = value;
   }
+  const features = stringArray(candidate.features);
+  if (features.length) attributes.features = features.join(', ');
+  else if (stringValue(candidate.features))
+    attributes.features = stringValue(candidate.features)!;
+  const department = normalizeFashionDepartment(attributes.department);
+  if (department) attributes.department = department;
   return attributes;
-}
-
-function keyFromServeUrl(url: string): string | null {
-  try {
-    const parsed = new URL(url, 'http://localhost');
-    const marker = '/api/storage/serve/';
-    const index = parsed.pathname.indexOf(marker);
-    if (index < 0) return null;
-    return decodeURIComponent(parsed.pathname.slice(index + marker.length));
-  } catch {
-    return null;
-  }
 }

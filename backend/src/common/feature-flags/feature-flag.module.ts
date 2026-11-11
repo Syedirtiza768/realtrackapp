@@ -54,6 +54,11 @@ export class FeatureFlagModule implements OnModuleInit {
         'Push warehouse stock quantities to sales channels (each store must also enable push)',
         false,
       ],
+      [
+        'multi_vertical_catalog',
+        'Enable Business & Industrial and Fashion catalog workflows',
+        false,
+      ],
     ];
 
     try {

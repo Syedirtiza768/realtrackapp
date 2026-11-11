@@ -66,7 +66,9 @@ function InlineEditField({
 /** Maps an Item Specifics label to its EbayListing field name for inline editing. */
 const SPECIFICS_FIELD_MAP: Record<string, string> = {
   'Brand': 'brand',
-  'Type': 'type',
+  // CatalogProductDetail persists `partType`; using the listing-preview
+  // presentation key `type` here silently dropped the edit on save.
+  'Type': 'partType',
   'Manufacturer Part Number': 'mpn',
   'OE/OEM Part Number': 'oemPartNumber',
   'Placement on Vehicle': 'placement',

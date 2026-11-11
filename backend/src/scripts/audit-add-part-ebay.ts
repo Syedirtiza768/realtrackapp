@@ -103,7 +103,10 @@ interface AuditResult {
 
 function option(name: string, fallback: string): string {
   const prefix = `--${name}=`;
-  return process.argv.find((arg) => arg.startsWith(prefix))?.slice(prefix.length) ?? fallback;
+  return (
+    process.argv.find((arg) => arg.startsWith(prefix))?.slice(prefix.length) ??
+    fallback
+  );
 }
 
 function hasFlag(name: string): boolean {
@@ -119,19 +122,26 @@ function normalize(value: unknown): string {
 
 function uniqueHttpUrls(values: unknown): string[] {
   const list = Array.isArray(values) ? values : [];
-  return [...new Set(
-    list
-      .map((value) => String(value ?? '').trim())
-      .filter((value) => /^https?:\/\//i.test(value)),
-  )];
+  return [
+    ...new Set(
+      list
+        .map((value) => String(value ?? '').trim())
+        .filter((value) => /^https?:\/\//i.test(value)),
+    ),
+  ];
 }
 
-function compatibilityKey(payload: EbayCompatibilityPayload | null | undefined): Set<string> {
+function compatibilityKey(
+  payload: EbayCompatibilityPayload | null | undefined,
+): Set<string> {
   return new Set(
     (payload?.compatibleProducts ?? [])
       .map((row) =>
         row.compatibilityProperties
-          .map((property) => `${normalize(property.name)}:${normalize(property.value)}`)
+          .map(
+            (property) =>
+              `${normalize(property.name)}:${normalize(property.value)}`,
+          )
           .sort()
           .join('|'),
       )
@@ -160,14 +170,18 @@ function sourceLocationMatches(
   if (!wanted) return true;
   if (!actual) return false;
   const address = actual.location?.address ?? {};
-  const actualText = normalize([
-    actual.name,
-    address.addressLine1,
-    address.city,
-    address.stateOrProvince,
-    address.postalCode,
-    address.country,
-  ].filter(Boolean).join(', '));
+  const actualText = normalize(
+    [
+      actual.name,
+      address.addressLine1,
+      address.city,
+      address.stateOrProvince,
+      address.postalCode,
+      address.country,
+    ]
+      .filter(Boolean)
+      .join(', '),
+  );
   const wantedTokens = wanted.split(/[, ]+/).filter(Boolean);
   return wantedTokens.every((token) => actualText.includes(token));
 }
@@ -186,13 +200,15 @@ function policyId(
 ): string | null {
   const wanted = normalize(name);
   if (!wanted) return null;
-  return policies.find(
-    (policy) =>
-      policy.ebayAccountId === accountId &&
-      policy.marketplaceId === marketplaceId &&
-      policy.policyType === policyType &&
-      normalize(policy.name) === wanted,
-  )?.ebayPolicyId ?? null;
+  return (
+    policies.find(
+      (policy) =>
+        policy.ebayAccountId === accountId &&
+        policy.marketplaceId === marketplaceId &&
+        policy.policyType === policyType &&
+        normalize(policy.name) === wanted,
+    )?.ebayPolicyId ?? null
+  );
 }
 
 function errorMessage(error: unknown): string {
@@ -201,7 +217,10 @@ function errorMessage(error: unknown): string {
 
 async function main(): Promise<void> {
   const limit = Math.max(0, Number(option('limit', '0')) || 0);
-  const concurrency = Math.max(1, Math.min(4, Number(option('concurrency', '2')) || 2));
+  const concurrency = Math.max(
+    1,
+    Math.min(4, Number(option('concurrency', '2')) || 2),
+  );
   const skipTrading = hasFlag('skip-trading');
   const channelFilter = option('channel-id', '').trim();
   const app = await NestFactory.createApplicationContext(AppModule, {
@@ -264,20 +283,26 @@ async function main(): Promise<void> {
       ? targets.filter((target) => target.channelId === channelFilter)
       : targets;
     if (channelFilter && scopedTargets.length === 0) {
-      throw new Error(`Audit channel ${channelFilter} was not found in the Add Part target set`);
+      throw new Error(
+        `Audit channel ${channelFilter} was not found in the Add Part target set`,
+      );
     }
-    const selected = (limit > 0 ? scopedTargets.slice(0, limit) : scopedTargets) as AuditTarget[];
-    console.log(JSON.stringify({
-      event: 'audit_started',
-      scope: 'listing_records.origin=add_part',
-      targetCount: selected.length,
-      candidateCount: targets.length,
-      channelFilter: channelFilter || null,
-      concurrency,
-      skipTrading,
-      readOnly: true,
-      startedAt: new Date().toISOString(),
-    }));
+    const selected = (
+      limit > 0 ? scopedTargets.slice(0, limit) : scopedTargets
+    ) as AuditTarget[];
+    console.log(
+      JSON.stringify({
+        event: 'audit_started',
+        scope: 'listing_records.origin=add_part',
+        targetCount: selected.length,
+        candidateCount: targets.length,
+        channelFilter: channelFilter || null,
+        concurrency,
+        skipTrading,
+        readOnly: true,
+        startedAt: new Date().toISOString(),
+      }),
+    );
 
     const locationCache = new Map<string, Promise<EbayLocation | null>>();
     const getLocation = (storeId: string, key: string | null | undefined) => {
@@ -286,7 +311,9 @@ async function main(): Promise<void> {
       const cacheKey = `${storeId}:${trimmed}`;
       const cached = locationCache.get(cacheKey);
       if (cached) return cached;
-      const value = inventoryApi.getLocation(storeId, trimmed).catch(() => null);
+      const value = inventoryApi
+        .getLocation(storeId, trimmed)
+        .catch(() => null);
       locationCache.set(cacheKey, value);
       return value;
     };
@@ -307,70 +334,91 @@ async function main(): Promise<void> {
           const fetchErrors: string[] = [];
           let item: EbayInventoryItem | null = null;
           let offer: EbayOffer | null = null;
-          let trading: Awaited<ReturnType<EbayTradingApiService['getItemDetails']>> | null = null;
+          let trading: Awaited<
+            ReturnType<EbayTradingApiService['getItemDetails']>
+          > | null = null;
           let inventoryCompatibility: EbayCompatibilityPayload | null = null;
           let tradingCompatibility: EbayCompatibilityPayload | null = null;
           let liveLocation: EbayLocation | null = null;
 
           if (!target.ebaySku) {
-          anomalies.push('missing_ebay_inventory_sku');
+            anomalies.push('missing_ebay_inventory_sku');
           } else {
-          try {
-            item = await inventoryApi.getItem(target.storeId, target.ebaySku);
-          } catch (error: unknown) {
-            anomalies.push('inventory_item_not_found_or_unreadable');
-            fetchErrors.push(`inventory_item: ${errorMessage(error)}`);
-          }
-          try {
-            inventoryCompatibility = await inventoryApi.getCompatibility(
-              target.storeId,
-              target.ebaySku,
-            );
-          } catch (error: unknown) {
-            if (expected.compatibleProducts.length > 0) {
-              fetchErrors.push(`inventory_compatibility: ${errorMessage(error)}`);
+            try {
+              item = await inventoryApi.getItem(target.storeId, target.ebaySku);
+            } catch (error: unknown) {
+              anomalies.push('inventory_item_not_found_or_unreadable');
+              fetchErrors.push(`inventory_item: ${errorMessage(error)}`);
             }
-            inventoryCompatibility = { compatibleProducts: [] };
-          }
+            try {
+              inventoryCompatibility = await inventoryApi.getCompatibility(
+                target.storeId,
+                target.ebaySku,
+              );
+            } catch (error: unknown) {
+              if (expected.compatibleProducts.length > 0) {
+                fetchErrors.push(
+                  `inventory_compatibility: ${errorMessage(error)}`,
+                );
+              }
+              inventoryCompatibility = { compatibleProducts: [] };
+            }
           }
 
           if (target.offerId) {
-          try {
-            offer = await inventoryApi.getOffer(target.storeId, target.offerId);
-          } catch (error: unknown) {
-            fetchErrors.push(`offer: ${errorMessage(error)}`);
-          }
+            try {
+              offer = await inventoryApi.getOffer(
+                target.storeId,
+                target.offerId,
+              );
+            } catch (error: unknown) {
+              fetchErrors.push(`offer: ${errorMessage(error)}`);
+            }
           }
           if (!offer && target.ebaySku) {
-          try {
-            const page = await inventoryApi.getOffersBySku(target.storeId, target.ebaySku, 100, 0);
-            offer = page.offers.find((candidate) => candidate.listingId === target.listingId) ??
-              page.offers.find((candidate) => candidate.status === 'PUBLISHED') ?? null;
-          } catch (error: unknown) {
-            fetchErrors.push(`offers_by_sku: ${errorMessage(error)}`);
-          }
+            try {
+              const page = await inventoryApi.getOffersBySku(
+                target.storeId,
+                target.ebaySku,
+                100,
+                0,
+              );
+              offer =
+                page.offers.find(
+                  (candidate) => candidate.listingId === target.listingId,
+                ) ??
+                page.offers.find(
+                  (candidate) => candidate.status === 'PUBLISHED',
+                ) ??
+                null;
+            } catch (error: unknown) {
+              fetchErrors.push(`offers_by_sku: ${errorMessage(error)}`);
+            }
           }
 
           if (!offer) anomalies.push('missing_or_unreadable_offer');
           if (!target.listingId) {
-          anomalies.push('missing_listing_id');
+            anomalies.push('missing_listing_id');
           } else if (!skipTrading) {
-          try {
-            trading = await tradingApi.getItemDetails(
-              target.storeId,
-              target.listingId,
-              target.marketplaceId,
-            );
-            tradingCompatibility = trading.compatibility ?? { compatibleProducts: [] };
-          } catch (error: unknown) {
-            anomalies.push('trading_listing_unreadable');
-            fetchErrors.push(`trading_item: ${errorMessage(error)}`);
-          }
+            try {
+              trading = await tradingApi.getItemDetails(
+                target.storeId,
+                target.listingId,
+                target.marketplaceId,
+              );
+              tradingCompatibility = trading.compatibility ?? {
+                compatibleProducts: [],
+              };
+            } catch (error: unknown) {
+              anomalies.push('trading_listing_unreadable');
+              fetchErrors.push(`trading_item: ${errorMessage(error)}`);
+            }
           }
 
           const liveTitle = item?.product?.title ?? null;
           if (!liveTitle) anomalies.push('missing_live_title');
-          else if (normalize(liveTitle) !== normalize(target.sourceTitle)) anomalies.push('title_mismatch');
+          else if (normalize(liveTitle) !== normalize(target.sourceTitle))
+            anomalies.push('title_mismatch');
 
           const inventoryDescription = item?.product?.description ?? null;
           const tradingDescription = trading?.description ?? null;
@@ -381,93 +429,136 @@ async function main(): Promise<void> {
             : inventoryDescription
               ? 'inventory'
               : 'unavailable';
-          const descriptionMatches = sourceDescription.length === 0
-            ? true
-            : liveDescription != null && normalize(liveDescription) === normalize(sourceDescription);
+          const descriptionMatches =
+            sourceDescription.length === 0
+              ? true
+              : liveDescription != null &&
+                normalize(liveDescription) === normalize(sourceDescription);
           if (sourceDescription.length > 0 && !descriptionMatches) {
-            anomalies.push(liveDescription ? 'description_mismatch' : 'missing_live_description');
+            anomalies.push(
+              liveDescription
+                ? 'description_mismatch'
+                : 'missing_live_description',
+            );
           }
 
           const inventoryImageCount = item?.product?.imageUrls?.length ?? null;
           const tradingImageCount = trading?.imageUrls?.length ?? null;
-          if (inventoryImageCount !== sourceImages.length) anomalies.push('inventory_image_count_mismatch');
-          if (tradingImageCount !== null && tradingImageCount !== sourceImages.length) anomalies.push('trading_image_count_mismatch');
+          if (inventoryImageCount !== sourceImages.length)
+            anomalies.push('inventory_image_count_mismatch');
+          if (
+            tradingImageCount !== null &&
+            tradingImageCount !== sourceImages.length
+          )
+            anomalies.push('trading_image_count_mismatch');
 
-          if (!compatibilityMatches(expected, inventoryCompatibility)) anomalies.push('inventory_compatibility_mismatch');
-          if (trading && !compatibilityMatches(expected, tradingCompatibility)) anomalies.push('trading_compatibility_mismatch');
+          if (!compatibilityMatches(expected, inventoryCompatibility))
+            anomalies.push('inventory_compatibility_mismatch');
+          if (trading && !compatibilityMatches(expected, tradingCompatibility))
+            anomalies.push('trading_compatibility_mismatch');
 
           const expectedPolicies = {
-          fulfillmentPolicyId: policyId(policies as PolicyRow[], target.accountId, target.marketplaceId, 'fulfillment', target.sourceShippingProfile),
-          paymentPolicyId: policyId(policies as PolicyRow[], target.accountId, target.marketplaceId, 'payment', target.sourcePaymentProfile),
-          returnPolicyId: policyId(policies as PolicyRow[], target.accountId, target.marketplaceId, 'return', target.sourceReturnProfile),
+            fulfillmentPolicyId: policyId(
+              policies as PolicyRow[],
+              target.accountId,
+              target.marketplaceId,
+              'fulfillment',
+              target.sourceShippingProfile,
+            ),
+            paymentPolicyId: policyId(
+              policies as PolicyRow[],
+              target.accountId,
+              target.marketplaceId,
+              'payment',
+              target.sourcePaymentProfile,
+            ),
+            returnPolicyId: policyId(
+              policies as PolicyRow[],
+              target.accountId,
+              target.marketplaceId,
+              'return',
+              target.sourceReturnProfile,
+            ),
           };
-          if (target.sourceShippingProfile && !expectedPolicies.fulfillmentPolicyId) anomalies.push('source_shipping_policy_not_synced');
-          if (target.sourcePaymentProfile && !expectedPolicies.paymentPolicyId) anomalies.push('source_payment_policy_not_synced');
-          if (target.sourceReturnProfile && !expectedPolicies.returnPolicyId) anomalies.push('source_return_policy_not_synced');
+          if (
+            target.sourceShippingProfile &&
+            !expectedPolicies.fulfillmentPolicyId
+          )
+            anomalies.push('source_shipping_policy_not_synced');
+          if (target.sourcePaymentProfile && !expectedPolicies.paymentPolicyId)
+            anomalies.push('source_payment_policy_not_synced');
+          if (target.sourceReturnProfile && !expectedPolicies.returnPolicyId)
+            anomalies.push('source_return_policy_not_synced');
 
           const livePolicies = offer?.listingPolicies
-          ? {
-              fulfillmentPolicyId: offer.listingPolicies.fulfillmentPolicyId ?? null,
-              paymentPolicyId: offer.listingPolicies.paymentPolicyId ?? null,
-              returnPolicyId: offer.listingPolicies.returnPolicyId ?? null,
-            }
-          : null;
+            ? {
+                fulfillmentPolicyId:
+                  offer.listingPolicies.fulfillmentPolicyId ?? null,
+                paymentPolicyId: offer.listingPolicies.paymentPolicyId ?? null,
+                returnPolicyId: offer.listingPolicies.returnPolicyId ?? null,
+              }
+            : null;
           if (offer && !livePolicies) {
-          anomalies.push('missing_live_policies');
+            anomalies.push('missing_live_policies');
           } else if (livePolicies) {
-          for (const [key, expectedId] of Object.entries(expectedPolicies)) {
-            if (expectedId && livePolicies[key as keyof typeof livePolicies] !== expectedId) {
-              anomalies.push(`${key}_mismatch`);
+            for (const [key, expectedId] of Object.entries(expectedPolicies)) {
+              if (
+                expectedId &&
+                livePolicies[key as keyof typeof livePolicies] !== expectedId
+              ) {
+                anomalies.push(`${key}_mismatch`);
+              }
             }
-          }
           }
 
           const liveLocationKey = offer?.merchantLocationKey ?? null;
           if (liveLocationKey) {
-          liveLocation = await getLocation(target.storeId, liveLocationKey);
-          if (
-            target.sourceLocation &&
-            !isWarehouseBinLocation(target.sourceLocation) &&
-            !sourceLocationMatches(target.sourceLocation, liveLocation)
-          ) {
-            anomalies.push('location_mismatch');
-          }
+            liveLocation = await getLocation(target.storeId, liveLocationKey);
+            if (
+              target.sourceLocation &&
+              !isWarehouseBinLocation(target.sourceLocation) &&
+              !sourceLocationMatches(target.sourceLocation, liveLocation)
+            ) {
+              anomalies.push('location_mismatch');
+            }
           } else {
             anomalies.push('missing_live_location');
           }
 
           const result: AuditResult = {
-          channelId: target.channelId,
-          accountId: target.accountId,
-          storeId: target.storeId,
-          marketplaceId: target.marketplaceId,
-          internalSku: target.internalSku,
-          ebaySku: target.ebaySku,
-          listingId: target.listingId,
-          offerId: offer?.offerId ?? target.offerId,
-          sourceTitle: target.sourceTitle,
-          liveTitle,
-          sourceDescriptionLength: sourceDescription.length,
-          inventoryDescriptionLength: inventoryDescription?.length ?? null,
-          tradingDescriptionLength: tradingDescription?.length ?? null,
-          liveDescriptionLength: liveDescription?.length ?? null,
-          descriptionSource,
-          descriptionMatches,
-          sourceImageCount: sourceImages.length,
-          inventoryImageCount,
-          tradingImageCount,
-          expectedCompatibilityCount: expected.compatibleProducts.length,
-          inventoryCompatibilityCount: inventoryCompatibility?.compatibleProducts?.length ?? null,
-          tradingCompatibilityCount: tradingCompatibility?.compatibleProducts?.length ?? null,
-          expectedPolicies,
-          livePolicies,
-          liveOfferStatus: offer?.status ?? null,
-          liveOfferListingId: offer?.listingId ?? null,
-          expectedLocation: target.sourceLocation,
-          liveLocationKey,
-          liveLocation,
-          anomalies: [...new Set(anomalies)],
-          fetchErrors,
+            channelId: target.channelId,
+            accountId: target.accountId,
+            storeId: target.storeId,
+            marketplaceId: target.marketplaceId,
+            internalSku: target.internalSku,
+            ebaySku: target.ebaySku,
+            listingId: target.listingId,
+            offerId: offer?.offerId ?? target.offerId,
+            sourceTitle: target.sourceTitle,
+            liveTitle,
+            sourceDescriptionLength: sourceDescription.length,
+            inventoryDescriptionLength: inventoryDescription?.length ?? null,
+            tradingDescriptionLength: tradingDescription?.length ?? null,
+            liveDescriptionLength: liveDescription?.length ?? null,
+            descriptionSource,
+            descriptionMatches,
+            sourceImageCount: sourceImages.length,
+            inventoryImageCount,
+            tradingImageCount,
+            expectedCompatibilityCount: expected.compatibleProducts.length,
+            inventoryCompatibilityCount:
+              inventoryCompatibility?.compatibleProducts?.length ?? null,
+            tradingCompatibilityCount:
+              tradingCompatibility?.compatibleProducts?.length ?? null,
+            expectedPolicies,
+            livePolicies,
+            liveOfferStatus: offer?.status ?? null,
+            liveOfferListingId: offer?.listingId ?? null,
+            expectedLocation: target.sourceLocation,
+            liveLocationKey,
+            liveLocation,
+            anomalies: [...new Set(anomalies)],
+            fetchErrors,
           };
           results.push(result);
           console.log(JSON.stringify({ event: 'audit_result', ...result }));
@@ -515,16 +606,28 @@ async function main(): Promise<void> {
       }
     };
 
-    await Promise.all(Array.from({ length: Math.min(concurrency, Math.max(1, selected.length)) }, () => worker()));
+    await Promise.all(
+      Array.from(
+        { length: Math.min(concurrency, Math.max(1, selected.length)) },
+        () => worker(),
+      ),
+    );
     const summary = {
       event: 'audit_completed',
       targetCount: results.length,
-      anomalousCount: results.filter((result) => result.anomalies.length > 0).length,
-      cleanCount: results.filter((result) => result.anomalies.length === 0).length,
-      fetchErrorCount: results.filter((result) => result.fetchErrors.length > 0).length,
+      anomalousCount: results.filter((result) => result.anomalies.length > 0)
+        .length,
+      cleanCount: results.filter((result) => result.anomalies.length === 0)
+        .length,
+      fetchErrorCount: results.filter((result) => result.fetchErrors.length > 0)
+        .length,
       anomalyCounts: Object.fromEntries(
-        [...new Set(results.flatMap((result) => result.anomalies))]
-          .map((code) => [code, results.filter((result) => result.anomalies.includes(code)).length]),
+        [...new Set(results.flatMap((result) => result.anomalies))].map(
+          (code) => [
+            code,
+            results.filter((result) => result.anomalies.includes(code)).length,
+          ],
+        ),
       ),
       completedAt: new Date().toISOString(),
     };
@@ -537,6 +640,8 @@ async function main(): Promise<void> {
 main()
   .then(() => process.exit(0))
   .catch((error: unknown) => {
-    console.error(JSON.stringify({ event: 'audit_failed', error: errorMessage(error) }));
+    console.error(
+      JSON.stringify({ event: 'audit_failed', error: errorMessage(error) }),
+    );
     process.exit(1);
   });

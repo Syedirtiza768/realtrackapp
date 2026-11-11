@@ -7,6 +7,7 @@ import {
   type TradingItemDetails,
 } from './ebay-trading-get-item.util.js';
 import type { EbayCompatibilityPayload } from './ebay-api.types.js';
+import { toCoreCompatibilityPayload } from '../../fitment/fitment-mvl.util.js';
 
 export interface TradingSellerListItem {
   itemId: string;
@@ -31,6 +32,40 @@ export interface TradingSellerListItem {
   listingUrl: string | null;
 }
 
+export interface TradingFixedPriceItemInput {
+  title: string;
+  description: string;
+  categoryId: string;
+  conditionId: number;
+  quantity: number;
+  price: number;
+  currency: string;
+  sku: string;
+  imageUrls: string[];
+  itemSpecifics?: Record<string, string[]>;
+  compatibility?: EbayCompatibilityPayload | null;
+  listingDuration?: string;
+  location?: string | null;
+  country?: string | null;
+  postalCode?: string | null;
+  conditionDescription?: string | null;
+  paymentProfileId?: string | null;
+  shippingProfileId?: string | null;
+  returnProfileId?: string | null;
+}
+
+export interface TradingFixedPriceRevisionInput {
+  title?: string;
+  description?: string;
+  categoryId?: string;
+  quantity?: number;
+  price?: number;
+  currency?: string;
+  imageUrls?: string[];
+  itemSpecifics?: Record<string, string[]>;
+  compatibility?: EbayCompatibilityPayload | null;
+}
+
 const MARKETPLACE_SITE_ID: Record<string, number> = {
   EBAY_US: 0,
   EBAY_MOTORS_US: 100,
@@ -46,6 +81,102 @@ function tagValue(block: string, tag: string): string | null {
   return raw.replace(/^<!\[CDATA\[|\]\]>$/g, '');
 }
 
+/**
+ * eBay reports policy blocks (e.g. "Overseas Warehouse Block", "account is
+ * limited") as a generic error 240 and puts the real reason in the first
+ * ErrorParameters value, as HTML. Surface it so operators don't see only
+ * "title and/or description may contain improper words".
+ */
+function tradingPolicyReason(xml: string): string | null {
+  const parameters = xml.match(
+    /<ErrorParameters\b[^>]*>([\s\S]*?)<\/ErrorParameters>/i,
+  )?.[1];
+  const raw = parameters ? tagValue(parameters, 'Value') : null;
+  if (!raw) return null;
+  const text = raw
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&apos;/g, "'")
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\{e\d+-\d+x\}/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return text || null;
+}
+
+function tradingFailureMessage(xml: string, fallback: string): string {
+  const details = [
+    tagValue(xml, 'LongMessage'),
+    tagValue(xml, 'Message'),
+    tagValue(xml, 'ShortMessage'),
+  ].filter((value): value is string => Boolean(value));
+  if (tagValue(xml, 'ErrorCode') === '240') {
+    const reason = tradingPolicyReason(xml);
+    if (reason) details.unshift(`eBay policy block: ${reason}`);
+  }
+  return [...new Set(details)].join(' — ') || fallback;
+}
+
+function fixedPriceRevisionFields(
+  input: TradingFixedPriceRevisionInput,
+): string[] {
+  const fields: string[] = [];
+  if (input.title != null) {
+    fields.push(`    <Title>${xmlText(input.title)}</Title>`);
+  }
+  if (input.description != null) {
+    fields.push(`    <Description>${xmlText(input.description)}</Description>`);
+  }
+  if (input.categoryId != null) {
+    fields.push(
+      `    <PrimaryCategory><CategoryID>${xmlText(input.categoryId)}</CategoryID></PrimaryCategory>`,
+    );
+  }
+  if (input.quantity != null) {
+    fields.push(
+      `    <Quantity>${Math.max(0, Math.trunc(input.quantity))}</Quantity>`,
+    );
+  }
+  if (input.price != null) {
+    fields.push(
+      `    <StartPrice currencyID="${xmlText(input.currency ?? 'USD')}">${input.price.toFixed(2)}</StartPrice>`,
+    );
+  }
+  if (input.imageUrls != null) {
+    const pictures = input.imageUrls
+      .map((url) => `      <PictureURL>${xmlText(url)}</PictureURL>`)
+      .join('\n');
+    fields.push(`    <PictureDetails>\n${pictures}\n    </PictureDetails>`);
+  }
+  if (input.itemSpecifics != null) {
+    const specifics = itemSpecificsXml(input.itemSpecifics).replace(
+      /^ {2}/gm,
+      '    ',
+    );
+    fields.push(specifics);
+  }
+  return fields;
+}
+
+function buildFixedPriceListingRequest(
+  callName: 'ReviseFixedPriceItem' | 'RelistFixedPriceItem',
+  itemId: string,
+  input: TradingFixedPriceRevisionInput,
+): string {
+  const fields = fixedPriceRevisionFields(input);
+  return `<?xml version="1.0" encoding="utf-8"?>
+<${callName}Request xmlns="urn:ebay:apis:eBLBaseComponents">
+  <ErrorLanguage>en_US</ErrorLanguage>
+  <WarningLevel>High</WarningLevel>
+  <Item>
+    <ItemID>${xmlText(itemId)}</ItemID>
+${fields.join('\n')}
+  </Item>
+</${callName}Request>`;
+}
+
 function escapeXml(value: string): string {
   return value
     .replaceAll('&', '&amp;')
@@ -53,6 +184,60 @@ function escapeXml(value: string): string {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&apos;');
+}
+
+function xmlText(value: string): string {
+  return escapeXml(value);
+}
+
+function sellerProfilesXml(input: TradingFixedPriceItemInput): string {
+  const profiles = [
+    input.paymentProfileId
+      ? `    <SellerPaymentProfile><PaymentProfileID>${xmlText(input.paymentProfileId)}</PaymentProfileID></SellerPaymentProfile>`
+      : '',
+    input.shippingProfileId
+      ? `    <SellerShippingProfile><ShippingProfileID>${xmlText(input.shippingProfileId)}</ShippingProfileID></SellerShippingProfile>`
+      : '',
+    input.returnProfileId
+      ? `    <SellerReturnProfile><ReturnProfileID>${xmlText(input.returnProfileId)}</ReturnProfileID></SellerReturnProfile>`
+      : '',
+  ].filter(Boolean);
+  return profiles.length ? `  <SellerProfiles>\n${profiles.join('\n')}\n  </SellerProfiles>` : '';
+}
+
+function itemSpecificsXml(aspects: Record<string, string[]> | undefined): string {
+  const rows = Object.entries(aspects ?? {}).flatMap(([name, values]) =>
+    (values ?? []).map(
+      (value) =>
+        `    <NameValueList><Name>${xmlText(name)}</Name><Value>${xmlText(String(value))}</Value></NameValueList>`,
+    ),
+  );
+  return rows.length ? `  <ItemSpecifics>\n${rows.join('\n')}\n  </ItemSpecifics>` : '';
+}
+
+function compatibilityXml(payload: EbayCompatibilityPayload | null | undefined): string {
+  const rows = (payload?.compatibleProducts ?? []).map((row) => {
+    const properties = row.compatibilityProperties
+      .map(
+        (property) =>
+          `      <NameValueList><Name>${xmlText(property.name)}</Name><Value>${xmlText(property.value)}</Value></NameValueList>`,
+      )
+      .join('\n');
+    const notes = row.notes
+      ? `\n      <CompatibilityNotes>${xmlText(row.notes)}</CompatibilityNotes>`
+      : '';
+    return `    <Compatibility>\n${properties}${notes}\n    </Compatibility>`;
+  });
+  return rows.length
+    ? `  <ItemCompatibilityList>\n${rows.join('\n')}\n  </ItemCompatibilityList>`
+    : '';
+}
+
+function isInvalidCompatibilityResponse(xml: string): boolean {
+  return (
+    /<ErrorCode>\s*21917122\s*<\/ErrorCode>/i.test(xml) ||
+    /all compatibilities are invalid/i.test(xml)
+  );
 }
 
 function parseActiveListItems(xml: string): TradingSellerListItem[] {
@@ -338,6 +523,222 @@ export class EbayTradingApiService {
     return parseTradingGetItemResponse(xml);
   }
 
+  /** Create a new Seller Hub-editable fixed-price listing with AddFixedPriceItem. */
+  async addFixedPriceItem(
+    storeId: string,
+    input: TradingFixedPriceItemInput,
+    marketplaceId?: string | null,
+  ): Promise<{ itemId: string }> {
+    const categoryId = String(input.categoryId ?? '').trim();
+    if (!/^\d{1,10}$/.test(categoryId)) {
+      throw new Error(
+        'eBay primary category ID is missing or invalid. Select a valid eBay category before publishing.',
+      );
+    }
+    if (input.imageUrls.length === 0) {
+      throw new Error('Trading API listing requires at least one image URL');
+    }
+    const pictures = input.imageUrls
+      .map((url) => `      <PictureURL>${xmlText(url)}</PictureURL>`)
+      .join('\n');
+    // Trading API validates the whole ItemCompatibilityList against the live
+    // Motors vocabulary. Local fitment may contain useful but non-eBay
+    // optional values such as Trim, Engine, and notes; sending those values
+    // can make every row invalid and prevent the listing itself from being
+    // created. Start with the validated core vehicle identity only.
+    const coreCompatibility = toCoreCompatibilityPayload(input.compatibility);
+    const profiles = sellerProfilesXml(input);
+    const specifics = itemSpecificsXml(input.itemSpecifics);
+    const buildBody = (includeCompatibility: boolean) => `<?xml version="1.0" encoding="utf-8"?>
+<AddFixedPriceItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <ErrorLanguage>en_US</ErrorLanguage>
+  <WarningLevel>High</WarningLevel>
+  <Item>
+    <Title>${xmlText(input.title)}</Title>
+    <Description>${xmlText(input.description)}</Description>
+    <PrimaryCategory><CategoryID>${xmlText(categoryId)}</CategoryID></PrimaryCategory>
+    <ConditionID>${input.conditionId}</ConditionID>
+    ${input.conditionDescription ? `<ConditionDescription>${xmlText(input.conditionDescription)}</ConditionDescription>` : ''}
+    <Quantity>${Math.max(1, Math.trunc(input.quantity))}</Quantity>
+    <Currency>${xmlText(input.currency)}</Currency>
+    <StartPrice currencyID="${xmlText(input.currency)}">${input.price.toFixed(2)}</StartPrice>
+    <ListingDuration>${xmlText(input.listingDuration ?? 'GTC')}</ListingDuration>
+    <ListingType>FixedPriceItem</ListingType>
+    <SKU>${xmlText(input.sku)}</SKU>
+    <!-- Keep the seller SKU as an editable custom label; identify this listing by ItemID. -->
+    <InventoryTrackingMethod>ItemID</InventoryTrackingMethod>
+    ${input.location ? `<Location>${xmlText(input.location)}</Location>` : ''}
+    ${input.country ? `<Country>${xmlText(input.country)}</Country>` : ''}
+    ${input.postalCode ? `<PostalCode>${xmlText(input.postalCode)}</PostalCode>` : ''}
+    <PictureDetails>
+${pictures}
+    </PictureDetails>
+${specifics}
+${includeCompatibility ? compatibilityXml(coreCompatibility) : ''}
+${profiles}
+  </Item>
+</AddFixedPriceItemRequest>`;
+    let xml = await this.postTradingRequest(
+      storeId,
+      'AddFixedPriceItem',
+      buildBody(Boolean(coreCompatibility?.compatibleProducts?.length)),
+      marketplaceId,
+    );
+    if (
+      /<Ack>\s*Failure\s*<\/Ack>/i.test(xml) &&
+      isInvalidCompatibilityResponse(xml) &&
+      coreCompatibility?.compatibleProducts?.length
+    ) {
+      this.logger.warn(
+        `Trading AddFixedPriceItem rejected compatibility for SKU ${input.sku}; retrying without the compatibility block`,
+      );
+      // AddFixedPriceItem is atomic: eBay reports Item not listed, so a
+      // second request without ItemCompatibilityList is safe and avoids
+      // leaving FEBEST products unpublished because one MVL row is stale.
+      xml = await this.postTradingRequest(
+        storeId,
+        'AddFixedPriceItem',
+        buildBody(false),
+        marketplaceId,
+      );
+    }
+    if (/<Ack>\s*Failure\s*<\/Ack>/i.test(xml)) {
+      const message = tradingFailureMessage(xml, 'AddFixedPriceItem failed');
+      const code = tagValue(xml, 'ErrorCode');
+      throw new Error(code ? `AddFixedPriceItem failed (${code}): ${message}` : message);
+    }
+    const itemId = tagValue(xml, 'ItemID');
+    if (!itemId) throw new Error('AddFixedPriceItem succeeded without an ItemID');
+    return { itemId };
+  }
+
+  /** Revise fields on a legacy fixed-price listing. */
+  async reviseFixedPriceItem(
+    storeId: string,
+    itemId: string,
+    input: TradingFixedPriceRevisionInput,
+    marketplaceId?: string | null,
+  ): Promise<void> {
+    const fields = fixedPriceRevisionFields(input);
+    if (fields.length === 0) return;
+    const body = buildFixedPriceListingRequest(
+      'ReviseFixedPriceItem',
+      itemId,
+      input,
+    );
+    const xml = await this.postTradingRequest(
+      storeId,
+      'ReviseFixedPriceItem',
+      body,
+      marketplaceId,
+    );
+    if (/<Ack>\s*Failure\s*<\/Ack>/i.test(xml)) {
+      const message = tradingFailureMessage(xml, 'ReviseFixedPriceItem failed');
+      const code = tagValue(xml, 'ErrorCode');
+      throw new Error(
+        code ? `ReviseFixedPriceItem failed (${code}): ${message}` : message,
+      );
+    }
+  }
+
+  /** Relist an ended legacy fixed-price item. eBay returns a new ItemID. */
+  async relistFixedPriceItem(
+    storeId: string,
+    itemId: string,
+    input: TradingFixedPriceRevisionInput,
+    marketplaceId?: string | null,
+  ): Promise<{ itemId: string }> {
+    const body = buildFixedPriceListingRequest(
+      'RelistFixedPriceItem',
+      itemId,
+      input,
+    );
+    const xml = await this.postTradingRequest(
+      storeId,
+      'RelistFixedPriceItem',
+      body,
+      marketplaceId,
+    );
+    if (/<Ack>\s*Failure\s*<\/Ack>/i.test(xml)) {
+      const message = tradingFailureMessage(xml, 'RelistFixedPriceItem failed');
+      const code = tagValue(xml, 'ErrorCode');
+      throw new Error(
+        code ? `RelistFixedPriceItem failed (${code}): ${message}` : message,
+      );
+    }
+    const relistedItemId = tagValue(xml, 'ItemID');
+    if (!relistedItemId) {
+      throw new Error('RelistFixedPriceItem succeeded without an ItemID');
+    }
+    return { itemId: relistedItemId };
+  }
+
+  /** End a legacy fixed-price listing. */
+  async endFixedPriceItem(
+    storeId: string,
+    itemId: string,
+    marketplaceId?: string | null,
+  ): Promise<void> {
+    const body = `<?xml version="1.0" encoding="utf-8"?>
+<EndFixedPriceItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <ErrorLanguage>en_US</ErrorLanguage>
+  <WarningLevel>High</WarningLevel>
+  <ItemID>${xmlText(itemId)}</ItemID>
+  <EndingReason>NotAvailable</EndingReason>
+</EndFixedPriceItemRequest>`;
+    const xml = await this.postTradingRequest(
+      storeId,
+      'EndFixedPriceItem',
+      body,
+      marketplaceId,
+    );
+    if (/<Ack>\s*Failure\s*<\/Ack>/i.test(xml)) {
+      const message = tagValue(xml, 'LongMessage') ?? 'EndFixedPriceItem failed';
+      const code = tagValue(xml, 'ErrorCode');
+      throw new Error(code ? `EndFixedPriceItem failed (${code}): ${message}` : message);
+    }
+  }
+
+  /**
+   * Replace the complete item-level gallery with one externally hosted image.
+   * ReviseItem replaces the existing PictureURL set when PictureDetails is
+   * supplied, so sending exactly one URL removes the other item-level images
+   * while preserving the rest of the listing fields.
+   */
+  async replaceListingImages(
+    storeId: string,
+    itemId: string,
+    imageUrl: string,
+    marketplaceId?: string | null,
+  ): Promise<void> {
+    const body = `<?xml version="1.0" encoding="utf-8"?>
+<ReviseItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <ErrorLanguage>en_US</ErrorLanguage>
+  <WarningLevel>High</WarningLevel>
+  <Item>
+    <ItemID>${escapeXml(itemId)}</ItemID>
+    <PictureDetails>
+      <PictureURL>${escapeXml(imageUrl)}</PictureURL>
+    </PictureDetails>
+  </Item>
+</ReviseItemRequest>`;
+
+    const xml = await this.postTradingRequest(
+      storeId,
+      'ReviseItem',
+      body,
+      marketplaceId,
+    );
+    if (/<Ack>\s*Failure\s*<\/Ack>/i.test(xml)) {
+      const err =
+        tagValue(xml, 'LongMessage') ?? 'ReviseItem image update failed';
+      const code = tagValue(xml, 'ErrorCode');
+      throw new Error(
+        code ? `ReviseItem image update failed (${code}): ${err}` : err,
+      );
+    }
+  }
+
   /**
    * Replace the legacy listing compatibility list.
    *
@@ -379,7 +780,9 @@ export class EbayTradingApiService {
       );
     }
 
-    const buildBody = (requestName: 'ReviseItemRequest' | 'ReviseFixedPriceItemRequest') => `<?xml version="1.0" encoding="utf-8"?>
+    const buildBody = (
+      requestName: 'ReviseItemRequest' | 'ReviseFixedPriceItemRequest',
+    ) => `<?xml version="1.0" encoding="utf-8"?>
 <${requestName} xmlns="urn:ebay:apis:eBLBaseComponents">
   <ErrorLanguage>en_US</ErrorLanguage>
   <WarningLevel>High</WarningLevel>

@@ -44,9 +44,11 @@ import { TeamsModule } from './teams/teams.module.js';
 import { VerticalsModule } from './verticals/verticals.module.js';
 import { CatalogModule } from './catalog/catalog.module.js';
 import { StockModule } from './stock/stock.module.js';
+import { MotoarkModule } from './integrations/motoark/motoark.module.js';
 
 @Module({
   imports: [
+    MotoarkModule,
     ConfigModule.forRoot({
       isGlobal: true,
       ignoreEnvFile: process.env.IGNORE_ENV_FILE === 'true',

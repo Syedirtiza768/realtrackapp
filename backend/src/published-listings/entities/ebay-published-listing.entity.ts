@@ -187,6 +187,14 @@ export class EbayPublishedListing {
   @Column({ name: 'catalog_product_id', type: 'uuid', nullable: true })
   catalogProductId!: string | null;
 
+  /** Synthetic row used only for external integration testing. */
+  @Column({ name: 'is_test_listing', type: 'boolean', default: false })
+  isTestListing!: boolean;
+
+  /** Decimal string: preserve bigint ordering without JavaScript precision loss. */
+  @Column({ type: 'bigint', default: 1 })
+  revision!: string;
+
   @ManyToOne(() => CatalogProduct, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'catalog_product_id' })
   catalogProduct!: CatalogProduct | null;

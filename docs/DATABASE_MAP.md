@@ -2,7 +2,7 @@
 
 # Database Map
 
-> Comprehensive database schema reference for RealTrackApp.
+> Comprehensive database schema reference for Omni Core.
 > For TypeORM entities, see `backend/src/*/entities/`.
 > For migrations, see `backend/src/migrations/`.
 

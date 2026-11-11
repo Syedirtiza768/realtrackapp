@@ -64,16 +64,26 @@ export const FASHION_FIELD_GROUPS: Array<{ id: string; label: string; fields: Fa
     ],
   },
   {
+    // Mirrors backend fashion.config.ts: eBay item specifics photo identification can fill.
+    id: 'details',
+    label: 'Listing details',
+    fields: [
+      { key: 'countryOfManufacture', label: 'Country of manufacture', input: 'text', families: ['clothing', 'footwear', 'accessories'], help: 'Only from a "Made in" label.' },
+      { key: 'features', label: 'Features', input: 'text', families: ['clothing', 'footwear', 'accessories'], help: 'Visible features such as Pockets, Logo, Hooded.' },
+      { key: 'season', label: 'Season', input: 'text', families: ['clothing', 'footwear', 'accessories'] },
+      { key: 'occasion', label: 'Occasion', input: 'text', families: ['clothing', 'footwear', 'accessories'] },
+      { key: 'theme', label: 'Theme', input: 'text', families: ['clothing', 'footwear', 'accessories'] },
+      { key: 'vintage', label: 'Vintage', input: 'text', families: ['clothing', 'footwear', 'accessories'], help: 'Yes or No.' },
+      { key: 'garmentCare', label: 'Garment care', input: 'text', families: ['clothing'], help: 'Only from a readable care label.' },
+    ],
+  },
+  {
     id: 'measurements',
     label: 'Measurements',
+    // Measured values, the chart choice and the unit are edited by FashionMeasurementChart
+    // (templates served by GET /api/fashion/measurement-templates).
     fields: [
-      { key: 'chestMeasurement', label: 'Chest / bust', input: 'text', families: ['clothing'] },
-      { key: 'waistMeasurement', label: 'Waist', input: 'text', families: ['clothing'] },
-      { key: 'hipMeasurement', label: 'Hip', input: 'text', families: ['clothing'] },
-      { key: 'lengthMeasurement', label: 'Length measurement', input: 'text', families: ['clothing'] },
-      { key: 'inseamMeasurement', label: 'Inseam', input: 'text', families: ['clothing'] },
-      { key: 'measurementsUnit', label: 'Measurement unit', input: 'text', families: ['clothing', 'footwear', 'accessories'], help: 'Required when a named measurement is set. Do not estimate from photos.' },
-      { key: 'measurements', label: 'Original measurement notes', input: 'textarea', families: ['clothing', 'footwear', 'accessories'] },
+      { key: 'measurements', label: 'Original measurement notes', input: 'textarea', families: ['clothing', 'footwear', 'accessories'], help: 'Anything the chart does not cover. Do not estimate from photos.' },
     ],
   },
   {

@@ -2,13 +2,13 @@
 
 # Architecture Overview
 
-> Authoritative high-level map of RealTrackApp. For deeper detail see the sibling
+> Authoritative high-level map of Omni Core. For deeper detail see the sibling
 > docs in `/docs/architecture/`. Update this file whenever a module, integration,
 > or major data flow is added/removed.
 
 ## What it is
 
-RealTrackApp (DB/internal name: **listingpro**; login screen still says "ListingPro")
+Omni Core (DB/internal name: **listingpro**)
 is a multi-channel **automotive parts listing & operations platform**. It ingests
 product data (CSV/catalog import, images, spreadsheets), enriches it with AI,
 manages fitment/compatibility, and publishes/syncs listings to marketplaces

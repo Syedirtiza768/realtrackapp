@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { PipelineJob } from './entities/pipeline-job.entity.js';
+import { AUTOMOTIVE_OEM_BRANDS } from './constants/automotive-oem-brands.js';
 import { CatalogProduct } from '../catalog-import/entities/catalog-product.entity.js';
 import { EbayCategoryMapping } from '../motors-intelligence/entities/ebay-category-mapping.entity.js';
 import { ListingGenerationPipeline } from '../common/openai/pipelines/listing-generation.pipeline.js';
@@ -34,9 +35,14 @@ import {
 import { buildStructuredEbayTitle } from '../channels/ebay/ebay-listing-text.util.js';
 import {
   alignGenerationAndYearRange,
+  formatYearRange,
+  parseYearRange,
+  resolvePlatformModelFromTitle,
   resolvePlatformGeneration,
 } from '../fitment/platform-generation.util.js';
+import { MAX_FITMENT_YEAR_SPAN } from '../fitment/mvl-donor-scope.util.js';
 import { derivePartNameFromTitle } from '../listings/utils/derive-part-name-from-title.js';
+import { findCitedExactOemYearRange } from '../listing-optimization/exact-oem-year-range.util.js';
 
 /** Item/store country for listing HTML — Dubai-based sellers default to AE. */
 function resolveSellerCountryFromLocation(
@@ -53,8 +59,15 @@ function resolveSellerCountryFromLocation(
   ) {
     return 'AE';
   }
-  // RealTrack warehouses ship from Dubai even when marketplace is US/AU.
+  // Omni Core warehouses ship from Dubai even when marketplace is US/AU.
   return 'AE';
+}
+
+function scalarText(value: unknown): string {
+  if (typeof value === 'string' || typeof value === 'number') {
+    return String(value).trim();
+  }
+  return '';
 }
 
 export type Marketplace = 'US' | 'DE' | 'AU';
@@ -90,6 +103,8 @@ export interface CompatibilityRow {
   notes?: string;
   confidence: number;
   source: 'source_data' | 'rejected';
+  evidenceSource?: 'ebay_mpn_lookup' | 'oem_catalog_lookup';
+  mvlStatus?: 'valid' | 'rejected' | 'needs_review';
   rejectedReason?: string;
 }
 
@@ -278,10 +293,22 @@ export class EnterpriseListingIntelligenceService {
       order: { sourceRow: 'ASC' },
       take: options.limit,
     });
+    for (const product of products) {
+      const sourceDonor = this.parseDonorVehicleFromFilename(
+        job.originalFilename,
+        product.brand,
+      );
+      if (!sourceDonor) continue;
+      if (!product.donorYear?.trim()) product.donorYear = sourceDonor.year;
+      if (!product.donorMake?.trim()) product.donorMake = sourceDonor.make;
+      if (!product.donorModel?.trim()) product.donorModel = sourceDonor.model;
+    }
 
     const aiProducts = products.slice(0, options.aiBudgetListings);
-    const aiResults = aiProducts.length
-      ? await this.listingPipeline.generateBatch(
+    let aiResults: ListingGenerationResult[] = [];
+    if (aiProducts.length > 0) {
+      try {
+        aiResults = await this.listingPipeline.generateBatch(
           aiProducts.map((product) => ({
             productData: {
               brand: product.brand,
@@ -305,8 +332,13 @@ export class EnterpriseListingIntelligenceService {
               sellerCountry: resolveSellerCountryFromLocation(product.location),
             },
           })),
-        )
-      : [];
+        );
+      } catch (error) {
+        this.logger.warn(
+          `AI listing generation failed for pipeline job ${jobId}; using deterministic fitment-based title fallbacks: ${String(error)}`,
+        );
+      }
+    }
 
     const aiByProductId = new Map<string, ListingGenerationResult>();
     for (let i = 0; i < aiProducts.length; i++) {
@@ -400,8 +432,9 @@ export class EnterpriseListingIntelligenceService {
    * Batch variant of generateForProduct — makes ONE call to
    * listingPipeline.generateBatch covering all given products instead of one
    * call per product, so the OpenAI round-trip is shared across the batch.
-   * Used by bulk listing optimization; single-product re-run still goes
-   * through generateForProduct above.
+   * If that AI call is unavailable, deterministic title/description builders
+   * still run from the stored product and fitment data. Used by bulk listing
+   * optimization; single-product re-run still goes through generateForProduct.
    */
   async generateForProductsBatch(
     productIds: string[],
@@ -426,9 +459,16 @@ export class EnterpriseListingIntelligenceService {
         rawOptions?.listingQualityProfile ?? 'max_seo_comprehensive',
     };
 
-    const aiResults = await this.listingPipeline.generateBatch(
-      ordered.map((product) => this.buildAiListingItem(product, options)),
-    );
+    let aiResults: ListingGenerationResult[] = [];
+    try {
+      aiResults = await this.listingPipeline.generateBatch(
+        ordered.map((product) => this.buildAiListingItem(product, options)),
+      );
+    } catch (error) {
+      this.logger.warn(
+        `AI listing generation failed for product batch; using deterministic fitment-based title fallbacks: ${String(error)}`,
+      );
+    }
 
     const titleSlotsByProductId = await this.resolveTitleSlots(
       ordered,
@@ -448,6 +488,74 @@ export class EnterpriseListingIntelligenceService {
     return results;
   }
 
+  /**
+   * Resolve a donor vehicle from an explicit upload name such as
+   * "2015 AUDI A8L WAUYGBFD1FN007844.xlsx" or "2012 Jaguar VIN.xlsx". The
+   * filename must end in a valid 17-character VIN, and its known vehicle make
+   * must match the product brand (which may contain both make and model).
+   */
+  parseDonorVehicleFromFilename(
+    filename: string | null | undefined,
+    expectedBrand: string | null | undefined,
+  ): { year: string; make: string; model: string } | null {
+    if (!filename || !expectedBrand?.trim()) return null;
+    const stem = filename
+      .split(/[\\/]/)
+      .pop()
+      ?.replace(/\.[^.]+$/, '')
+      .trim();
+    if (!stem) return null;
+
+    const match = stem.match(
+      /^((?:19|20)\d{2})\s+(.+?)\s+([A-HJ-NPR-Z0-9]{17})$/i,
+    );
+    if (!match) return null;
+
+    const year = Number(match[1]);
+    if (year < 1900 || year > new Date().getFullYear() + 2) return null;
+
+    const normalizeVehicleMakeAlias = (value: string) =>
+      value
+        .replace(/^Infinity(?=\s|$)/i, 'Infiniti')
+        .replace(/^Bently(?=\s|$)/i, 'Bentley');
+    const vehicleLabel = normalizeVehicleMakeAlias(match[2].trim());
+    const normalizedBrand = normalizeVehicleMakeAlias(expectedBrand)
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .trim();
+    const make = [...AUTOMOTIVE_OEM_BRANDS]
+      .filter(
+        (candidate) =>
+          !EnterpriseListingIntelligenceService.NON_VEHICLE_BRANDS.has(
+            candidate.toLowerCase(),
+          ),
+      )
+      .sort((a, b) => b.length - a.length)
+      .find((candidate) => {
+        const normalizedMake = candidate.toLowerCase();
+        return (
+          (vehicleLabel.toLowerCase() === normalizedMake ||
+            vehicleLabel.toLowerCase().startsWith(`${normalizedMake} `)) &&
+          (normalizedBrand === normalizedMake ||
+            normalizedBrand.startsWith(`${normalizedMake} `))
+        );
+      });
+    if (!make) return null;
+
+    const modelFromFilename = vehicleLabel.slice(make.length).trim();
+    const modelFromBrandCandidate = expectedBrand
+      .trim()
+      .slice(make.length)
+      .trim();
+    const modelFromBrand = resolvePlatformModelFromTitle(
+      make,
+      `${make} ${modelFromBrandCandidate}`,
+    );
+    const model = modelFromFilename || modelFromBrand || '';
+
+    return { year: String(year), make, model };
+  }
+
   private async resolveTitleSlots(
     products: CatalogProduct[],
     marketplace: Marketplace,
@@ -461,10 +569,10 @@ export class EnterpriseListingIntelligenceService {
       products.map((product) => {
         const donorYear = product.donorVinDecoded?.['year']
           ? String(product.donorVinDecoded['year'])
-          : undefined;
+          : (product.donorYear ?? undefined);
         const donorModel = product.donorVinDecoded?.['model']
           ? String(product.donorVinDecoded['model'])
-          : undefined;
+          : (product.donorModel ?? undefined);
         // Warehouse-intake descriptions can be AI-hallucinated from thin
         // signal (no photos, just brand + part number) — don't feed that
         // to the title-slot model as if it were reliable; the title itself
@@ -476,7 +584,10 @@ export class EnterpriseListingIntelligenceService {
           id: product.id,
           rawDesc,
           partNumber: product.oemPartNumber ?? product.mpn,
-          make: product.brand,
+          make:
+            (product.donorVinDecoded?.['make']
+              ? String(product.donorVinDecoded['make'])
+              : product.donorMake) ?? product.brand,
           model: donorModel,
           year: donorYear,
           categoryName: product.categoryName,
@@ -597,6 +708,13 @@ export class EnterpriseListingIntelligenceService {
     const compatibilityValidRows = compatibility.filter(
       (row) => row.source === 'source_data',
     );
+    // Exact Brand+MPN listing hints can safely guide the draft title after
+    // their Y/M/M values pass MVL, but they are not approved compatibility.
+    // Keep this evidence out of AI prompts, descriptions, and publish data.
+    const reviewTitleRows = this.normalizeReviewTitleEvidence([
+      ...(Array.isArray(product.fitmentRows) ? product.fitmentRows : []),
+      ...(Array.isArray(product.fitmentData) ? product.fitmentData : []),
+    ], product.mpn?.trim() || product.oemPartNumber);
     const compatibilityRejected =
       compatibility.length - compatibilityValidRows.length;
     const fitmentConfidence =
@@ -665,6 +783,7 @@ export class EnterpriseListingIntelligenceService {
       const germanInput = this.toGermanListingInput(
         product,
         compatibilityValidRows,
+        reviewTitleRows,
       );
       const categoryHint = resolveMotorsCategoryFromPart(
         product.partType,
@@ -686,8 +805,12 @@ export class EnterpriseListingIntelligenceService {
         }
       }
 
-      if (!isLikelyGermanText(optimizedTitle)) {
-        optimizedTitle = buildGermanListingTitle(germanInput);
+      const deterministicGermanTitle = buildGermanListingTitle(germanInput);
+      const hasExpectedYearRange =
+        !germanInput.yearRange ||
+        optimizedTitle.trim().startsWith(`${germanInput.yearRange} `);
+      if (!isLikelyGermanText(optimizedTitle) || !hasExpectedYearRange) {
+        optimizedTitle = deterministicGermanTitle;
         aiTitleConfidence = Math.max(aiTitleConfidence, 0.88);
       }
       if (!subtitle) {
@@ -715,6 +838,7 @@ export class EnterpriseListingIntelligenceService {
       const englishInput = this.toEnglishListingInput(
         product,
         compatibilityValidRows,
+        reviewTitleRows,
       );
       if (titleSlots?.position) {
         englishInput.placement = titleSlots.position;
@@ -806,6 +930,11 @@ export class EnterpriseListingIntelligenceService {
     const imageAnalysis = this.evaluateImages(product.imageUrls);
     const complianceWarnings = this.buildComplianceWarnings({
       title: optimizedTitle,
+      expectedYearRange: this.toEnglishListingInput(
+        product,
+        compatibilityValidRows,
+        reviewTitleRows,
+      ).yearRange,
       categoryId,
       requiredSpecifics: specificsEvaluation.requiredTotal,
       requiredSpecificsPresent: specificsEvaluation.requiredPresent,
@@ -1409,17 +1538,26 @@ export class EnterpriseListingIntelligenceService {
 
     const rows: CompatibilityRow[] = [];
     for (const raw of fitmentData) {
-      const make = String(raw['Make'] ?? raw['make'] ?? '').trim();
-      const model = String(raw['Model'] ?? raw['model'] ?? '').trim();
-      const year = String(raw['Year'] ?? raw['year'] ?? '').trim();
-      const trim = String(raw['Trim'] ?? raw['trim'] ?? '').trim() || undefined;
-      const engine =
-        String(raw['Engine'] ?? raw['engine'] ?? '').trim() || undefined;
+      const make = scalarText(raw['Make'] ?? raw['make']);
+      const model = scalarText(raw['Model'] ?? raw['model']);
+      const year = scalarText(raw['Year'] ?? raw['year']);
+      const trim = scalarText(raw['Trim'] ?? raw['trim']) || undefined;
+      const engine = scalarText(raw['Engine'] ?? raw['engine']) || undefined;
       const drivetrain =
-        String(raw['Drivetrain'] ?? raw['drivetrain'] ?? '').trim() ||
-        undefined;
+        scalarText(raw['Drivetrain'] ?? raw['drivetrain']) || undefined;
       const bodyStyle =
-        String(raw['Body Style'] ?? raw['bodyStyle'] ?? '').trim() || undefined;
+        scalarText(raw['Body Style'] ?? raw['bodyStyle']) || undefined;
+      const storedStatuses = [
+        scalarText(raw['validationStatus']).toLowerCase(),
+        scalarText(raw['MvlStatus'] ?? raw['mvlStatus']).toLowerCase(),
+      ];
+      const storedStatus = storedStatuses.includes('rejected')
+        ? 'rejected'
+        : storedStatuses.includes('needs_review')
+          ? 'needs_review'
+          : storedStatuses.includes('valid')
+            ? 'valid'
+            : '';
 
       const yearNum = Number(year);
       const yearValid =
@@ -1442,6 +1580,22 @@ export class EnterpriseListingIntelligenceService {
         continue;
       }
 
+      if (storedStatus === 'needs_review' || storedStatus === 'rejected') {
+        rows.push({
+          make,
+          model,
+          year,
+          trim,
+          engine,
+          drivetrain,
+          bodyStyle,
+          confidence: 0,
+          source: 'rejected',
+          rejectedReason: `Fitment row remains ${storedStatus}`,
+        });
+        continue;
+      }
+
       rows.push({
         make,
         model,
@@ -1452,6 +1606,82 @@ export class EnterpriseListingIntelligenceService {
         bodyStyle,
         confidence: this.round(trim || engine ? 0.92 : 0.82),
         source: 'source_data',
+      });
+    }
+    return rows;
+  }
+
+  private normalizeReviewTitleEvidence(
+    fitmentRows: Record<string, unknown>[] | null,
+    expectedMpn: string | null | undefined,
+  ): CompatibilityRow[] {
+    if (!Array.isArray(fitmentRows)) return [];
+    const expectedMpnKey = (expectedMpn ?? '')
+      .replace(/[^a-z0-9]/gi, '')
+      .toUpperCase();
+    const rows: CompatibilityRow[] = [];
+    for (const raw of fitmentRows) {
+      const evidenceSource = scalarText(raw['source']).toLowerCase();
+      const notes = scalarText(raw['notes'] ?? raw['Notes']);
+      const citedMpn = notes.match(/^\s*Exact MPN\s+([^\s]+)\s+matched\b/i)?.[1];
+      const notesMpnKey = notes.replace(/[^a-z0-9]/gi, '').toUpperCase();
+      const validationStatus = scalarText(raw['validationStatus']).toLowerCase();
+      const mvlStatus = scalarText(raw['mvlStatus'] ?? raw['MvlStatus']).toLowerCase();
+      const notesMatchExpectedMpn =
+        evidenceSource === 'oem_catalog_lookup'
+          ? citedMpn?.replace(/[^a-z0-9]/gi, '').toUpperCase() ===
+            expectedMpnKey
+          : notesMpnKey.includes(expectedMpnKey);
+      const hasExplicitOemRange =
+        evidenceSource === 'oem_catalog_lookup' &&
+        notes.split(/\r?\n/).some((line) =>
+          /^\s*[-*•]\s*((?:19|20)\d{2})\s*[-–]\s*((?:19|20)\d{2})\s+\S+/i.test(
+            line,
+          ),
+        );
+      const isMvlCheckedReview =
+        validationStatus === 'needs_review' && mvlStatus === 'valid';
+      const isExactOemTitleReview =
+        evidenceSource === 'oem_catalog_lookup' &&
+        notesMatchExpectedMpn &&
+        hasExplicitOemRange &&
+        ['needs_review', 'rejected'].includes(validationStatus);
+      if (
+        (evidenceSource !== 'ebay_mpn_lookup' &&
+          evidenceSource !== 'oem_catalog_lookup') ||
+        (!isMvlCheckedReview && !isExactOemTitleReview) ||
+        !expectedMpnKey ||
+        !notesMatchExpectedMpn
+      ) {
+        continue;
+      }
+      const make = scalarText(raw['make'] ?? raw['Make']);
+      const model = scalarText(raw['model'] ?? raw['Model']);
+      const year = scalarText(raw['year'] ?? raw['Year']);
+      const yearNum = Number(year);
+      if (
+        !make ||
+        !model ||
+        !Number.isInteger(yearNum) ||
+        yearNum < 1900 ||
+        yearNum > new Date().getFullYear() + 2
+      ) {
+        continue;
+      }
+      rows.push({
+        make,
+        model,
+        year,
+        trim: scalarText(raw['trim'] ?? raw['Trim']) || undefined,
+        notes: notes || undefined,
+        confidence: 0.6,
+        source: 'rejected',
+        evidenceSource,
+        ...(mvlStatus === 'valid' ||
+        mvlStatus === 'needs_review' ||
+        mvlStatus === 'rejected'
+          ? { mvlStatus }
+          : {}),
       });
     }
     return rows;
@@ -1513,6 +1743,7 @@ export class EnterpriseListingIntelligenceService {
 
   private buildComplianceWarnings(input: {
     title: string;
+    expectedYearRange?: string | null;
     categoryId: string | null;
     requiredSpecifics: number;
     requiredSpecificsPresent: number;
@@ -1533,6 +1764,41 @@ export class EnterpriseListingIntelligenceService {
         field: 'title',
         message: 'Title missing or exceeds 80 characters',
       });
+    }
+    const expectedYearRange = parseYearRange(input.expectedYearRange);
+    const titleYearMatch = input.title
+      .trim()
+      .match(/^((?:19|20)\d{2})(?:\s*[-–]\s*((?:19|20)\d{2}))?(?:\s|$)/);
+    if (!expectedYearRange) {
+      issues.push({
+        code: 'TITLE_YEAR_RANGE_MISSING',
+        severity: 'error',
+        field: 'title',
+        message:
+          'A contiguous, part-number-matched year range validated for the target marketplace is required for an eBay Motors title',
+      });
+    } else if (!titleYearMatch) {
+      issues.push({
+        code: 'TITLE_YEAR_RANGE_MISSING',
+        severity: 'error',
+        field: 'title',
+        message: `Title must begin with the required year range ${input.expectedYearRange}`,
+      });
+    } else {
+      const titleStart = Number(titleYearMatch[1]);
+      const titleEnd = Number(titleYearMatch[2] ?? titleYearMatch[1]);
+      if (
+        titleEnd < titleStart ||
+        titleStart !== expectedYearRange.min ||
+        titleEnd !== expectedYearRange.max
+      ) {
+        issues.push({
+          code: 'TITLE_YEAR_RANGE_MISMATCH',
+          severity: 'error',
+          field: 'title',
+          message: `Title year range must match the required range ${input.expectedYearRange}`,
+        });
+      }
     }
     if (!input.categoryId) {
       issues.push({
@@ -1643,8 +1909,13 @@ export class EnterpriseListingIntelligenceService {
   private toEnglishListingInput(
     product: CatalogProduct,
     fitmentRows: CompatibilityRow[],
+    reviewTitleRows: CompatibilityRow[] = [],
   ) {
-    const german = this.toGermanListingInput(product, fitmentRows);
+    const german = this.toGermanListingInput(
+      product,
+      fitmentRows,
+      reviewTitleRows,
+    );
     return {
       brand: german.brand,
       model: german.model,
@@ -1715,47 +1986,78 @@ export class EnterpriseListingIntelligenceService {
   private toGermanListingInput(
     product: CatalogProduct,
     fitmentRows: CompatibilityRow[],
+    reviewTitleRows: CompatibilityRow[] = [],
   ): GermanListingInput {
     const decoded = product.donorVinDecoded;
-    const donorYear = decoded?.['year'] ? String(decoded['year']) : '';
-    const resolvedMake = this.resolveVehicleMake(product, fitmentRows);
-    const donorMake = decoded?.['make']
-      ? String(decoded['make'])
-      : (resolvedMake ?? '');
-    const donorModel = decoded?.['model'] ? String(decoded['model']) : '';
+    const decodedYear = scalarText(decoded?.['year']);
+    const donorYear = decodedYear || (product.donorYear?.trim() ?? '');
+    const titleIdentityRows =
+      fitmentRows.length > 0 ? fitmentRows : reviewTitleRows;
+    const resolvedMake =
+      titleIdentityRows[0]?.make ||
+      product.donorMake?.trim() ||
+      this.resolveVehicleMake(product, fitmentRows);
+    const decodedMake = scalarText(decoded?.['make']);
+    const decodedModel = scalarText(decoded?.['model']);
+    const donorMake =
+      decodedMake || product.donorMake?.trim() || resolvedMake || '';
+    const titleModelHint = resolvePlatformModelFromTitle(
+      donorMake || resolvedMake,
+      product.title,
+    );
+    const donorModel =
+      decodedModel ||
+      product.donorModel?.trim() ||
+      titleModelHint ||
+      titleIdentityRows[0]?.model ||
+      '';
+    const titleModel =
+      donorModel ||
+      titleIdentityRows[0]?.model ||
+      decodedModel;
     const donorVehicle =
       [donorYear, donorMake, donorModel].filter(Boolean).join(' ').trim() ||
       undefined;
 
-    const years = fitmentRows
+    const titleRangeRows = this.selectTitleRangeRows(
+      fitmentRows,
+      reviewTitleRows,
+      titleIdentityRows[0],
+      titleModel,
+      product.mpn?.trim() || product.oemPartNumber,
+    );
+    const years = titleRangeRows
       .map((r) => Number(r.year))
       .filter((y) => Number.isFinite(y));
     const yearRangeFromFitment =
-      years.length >= 2
-        ? `${Math.min(...years)}-${Math.max(...years)}`
-        : years.length === 1
-          ? String(years[0])
-          : donorYear || undefined;
+      years.length >= 1
+        ? formatYearRange(Math.min(...years), Math.max(...years))
+        : undefined;
 
-    const platform = donorYear
+    // Only part-number-matched rows may anchor a title generation. Donor year
+    // describes the source vehicle and is not evidence that this part fits it.
+    const titleAnchorYear = titleRangeRows[0]?.year;
+    const platform = titleAnchorYear
       ? resolvePlatformGeneration(
-          donorMake,
-          donorModel || product.brand,
-          donorYear,
+          resolvedMake,
+          titleModel || product.brand,
+          titleAnchorYear,
         )
       : null;
     const aligned = alignGenerationAndYearRange({
       generation: platform?.code,
       yearRange: yearRangeFromFitment,
       make: donorMake || resolvedMake,
-      model: donorModel || fitmentRows[0]?.model,
-      anchorYear: donorYear,
-      fitmentYears: fitmentRows.map((r) => r.year),
+      model: titleModel || fitmentRows[0]?.model,
+      anchorYear: titleAnchorYear,
+      fitmentYears: yearRangeFromFitment
+        ? titleRangeRows.map((r) => r.year)
+        : [],
     });
 
     return {
       brand: resolvedMake,
-      model: donorModel || fitmentRows[0]?.model || undefined,
+      model: titleModel || fitmentRows[0]?.model || undefined,
       partType: this.resolveDescriptivePartType(product) ?? undefined,
       placement: product.placement,
       mpn: product.mpn,
@@ -1779,6 +2081,142 @@ export class EnterpriseListingIntelligenceService {
       categoryId: product.categoryId,
       categoryName: product.categoryName,
     };
+  }
+
+  private selectTitleRangeRows(
+    validRows: CompatibilityRow[],
+    reviewTitleRows: CompatibilityRow[],
+    primary?: CompatibilityRow,
+    titleModel?: string,
+    expectedMpn?: string | null,
+  ): CompatibilityRow[] {
+    if (!primary) return [];
+    const titleModelTokens = this.vehicleModelTokens(titleModel ?? '');
+    if (titleModelTokens.length === 0) return [];
+    const requestedTokens = new Set(titleModelTokens);
+    const makeKey = primary.make.trim().toLowerCase();
+    const titleCandidates = [...validRows, ...reviewTitleRows].filter((row) => {
+      if (row.make.trim().toLowerCase() !== makeKey) return false;
+      const rowTokens = this.vehicleModelTokens(
+        `${row.model} ${row.trim ?? ''}`,
+      );
+      return titleModelTokens.every((token) => rowTokens.includes(token));
+    });
+    if (titleCandidates.length === 0) return [];
+
+    // Catalogs often describe one MVL trim with different levels of detail
+    // (for example, "GTI" and "GTI Autobahn Hatchback"). Pick the closest
+    // match to the requested title variant, then combine rows that support
+    // that same target variant instead of requiring identical raw trim text.
+    const closestCandidate = [...titleCandidates].sort((a, b) => {
+      const extraTokens = (row: CompatibilityRow) =>
+        this.vehicleModelTokens(`${row.model} ${row.trim ?? ''}`).filter(
+          (token) => !requestedTokens.has(token),
+        ).length;
+      return extraTokens(a) - extraTokens(b);
+    })[0];
+    const modelKey = closestCandidate.model.trim().toLowerCase();
+    const modelTokens = new Set(
+      this.vehicleModelTokens(closestCandidate.model),
+    );
+    const requestedVariantTokens = titleModelTokens.filter(
+      (token) => !modelTokens.has(token),
+    );
+    const closestTrimKey = (closestCandidate.trim ?? '').trim().toLowerCase();
+    const yearsByYear = new Map<number, CompatibilityRow>();
+    for (const row of titleCandidates) {
+      if (row.model.trim().toLowerCase() !== modelKey) continue;
+      const rowTrimTokens = this.vehicleModelTokens(row.trim ?? '');
+      if (
+        requestedVariantTokens.length > 0
+          ? !requestedVariantTokens.every((token) =>
+              rowTrimTokens.includes(token),
+            )
+          : (row.trim ?? '').trim().toLowerCase() !== closestTrimKey
+      ) continue;
+      const year = Number(row.year);
+      if (Number.isInteger(year)) yearsByYear.set(year, row);
+    }
+    const years = [...yearsByYear.keys()].sort((a, b) => a - b);
+    if (years.length <= 1) {
+      return years.length === 1
+        ? [yearsByYear.get(years[0])!]
+        : this.selectExplicitOemYearRange(
+            titleCandidates.filter(
+              (row) => row.model.trim().toLowerCase() === modelKey,
+            ),
+            closestCandidate,
+            expectedMpn,
+          );
+    }
+    const span = years[years.length - 1] - years[0];
+    if (
+      span > MAX_FITMENT_YEAR_SPAN ||
+      years.length !== span + 1 ||
+      years.some((year, index) => index > 0 && year !== years[index - 1] + 1)
+    ) {
+      return this.selectExplicitOemYearRange(
+        titleCandidates.filter(
+          (row) => row.model.trim().toLowerCase() === modelKey,
+        ),
+        closestCandidate,
+        expectedMpn,
+      );
+    }
+    return years.map((year) => yearsByYear.get(year)!);
+  }
+
+  /**
+   * MVL may omit individual years even when an exact-MPN OEM catalog explicitly
+   * states one inclusive application interval. Use that cited interval for the
+   * draft title only; these synthetic rows never enter publish compatibility.
+   */
+  private selectExplicitOemYearRange(
+    rows: CompatibilityRow[],
+    target: CompatibilityRow,
+    expectedMpn?: string | null,
+  ): CompatibilityRow[] {
+    const range = findCitedExactOemYearRange(
+      rows.map((row) => ({
+        make: row.make,
+        model: row.model,
+        trim: row.trim,
+        notes: row.notes,
+        evidenceSource: row.evidenceSource,
+        mvlStatus: row.mvlStatus,
+      })),
+      expectedMpn,
+      { make: target.make, model: target.model, trim: target.trim },
+      MAX_FITMENT_YEAR_SPAN,
+      new Date().getFullYear() + 2,
+    );
+    if (!range) return [];
+
+    return Array.from(
+      { length: range.endYear - range.startYear + 1 },
+      (_, index) => ({
+        make: range.make,
+        model: target.model,
+        year: String(range.startYear + index),
+        ...(target.trim ? { trim: target.trim } : {}),
+        confidence: 0.6,
+        source: 'rejected' as const,
+        evidenceSource: 'oem_catalog_lookup' as const,
+        mvlStatus: 'valid' as const,
+      }),
+    );
+  }
+
+  private vehicleModelTokens(value: string): string[] {
+    return value
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter(
+        (token) =>
+          (token.length > 1 || /^[a-z]$/.test(token)) &&
+          !/^(?:19|20)\d{2}$/.test(token) &&
+          !/^mk\d+$/.test(token),
+      );
   }
 
   private buildMissingDataReport(

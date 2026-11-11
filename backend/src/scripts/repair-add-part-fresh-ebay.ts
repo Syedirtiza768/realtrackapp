@@ -65,19 +65,26 @@ function hasFlag(name: string): boolean {
 
 function message(error: unknown): string {
   const base = error instanceof Error ? error.message : String(error);
-  if (!error || typeof error !== 'object' || !('response' in error)) return base;
-  const response = (error as {
-    response?: { status?: number; data?: unknown };
-  }).response;
+  if (!error || typeof error !== 'object' || !('response' in error))
+    return base;
+  const response = (
+    error as {
+      response?: { status?: number; data?: unknown };
+    }
+  ).response;
   if (!response) return base;
-  const detail = response.data === undefined
-    ? ''
-    : ` ${typeof response.data === 'string' ? response.data : JSON.stringify(response.data)}`;
+  const detail =
+    response.data === undefined
+      ? ''
+      : ` ${typeof response.data === 'string' ? response.data : JSON.stringify(response.data)}`;
   return `${base} (HTTP ${response.status ?? 'unknown'})${detail}`;
 }
 
 function normalized(value: unknown): string {
-  return String(value ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+  return String(value ?? '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
 }
 
 function auditedFreshIds(path: string): string[] {
@@ -165,7 +172,9 @@ async function main(): Promise<void> {
   );
   const auditedIds = auditedFreshIds(reportPath);
   if (auditedIds.length === 0) {
-    throw new Error(`No audited noncanonical Add Part rows found in ${reportPath}`);
+    throw new Error(
+      `No audited noncanonical Add Part rows found in ${reportPath}`,
+    );
   }
 
   const app = await NestFactory.createApplicationContext(AppModule, {
@@ -180,7 +189,7 @@ async function main(): Promise<void> {
     const inventoryApi = app.get(EbayInventoryApiService);
     const reconciler = app.get(EbayCompatibilityReconciliationService);
 
-    const rows = (await dataSource.query(
+    const rows = await dataSource.query(
       `
         SELECT
           elc.id AS "channelId",
@@ -224,21 +233,25 @@ async function main(): Promise<void> {
         ORDER BY ca.id, elc.listing_id
       `,
       [auditedIds],
-    )) as RecoveryTarget[];
+    );
 
     const scopedRows = channelFilter
       ? rows.filter((row) => row.channelId === channelFilter)
       : rows;
     if (channelFilter && scopedRows.length === 0) {
-      throw new Error(`Fresh recovery channel ${channelFilter} was not found in the audited target set`);
+      throw new Error(
+        `Fresh recovery channel ${channelFilter} was not found in the audited target set`,
+      );
     }
     const pendingRows = scopedRows.filter((row) => {
-      const deterministicSku = replacementSku || conflictSafeSkuFor(row.canonicalSku);
+      const deterministicSku =
+        replacementSku || conflictSafeSkuFor(row.canonicalSku);
       return !deterministicSku || row.ebaySku !== deterministicSku;
     });
-    const selected = limit > 0
-      ? pendingRows.slice(offset, offset + limit)
-      : pendingRows.slice(offset);
+    const selected =
+      limit > 0
+        ? pendingRows.slice(offset, offset + limit)
+        : pendingRows.slice(offset);
     if (replacementSku && selected.length !== 1) {
       throw new Error(
         '--replacement-sku requires --channel-id and exactly one selected target; ' +
@@ -285,13 +298,18 @@ async function main(): Promise<void> {
           );
         }
         const requestedSku =
-          replacementSku || conflictSafeSkuFor(target.canonicalSku) || undefined;
+          replacementSku ||
+          conflictSafeSkuFor(target.canonicalSku) ||
+          undefined;
         if (diagnose && requestedSku) {
-          let item: Awaited<ReturnType<EbayInventoryApiService['getItem']>> | null = null;
+          let item: Awaited<
+            ReturnType<EbayInventoryApiService['getItem']>
+          > | null = null;
           try {
             item = await inventoryApi.getItem(target.storeId, requestedSku);
           } catch (error: unknown) {
-            if (!(error instanceof Error) || !/404/.test(error.message)) throw error;
+            if (!(error instanceof Error) || !/404/.test(error.message))
+              throw error;
           }
           const offers = await inventoryApi.getOffersBySku(
             target.storeId,
@@ -324,22 +342,32 @@ async function main(): Promise<void> {
         const catalog = await catalogRepo.findOneBy({
           id: target.catalogProductId,
         });
-        if (!catalog) throw new Error(`Catalog product ${target.catalogProductId} not found`);
+        if (!catalog)
+          throw new Error(
+            `Catalog product ${target.catalogProductId} not found`,
+          );
 
-        const expected =
-          (await publishService.resolveCatalogCompatibility(catalog)) ?? {
-            compatibleProducts: [],
-          };
+        const expected = (await publishService.resolveCatalogCompatibility(
+          catalog,
+        )) ?? {
+          compatibleProducts: [],
+        };
         const canonical = await publishService.buildCanonicalRecoveryProjection(
           target.sourceListingId,
           target.storeId,
         );
         if (cleanupOrphan && requestedSku) {
-          let orphanItem: Awaited<ReturnType<EbayInventoryApiService['getItem']>> | null = null;
+          let orphanItem: Awaited<
+            ReturnType<EbayInventoryApiService['getItem']>
+          > | null = null;
           try {
-            orphanItem = await inventoryApi.getItem(target.storeId, requestedSku);
+            orphanItem = await inventoryApi.getItem(
+              target.storeId,
+              requestedSku,
+            );
           } catch (error: unknown) {
-            if (!(error instanceof Error) || !/404/.test(error.message)) throw error;
+            if (!(error instanceof Error) || !/404/.test(error.message))
+              throw error;
           }
           const orphanOffers = await inventoryApi.getOffersBySku(
             target.storeId,
@@ -349,13 +377,17 @@ async function main(): Promise<void> {
           );
           const expectedProduct = canonical.item.product;
           const actualProduct = orphanItem?.product;
-          const titleMatches = normalized(actualProduct?.title) === normalized(expectedProduct.title);
+          const titleMatches =
+            normalized(actualProduct?.title) ===
+            normalized(expectedProduct.title);
           const imageCountMatches =
-            (actualProduct?.imageUrls?.length ?? 0) === (expectedProduct.imageUrls?.length ?? 0);
+            (actualProduct?.imageUrls?.length ?? 0) ===
+            (expectedProduct.imageUrls?.length ?? 0);
           const brandMatches =
             !actualProduct?.brand ||
             !expectedProduct.brand ||
-            normalized(actualProduct.brand) === normalized(expectedProduct.brand);
+            normalized(actualProduct.brand) ===
+              normalized(expectedProduct.brand);
           const mpnMatches =
             !actualProduct?.mpn ||
             !expectedProduct.mpn ||

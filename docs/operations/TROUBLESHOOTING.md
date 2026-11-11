@@ -81,6 +81,7 @@ curl http://localhost:4191/api/health
 | OAuth callback fails | Wrong `EBAY_REDIRECT_URI` | Verify RuName matches eBay app config |
 | Token refresh fails | Expired/invalid token | Reconnect eBay account; check `EBAY_ENVIRONMENT` |
 | Publish fails with policy errors | Missing/stale business policies | Sync policies via `/api/integrations/ebay/:id/sync` |
+| Trading API `AddFixedPriceItem` fails with error 240 | eBay returned a generic content or seller-policy rejection; some responses include the actionable reason in `ErrorParameters.Value` | Inspect the complete eBay response. If it contains only the generic message, check Seller Hub account limits and listing policies with eBay; correct verified item data such as the actual item location before retrying. Do not repeatedly retry or bypass a seller-policy block. |
 | SellerPundit 504 errors | Timeout on SP API | Published via `auto` fallback mode; extends nginx/Vite timeouts |
 
 ---

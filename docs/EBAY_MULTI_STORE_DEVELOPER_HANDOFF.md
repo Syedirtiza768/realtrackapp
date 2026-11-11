@@ -6,7 +6,7 @@ This document answers architecture questions, maps the spec to this repo, and ex
 
 ## Executive summary (business logic)
 
-- **RealTrackApp owns one eBay Developer application** (`EBAY_CLIENT_ID`, `EBAY_CLIENT_SECRET`, RuName / `EBAY_REDIRECT_URI`).
+- **Omni Core owns one eBay Developer application** (`EBAY_CLIENT_ID`, `EBAY_CLIENT_SECRET`, RuName / `EBAY_REDIRECT_URI`).
 - **Each seller connects with “Sign in with eBay”** (OAuth 2.0 authorization code grant). They do **not** need their own Developer Program app for normal use.
 - **Each connected seller gets their own encrypted OAuth token pair** in `ebay_oauth_tokens`, scoped to `organization_id` + `ebay_user_id`.
 - **Every API call** that touches seller data uses **that seller’s user access token**, never another store’s token.
@@ -126,7 +126,7 @@ Validate granted scopes in `ebay_oauth_tokens.granted_scopes` before publish; bl
 ### OAuth & accounts
 
 - `POST /integrations/ebay/oauth/start` — `{ marketplaceId, environment, accountDisplayName? }` (+ optional `organizationId` for multi-workspace users) → `{ authUrl, state }`. **Sellers never paste an eBay org ID** — identity is from OAuth + `GET commerce/identity/v1/user/` (`userId` preferred over `username`).
-- `GET /integrations/ebay/workspace` — resolves the signed-in user’s RealTrack workspace (internal tenant).
+- `GET /integrations/ebay/workspace` — resolves the signed-in user’s Omni Core workspace (internal tenant).
 - `GET /integrations/ebay/oauth/callback` — browser only; redirects to frontend
 - `GET /integrations/ebay/accounts?organizationId=`
 - `GET /integrations/ebay/accounts/:id?organizationId=`
@@ -146,7 +146,7 @@ Validate granted scopes in `ebay_oauth_tokens.granted_scopes` before publish; bl
 - `GET /ebay/listing-jobs/:id`, `.../targets`
 - `GET /ebay/listings`, `/ebay/errors`, `/ebay/activity-logs`
 
-Auth: **JWT Bearer** on all integration routes (`JwtAuthGuard` on `EbayIntegrationsModule`). Only `GET /integrations/ebay/oauth/callback` is `@Public()`. Frontend uses `fetchWithAuth` + `useEbayWorkspace()` — **no manual Organization ID field**. `organizationId` is RealTrack’s internal tenant boundary; it is created on register or first eBay page load, not supplied by eBay.
+Auth: **JWT Bearer** on all integration routes (`JwtAuthGuard` on `EbayIntegrationsModule`). Only `GET /integrations/ebay/oauth/callback` is `@Public()`. Frontend uses `fetchWithAuth` + `useEbayWorkspace()` — **no manual Organization ID field**. `organizationId` is Omni Core’s internal tenant boundary; it is created on register or first eBay page load, not supplied by eBay.
 
 ---
 
@@ -222,7 +222,7 @@ See `backend/.env.example`:
 
 - `EBAY_CLIENT_ID`, `EBAY_CLIENT_SECRET`, `EBAY_DEV_ID`
 - `EBAY_ENVIRONMENT` or per-connect `environment`
-- `EBAY_REDIRECT_URI` → must be `https://<host>/api/integrations/ebay/oauth/callback`
+- `EBAY_REDIRECT_URI` → must be the OAuth-enabled eBay RuName in production (not the URL); its Accept URL in the eBay Developer Portal must be `https://app.omnicoreholding.com/api/integrations/ebay/oauth/callback`
 - `EBAY_SCOPES` (optional override)
 - `TOKEN_ENCRYPTION_KEY` (64-char hex) — **required in production**
 - `FRONTEND_BASE_URL`, `REDIS_URL`, `EBAY_INTEGRATIONS_REDIS` (optional)
@@ -285,8 +285,8 @@ Set `CHANNEL_DEMO_MODE=false` in production so publish hits real eBay APIs.
 
 | Role | Needs eBay Developer app? |
 |------|---------------------------|
-| RealTrackApp (you) | **Yes** — one app for all sellers |
+| Omni Core (you) | **Yes** — one app for all sellers |
 | Each eBay seller using your product | **No** — OAuth sign-in only |
 | Enterprise tenant with own compliance | Optional separate app per tenant |
 
-This is the intended production model for RealTrackApp multi-store listing management.
+This is the intended production model for Omni Core multi-store listing management.

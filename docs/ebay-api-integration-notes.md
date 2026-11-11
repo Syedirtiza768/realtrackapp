@@ -23,7 +23,7 @@ Inventory and related calls require `X-EBAY-C-MARKETPLACE-ID` and `Content-Langu
 The catalog publish path (`EbayInventoryApiService`) resolves both from each store's
 `ebay_marketplace_id` / `config.marketplace` via `EbayMarketplaceConfigService`.
 
-**Offer body vs header:** RealTrack stores Motors as `EBAY_MOTORS_US` (headers, DB,
+**Offer body vs header:** Omni Core stores Motors as `EBAY_MOTORS_US` (headers, DB,
 policy sync). The Inventory API `createOffer` / `updateOffer` body must use eBay's
 `MarketplaceEnum` value `EBAY_MOTORS`. `toEbayInventoryApiMarketplaceId()` in
 `ebay-marketplace-headers.util.ts` performs this mapping before POST/PUT `/offer`.
@@ -58,7 +58,7 @@ rejects fulfillment/shipping policy ids.
 **Parts & Accessories return policy:** Per [eBay Seller Center (June 2025)](https://www.ebay.com/sellercenter/news/2025-june/parts-accessories-return-policy),
 seller-paid 30-day returns are **mandatory only for New and New Other** fixed-price
 P&A listings (US, over $10). **Used** listings may keep buyer-paid return shipping
-when returns are accepted and the window is 30+ days. RealTrack applies mandatory
+when returns are accepted and the window is 30+ days. Omni Core applies mandatory
 seller-paid rules only when `listingRequiresPartsAccessoriesReturnPolicy()` is true
 (marketplace/category scope **and** condition `NEW` / `NEW_OTHER`). Policy sync and
 publish (`pickReturnPolicyIdForListing`) prefer compliant policies for New/New Other;
@@ -66,7 +66,7 @@ used Motors listings use the normal default (e.g. buyer-paid 30-day policy).
 If none exists, `EbayPaReturnPolicyService.ensureCompliantReturnPolicy` runs at
 publish time: pick a compliant policy, **upgrade** the closest match (returns
 accepted, 30+ days, buyer-paid shipping → seller-paid via Account API
-`updateReturnPolicy`), or **create** `P&A Compliant Return (RealTrack)` via
+`updateReturnPolicy`), or **create** `P&A Compliant Return (Omni Core)` via
 `createReturnPolicy`. The new id is saved to `ebay_business_policies` and
 `ebay_account_marketplaces.default_return_policy_id`. Manual Seller Hub edits
 are only needed if the token lacks `sell.account` scope or eBay rejects the
@@ -130,9 +130,9 @@ Use **Trading API** only when REST Inventory / Fulfillment cannot satisfy a requ
 
 ## Redirect URI
 
-`EBAY_REDIRECT_URI` must exactly match the RuName / redirect URL registered in the eBay developer portal and should point to:
+`EBAY_REDIRECT_URI` must contain the OAuth-enabled RuName registered in the eBay developer portal (not the callback URL). Configure that RuName’s Accept URL in production as:
 
-`GET /api/integrations/ebay/oauth/callback`
+`https://app.omnicoreholding.com/api/integrations/ebay/oauth/callback`
 
 ## Rate limits
 

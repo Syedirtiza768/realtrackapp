@@ -126,6 +126,32 @@ const DEFAULT_COLUMN_MAP: Record<string, string> = {
   imageurl: 'imageUrls',
   imageurls: 'imageUrls',
   images: 'imageUrls',
+  'image urls': 'imageUrls',
+  // Listing exports carry every photo pipe-delimited in all_image_urls. The
+  // numbered image_url / image_1..image_N columns are a fallback handled in
+  // CsvImportProcessor.parseRow when this column is absent or empty.
+  all_image_urls: 'imageUrls',
+  image_urls: 'imageUrls',
+  'item specifics': 'itemSpecifics',
+  itemspecifics: 'itemSpecifics',
+  specifics: 'itemSpecifics',
+  'marketplace id': 'sourceMarketplaceId',
+  marketplaceid: 'sourceMarketplaceId',
+  'ebay site id': 'sourceMarketplaceSiteId',
+  'site id': 'sourceMarketplaceSiteId',
+  marketplace: 'sourceMarketplaceName',
+  'channel id': 'sourceChannelId',
+  channelid: 'sourceChannelId',
+  status: 'sourceChannelStatus',
+  account: 'sourceAccountName',
+  'account name': 'sourceAccountName',
+  currency: 'sourcePriceCurrency',
+  'price currency': 'sourcePriceCurrency',
+  id: 'sourceMarketplaceItemId',
+  'condition': 'sourceCondition',
+  'category id': 'categoryId',
+  'listing url': 'sourceListingUrl',
+  'item url': 'sourceListingUrl',
   // Vertical-neutral and Business & Industrial fields
   department: 'department',
   size: 'size',
@@ -502,7 +528,8 @@ export class CatalogImportService {
       await this.importRepo.save(importRecord);
     }
 
-    // Fashion retry is explicit: a failed worker must not race an automatic retry.
+    // The processor checkpoints committed rows and resumes incomplete image work,
+    // so bounded automatic retries do not duplicate products or row results.
     try {
       await this.importQueue.add(
         'process-csv',
@@ -513,8 +540,11 @@ export class CatalogImportService {
           resumeFromRow: importRecord.lastProcessedRow,
         },
         {
-          attempts: importRecord.vertical === 'fashion' ? 1 : 3,
-          backoff: { type: 'exponential', delay: 30_000 },
+          attempts: importRecord.vertical === 'fashion' ? 5 : 3,
+          backoff: {
+            type: 'exponential',
+            delay: 30_000,
+          },
           removeOnComplete: 50,
           removeOnFail: 100,
         },
@@ -1033,9 +1063,27 @@ export class CatalogImportService {
    */
   autoMapColumns(headers: string[]): Record<string, string> {
     const mapping: Record<string, string> = {};
+    const isArtisticServerExport = [
+      'channel id',
+      'marketplace id',
+      'item specifics',
+      'measurements',
+    ].every((required) =>
+      headers.some(
+        (header) =>
+          header
+            .toLowerCase()
+            .replace(/\*/g, '')
+            .trim() === required,
+      ),
+    );
 
     for (const header of headers) {
       const key = header.toLowerCase().replace(/\*/g, '').trim();
+      if (isArtisticServerExport && key === 'category') {
+        mapping[header] = 'categoryName';
+        continue;
+      }
       if (DEFAULT_COLUMN_MAP[key]) {
         mapping[header] = DEFAULT_COLUMN_MAP[key];
       } else if (DEFAULT_COLUMN_MAP[header.toLowerCase().trim()]) {
@@ -1104,6 +1152,17 @@ export class CatalogImportService {
       { field: 'features', label: 'Features', required: false },
       { field: 'countryOfOrigin', label: 'Country of Origin', required: false },
       { field: 'imageUrls', label: 'Image URLs', required: false },
+      { field: 'itemSpecifics', label: 'Item Specifics', required: false },
+      { field: 'sourceChannelStatus', label: 'Source Channel Status', required: false },
+      { field: 'sourceChannelId', label: 'Source Channel ID', required: false },
+      { field: 'sourceMarketplaceId', label: 'Source Marketplace ID', required: false },
+      { field: 'sourceMarketplaceName', label: 'Source Marketplace', required: false },
+      { field: 'sourceMarketplaceSiteId', label: 'Source Marketplace Site ID', required: false },
+      { field: 'sourceMarketplaceItemId', label: 'Source Marketplace Item ID', required: false },
+      { field: 'sourceCondition', label: 'Source Condition', required: false },
+      { field: 'sourceAccountName', label: 'Source Account', required: false },
+      { field: 'sourcePriceCurrency', label: 'Source Price Currency', required: false },
+      { field: 'sourceListingUrl', label: 'Source Listing URL', required: false },
       { field: 'location', label: 'Location', required: false },
       { field: 'format', label: 'Listing Format', required: false },
       { field: 'duration', label: 'Duration', required: false },

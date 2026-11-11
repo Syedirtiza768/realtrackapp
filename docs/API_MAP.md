@@ -2,7 +2,7 @@
 
 # API Map
 
-> Complete API endpoint reference for RealTrackApp.
+> Complete API endpoint reference for Omni Core.
 > All routes are under the global prefix `/api`.
 > Swagger UI available at `/api/docs` (non-production).
 

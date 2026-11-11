@@ -70,8 +70,8 @@ export class OpenAiService implements OnModuleInit {
       maxRetries: 0,
       timeout: Number(this.config.get('OPENAI_TIMEOUT_MS', '120000')),
       defaultHeaders: {
-        'HTTP-Referer': 'https://realtrackapp.com',
-        'X-Title': 'RealTrackApp',
+        'HTTP-Referer': 'https://app.omnicoreholding.com',
+        'X-Title': 'Omni Core',
       },
     });
     this.baseURL = baseURL;
@@ -122,16 +122,50 @@ export class OpenAiService implements OnModuleInit {
       messages.push({ role: 'user', content: req.userPrompt });
     }
 
-    const response = await this.callWithRetry(() =>
-      this.client.chat.completions.create({
+    const request = {
         model,
         messages,
         temperature,
-        ...(typeof req.maxTokens === 'number'
-          ? { max_tokens: req.maxTokens }
-          : {}),
+        // An omitted limit can reserve the provider's full 65k output budget.
+        max_tokens:
+          typeof req.maxTokens === 'number' &&
+          Number.isFinite(req.maxTokens) && req.maxTokens > 0
+            ? Math.floor(req.maxTokens)
+            : 4096,
         ...(req.jsonMode ? { response_format: { type: 'json_object' } } : {}),
-      }),
+        ...(req.webSearch
+          ? {
+              tools: [
+                {
+                  type: 'openrouter:web_search',
+                  parameters: {
+                    engine: req.webSearchOptions?.engine ?? 'exa',
+                    max_results: req.webSearchOptions?.maxResults ?? 5,
+                    max_uses: req.webSearchOptions?.maxUses ?? 2,
+                    max_total_results:
+                      req.webSearchOptions?.maxTotalResults ?? 10,
+                    search_context_size:
+                      req.webSearchOptions?.searchContextSize ?? 'medium',
+                    ...(req.webSearchOptions?.allowedDomains?.length
+                      ? {
+                          allowed_domains:
+                            req.webSearchOptions.allowedDomains,
+                        }
+                      : {}),
+                  },
+                },
+              ],
+            }
+          : {}),
+        ...(req.reasoningEffort
+          ? { reasoning_effort: req.reasoningEffort }
+          : {}),
+      };
+
+    const response = await this.callWithRetry(() =>
+      this.client.chat.completions.create(
+        request as unknown as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming,
+      ),
     );
 
     const latencyMs = Date.now() - startMs;
@@ -149,7 +183,20 @@ export class OpenAiService implements OnModuleInit {
     const promptTokens = usage?.prompt_tokens ?? 0;
     const completionTokens = usage?.completion_tokens ?? 0;
     const totalTokens = promptTokens + completionTokens;
-    const cost = estimateCost(model, promptTokens, completionTokens);
+    const webSearchRequests = Number(
+      (
+        usage as unknown as {
+          server_tool_use?: { web_search_requests?: number };
+        }
+      )?.server_tool_use?.web_search_requests ?? 0,
+    );
+    const citations = req.webSearch
+      ? this.extractWebCitations(choice.message)
+      : [];
+    const cost =
+      estimateCost(model, promptTokens, completionTokens) +
+      // OEM fitment lookups pin OpenRouter web search to Exa ($0.007/query).
+      webSearchRequests * 0.007;
     this.sessionCostUsd += cost;
     const laneKey = req.costLane ?? model;
     this.sessionCostByLane.set(
@@ -175,7 +222,42 @@ export class OpenAiService implements OnModuleInit {
       usage: { promptTokens, completionTokens, totalTokens },
       latencyMs,
       estimatedCostUsd: cost,
+      ...(citations.length > 0 ? { citations } : {}),
+      ...(req.webSearch ? { webSearchRequests } : {}),
     };
+  }
+
+  private extractWebCitations(message: unknown) {
+    if (!message || typeof message !== 'object') return [];
+    const metadata = message as {
+      annotations?: Array<Record<string, unknown>>;
+      citations?: Array<Record<string, unknown>>;
+    };
+    const entries = [
+      ...(Array.isArray(metadata.annotations) ? metadata.annotations : []),
+      ...(Array.isArray(metadata.citations) ? metadata.citations : []),
+    ];
+    const citations = new Map<
+      string,
+      { url: string; title?: string; content?: string }
+    >();
+
+    for (const entry of entries) {
+      const raw =
+        entry['url_citation'] && typeof entry['url_citation'] === 'object'
+          ? (entry['url_citation'] as Record<string, unknown>)
+          : entry;
+      const url = typeof raw['url'] === 'string' ? raw['url'].trim() : '';
+      if (!/^https?:\/\//i.test(url)) continue;
+      citations.set(url, {
+        url,
+        ...(typeof raw['title'] === 'string' ? { title: raw['title'] } : {}),
+        ...(typeof raw['content'] === 'string'
+          ? { content: raw['content'] }
+          : {}),
+      });
+    }
+    return [...citations.values()];
   }
 
   // ──────────────────────────── Embeddings ─────────────────────────

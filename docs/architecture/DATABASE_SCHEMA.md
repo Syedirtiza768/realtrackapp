@@ -1,5 +1,24 @@
 # Database Schema
 
+## MotoArk lifecycle additions (deployed 2026-11-03)
+
+Migration `1791500000000-MotoarkOrderLifecycle` adds `primemotive_sale_receipts`
+(organization/event primary key), `motoark_order_events` (durable payload hash,
+state, retry/result), `motoark_orders` (organization/external-order uniqueness,
+generic-order link, version and financial balances), `motoark_order_lines`
+(stable external line, inventory/generic-line links, shipped/cancelled limits),
+`motoark_returns` (requested/received/restocked/disposed balances and physical
+unit identity), and `motoark_refunds` (unique refund ID and positive amount).
+Domain processing writes these tables and the existing warehouse ledger in
+one transaction; no schema synchronization is used.
+
+Migration `1791600000000-PrimemotiveOrderedChanges` adds bigint listing
+`revision`, nullable promoted change `sequence`, a sequence allocator, cursor
+and pending-delivery indexes, and replacement change/revision triggers. The
+old capture function is retained for rollback. Existing events are promoted
+in bounded batches after their source transactions commit. See
+[schema behavior and deployment limits](MOTOARK_ORDER_LIFECYCLE.md).
+
 > Fashion completion candidate (2026-09-09): see docs/architecture/FASHION_WORKSPACE_COMPLETION.md for route/API changes, scoped services, password_change_required migration and seed variable names, test evidence, deployment procedure, and explicitly unimplemented requirements. This candidate is not yet deployed.
 
 > **Source**: Consolidated from `docs/DATABASE_MAP.md` (513 lines, entity-focused) and `docs/architecture/database.md` (108 lines, engine/ORM config focused) — 2026-05-29. Updated: 2026-06-11.
@@ -159,6 +178,16 @@ used by Inventory API and SellerPundit publishes. The unique
 tracks eBay's unused-image expiration response so stale cache entries can be
 replaced.
 
+#### `ebay_published_listings` and `ebay_published_listing_changes`
+The published-listing mirror includes `is_test_listing` (default `false`) to
+identify synthetic integration fixtures. Migration
+`1791400000000-PrimemotiveListingChangeFeed` adds the append-only change/outbox
+table and a PostgreSQL trigger that records meaningful Primemotive listing
+inserts, edits, ended rows, and deletes in the same transaction. Change rows
+retain a listing snapshot so consumers can process removals after the mirror
+row is no longer present. Delivery attempt, next-attempt, last-error, and
+delivered timestamps support signed outbound webhook retries.
+
 ### Orders Module
 
 #### `orders`
@@ -286,6 +315,19 @@ Entities with `@DeleteDateColumn` automatically exclude soft-deleted rows. Use `
 The additive vertical migration adds explicit vertical and vertical_attributes fields to catalog/listing/import/job tables, per-store vertical_config, and product family/variant/category metadata tables. Fashion garment identification stores category-aware clothing/footwear/accessory attributes plus `_` review-metadata keys (`_suggestedKeys`, `_confirmedKeys`, `_analysisStatus`, and related flags) in `catalog_products.vertical_attributes` JSON; underscore-prefixed keys are stored as-is and are not camel-cased. No additional table or migration was required. Migration 1790400000000-CreateFashionWorkspaceSecurity adds fashion_reviews with organization_id, catalog_product_id, status, authenticity_confirmed, private evidence_keys, reviewer, notes, and timestamps. Evidence keys are never returned by public listing payloads.
 
 CatalogProduct retains the existing global SKU uniqueness constraint during the pilot. Fashion endpoints reject an existing SKU rather than overwriting another vertical. DB_SYNCHRONIZE remains disabled; neither vertical migration has been run by this implementation.
+
+### Fashion quick capture (2026-09-28)
+
+Migration `1791000000000-CreateFashionIntake` (additive):
+
+- `fashion_warehouses` — `id` uuid PK, `organization_id` uuid, `code` varchar(40) (unique per organization via `uq_fashion_warehouses_org_code`), `name` varchar(120), `country_code` varchar(2) null, `active` boolean default true, `created_at`, `updated_at`.
+- `fashion_sku_counters` — PK (`organization_id`, `batch` varchar(20)), `last_value` integer, `updated_at`. Advanced with `UPDATE … RETURNING` / `INSERT … ON CONFLICT DO UPDATE … RETURNING`.
+
+New measurement keys and `_intake*`, `_warehouse*`, `_photoRoles` (`role:url` entries), `_sizeChartImageUrl` meta keys live in `catalog_products.vertical_attributes`. See docs/architecture/FASHION_QUICK_CAPTURE.md.
+
+Fashion staged intake and activity reporting (2026-10-09) reuse `catalog_products.vertical_attributes` and existing `listing_action_logs`; there is no added table or migration. `_catalogAdded`, `_catalogAddedBy`, and `_catalogAddedAt` track the handoff into the shared Fashion Catalog. `_intakeCreatedBy` / `_createdByUserId` identify the uploader when available. The `fashion.intake.catalog_added` action log records the handoff actor and time. Photo objects are canonical WebP; reports read attributes from JSONB and publication/policy history from existing eBay listing job targets.
+
+Fashion catalogue-export imports also reuse `catalog_products.vertical_attributes` JSONB: source marketplace/channel provenance, item-specific name/value arrays, original measurement JSON, measurement-unit review state, and WebP mirror counts/status live alongside curated Fashion fields. After the image-mirror step succeeds, `catalog_products.image_urls` contains only application WebP URLs for this source format. No table, column, index, or migration is added; publish validation checks the JSONB mirror status and unresolved measurement unit before allowing an imported row to publish.
 
 ## Business & Industrial vertical schema (2026-09-09)
 

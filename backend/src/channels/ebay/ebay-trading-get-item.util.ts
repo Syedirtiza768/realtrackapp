@@ -1,6 +1,24 @@
 import type { EbayCompatibilityPayload } from './ebay-api.types.js';
 
 export interface TradingItemDetails {
+  itemId: string | null;
+  sku: string | null;
+  title: string | null;
+  categoryId: string | null;
+  conditionId: number | null;
+  quantity: number | null;
+  quantitySold: number | null;
+  price: number | null;
+  currency: string | null;
+  listingType: string | null;
+  listingStatus: string | null;
+  listingDuration: string | null;
+  location: string | null;
+  country: string | null;
+  postalCode: string | null;
+  listingUrl: string | null;
+  startTime: string | null;
+  endTime: string | null;
   imageUrls: string[];
   compatibility: EbayCompatibilityPayload | null;
   listingDetails: {
@@ -130,7 +148,43 @@ export function parseTradingGetItemResponse(xml: string): TradingItemDetails {
       tagValue(listingDetailsBlock, 'BestOfferEnabled'),
   );
   const immediatePayRequired = parseBoolean(tagValue(itemBlock, 'AutoPay'));
+  const primaryCategoryBlock = itemBlock.match(
+    /<PrimaryCategory>[\s\S]*?<\/PrimaryCategory>/i,
+  )?.[0];
+  const priceRaw =
+    tagValue(itemBlock, 'BuyItNowPrice') ??
+    tagValue(itemBlock, 'CurrentPrice') ??
+    tagValue(itemBlock, 'StartPrice');
+  const priceTag = itemBlock.match(
+    /<(?:BuyItNowPrice|CurrentPrice|StartPrice)(?:\s[^>]*)?[^>]*>/i,
+  )?.[0];
+  const currency = priceTag?.match(/currencyID="([^"]+)"/i)?.[1] ?? null;
+  const numberOrNull = (value: string | null): number | null => {
+    if (value == null || value.trim() === '') return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
   return {
+    itemId: tagValue(itemBlock, 'ItemID'),
+    sku: tagValue(itemBlock, 'SKU'),
+    title: tagValue(itemBlock, 'Title'),
+    categoryId:
+      tagValue(itemBlock, 'PrimaryCategoryID') ??
+      (primaryCategoryBlock ? tagValue(primaryCategoryBlock, 'CategoryID') : null),
+    conditionId: numberOrNull(tagValue(itemBlock, 'ConditionID')),
+    quantity: numberOrNull(tagValue(itemBlock, 'Quantity')),
+    quantitySold: numberOrNull(tagValue(itemBlock, 'QuantitySold')),
+    price: numberOrNull(priceRaw),
+    currency,
+    listingType: tagValue(itemBlock, 'ListingType'),
+    listingStatus: tagValue(itemBlock, 'ListingStatus'),
+    listingDuration: tagValue(itemBlock, 'ListingDuration'),
+    location: tagValue(itemBlock, 'Location'),
+    country: tagValue(itemBlock, 'Country'),
+    postalCode: tagValue(itemBlock, 'PostalCode'),
+    listingUrl: tagValue(itemBlock, 'ViewItemURL'),
+    startTime: tagValue(itemBlock, 'StartTime'),
+    endTime: tagValue(itemBlock, 'EndTime'),
     imageUrls: parsePictureUrls(itemBlock),
     compatibility: parseTradingItemCompatibility(itemBlock),
     listingDetails: {

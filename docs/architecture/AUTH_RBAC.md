@@ -1,5 +1,17 @@
 # Auth & RBAC
 
+**MotoArk lifecycle (deployed 2026-11-03):** `motoark.orders.notify`
+and `motoark.orders.view` allow scoped lifecycle submission/status/quantity
+reads. `motoark.returns.receive` and `motoark.returns.restock` separately
+authorize physical return processing. Registry defaults grant administrators
+these permissions; migration `1791500000000` grants the existing external
+reader role only notify/view. Production verification confirmed the external
+reader has no physical return receive/restock authority. JWT, organization membership, Primemotive store
+access, strict DTO validation, and a separate raw-body HMAC remain required.
+See the [full contract](MOTOARK_ORDER_LIFECYCLE.md).
+
+> Fashion completion candidate (2026-09-09): see docs/architecture/FASHION_WORKSPACE_COMPLETION.md for route/API changes, scoped services, password_change_required migration and seed variable names, test evidence, deployment procedure, and explicitly unimplemented requirements. This candidate is not yet deployed.
+
 > **Source**: Consolidated from `docs/RBAC_AND_SECURITY.md` (374 lines) and `docs/architecture/auth-rbac.md` (106 lines) — 2026-05-29.
 > For the security checklist and operational concerns, see [SECURITY.md](SECURITY.md).
 
@@ -131,10 +143,19 @@ Tables (rbac module): `Role`, `Permission`, `RolePermission`, `UserRoleAssignmen
 | fitment | `fitment.view`, `fitment.manage` |
 | storage | `storage.view`, `storage.upload`, `storage.manage` |
 | pricing | `pricing.view`, `pricing.manage` |
-| published_listings | `published_listings.view`, `published_listings.export`, `published_listings.sync`, `published_listings.manage`, `published_listings.bulk` |
+| published_listings | `published_listings.view`, `published_listings.export`, `published_listings.external_feed`, `published_listings.sales.notify`, `published_listings.sync`, `published_listings.manage`, `published_listings.bulk` |
 | feature_flags | `feature_flags.view`, `feature_flags.manage` |
 
 > Full list: read `permission-registry.ts` (do not duplicate it here — it drifts).
+
+### Vertical pilot authorization
+
+Vertical endpoints reuse existing permissions: `catalog.view`/`catalog.update`
+for profiles, category metadata, families, and variants; `settings.view` and
+`settings.manage` for per-store configuration; and `ebay.publish` for variant
+mappings and family publishing. The separate `multi_vertical_catalog` feature
+flag is disabled by default and is an additional rollout gate, not a new RBAC
+permission.
 
 ### Default Role Assignments
 
@@ -164,6 +185,14 @@ To grant a user all-store access without per-store assignments, set `store_acces
 > **Policy (2026-08-08):** Every human system role can upload files to the enrichment pipeline and receive output listings. `pipeline.run` (gates `POST /api/pipeline/upload` and `POST /api/pipeline/single`) defaults to `READ_ONLY` — all 10 human roles. `pipeline.view` and `pipeline.export` are already `READ_ONLY`. Pipeline job visibility in `GET /api/pipeline/jobs` is filtered to a user's own jobs unless they hold `users.view` (manager-and-up), but a user who uploads a file always sees their own job and can download its output templates (`us`/`uk`/`au`/`de`/`report`). The pipeline processor imports results into `catalog_products` + `listing_records` as a background job (no per-request permission check); those imported listings are then visible to the uploader via `listings.view` (READ_ONLY) with the store filter bypassed by `store_access_all`.
 
 > **Customized roles caveat:** roles with `roles.is_customized = true` are skipped by `syncFromRegistry()` on boot. If a customized role (e.g. `staff`) is missing publish perms after a registry change, add them directly to `role_permissions` or reset the role to defaults.
+
+The Primemotive external API permissions are not granted to human default roles.
+Migration `1791200000000-PrimemotiveExternalApiPermissions` grants
+`published_listings.external_feed` and `published_listings.sales.notify` only to the
+`api_published_listings_reader` custom role when it exists.
+Migration `1791300000000-PrimemotiveExportPermissionGrant` adds the existing
+`published_listings.export` CSV permission to the same role. It does not grant
+listing management or publishing permissions.
 
 ---
 
@@ -238,16 +267,82 @@ Permissions returned from `GET /api/auth/me`.
 
 ---
 
-## Known Gaps
+## Current session and automotive isolation controls (2026-09-11)
 
-- No server-side token revocation/blacklist — logout is client-side only.
-- No refresh-token rotation; JWT expiry config not asserted here (check `auth.module.ts` `JwtModule` registration).
-- Row-level tenant/org isolation enforcement is inconsistent per prior audit.
-- Some routes (e.g. `/settings/client`, `/settings/users` in `App.tsx`) lack an explicit `permissions` prop on the route element — verify the page-level guard covers them.
+- New access tokens include a `jti`. Logout stores that session ID in Redis until
+  token expiry, and `JwtStrategy` rejects revoked sessions. Tokens issued before
+  this rollout have no `jti` and expire normally.
+- Query-string JWTs are rejected globally except for the authenticated Motors
+  product-progress SSE route required by native `EventSource`.
+- Dedicated login requests validate `automotive` (`dashboard.view`), `fashion`
+  (`fashion.access`), or `business_industrial`
+  (`business_industrial.access`) before issuing a token.
+- Generic Auto Parts catalog and listing APIs apply organization, automotive
+  vertical, store, and team boundaries on the server. Pre-tenancy NULL rows are
+  visible only to members of `LEGACY_AUTOMOTIVE_ORGANIZATION_ID`; new rows are
+  tagged with the resolved organization and `vertical=automotive`.
+
+Refresh-token rotation is not implemented; access tokens remain bounded by
+`JWT_EXPIRY_SECONDS`.
 
 ---
 
 *Consolidated & reorganized: 2026-06-06. Updated: 2026-08-19.*
+
+## Fashion workspace authorization (2026-09-09)
+
+Fashion has an explicit login at /fashion/login and uses the same JWT/RBAC infrastructure with a separate permission namespace. The registry defines fashion.access, dashboard/listing/import/review/publish/store/user/role/settings/authenticity/incident permissions and the system roles fashion_admin, fashion_manager, and fashion_operator. Fashion roles do not inherit the legacy organization-wide publish permissions.
+
+The Fashion login rejects authenticated credentials unless the user has fashion.access. Fashion controllers enforce the same permission boundary server-side; the client route is not a security boundary. The Fashion user-management endpoints can list workspace members and assign only the three Fashion roles. Existing users do not receive Fashion access automatically.
+
+The seed command is backend npm run seed:fashion-admin. It requires FASHION_SEED_ADMIN_EMAIL and FASHION_SEED_ADMIN_PASSWORD, creates only a missing user/workspace, never resets an existing password, and refuses to expand an existing non-Fashion account.
+
+## Business & Industrial workspace authorization (2026-09-09)
+
+The B&I route tree uses `business_industrial.access` plus specific permissions
+for listings, import, review, private evidence, publish, stores, incidents,
+and users. The registry defines `business_industrial_admin`,
+`business_industrial_manager`, and `business_industrial_operator`; these
+vertical roles are excluded from the legacy all-users publish permission grant.
+Existing users do not receive B&I access automatically.
+
+The backend resolves every request through the user’s organization membership.
+Store access is further restricted to eBay stores whose config explicitly says
+`ownerVertical: business_industrial`; OAuth rejects a seller account already
+connected in the organization, preventing reuse across verticals. The B&I
+login sends an explicit vertical assertion and the backend validates the
+matching permission before issuing a token. The B&I admin UI creates
+organization-scoped accounts with temporary-password enforcement, supports
+role assignment/deactivation, and replaces dedicated-store assignments
+transactionally. Account, policy, category, job, and publication APIs use the
+same `BusinessIndustrialService` authorization rule. Users with
+`business_industrial.stores.manage` may administer every dedicated B&I store in
+their organization; other users remain limited by explicit store assignments
+and access level. No cross-vertical store access is granted.
+
+The shared public eBay OAuth callback uses the vertical saved in OAuth state
+when choosing its success destination. A B&I connection returns to
+`/business-industrial/stores`; the general `/settings/integrations/ebay` page
+requires `ebay.view` and is not an authorized fallback for B&I-only roles.
+
+A public invitation acceptance flow remains outside this change.
+
+The seed command is `backend` npm run `seed:business-industrial-admin`. It
+requires `BUSINESS_INDUSTRIAL_SEED_ADMIN_EMAIL` and
+`BUSINESS_INDUSTRIAL_SEED_ADMIN_PASSWORD`, never resets an existing password,
+and refuses to expand an existing account without an explicit B&I role.
+
+## Shared catalog action permissions (2026-09-12)
+
+Catalog reads use the existing vertical listing-view permissions. The shared
+workspace adds `fashion.catalog.export`, `fashion.catalog.delete`,
+`fashion.catalog.assign_team`, and `fashion.catalog.manage_policies`, with
+parallel `business_industrial.catalog.*` permissions. Export is available to
+all vertical roles; team assignment and policy changes are manager/admin
+actions; delete is admin-only. Every controller method declares both the
+vertical access permission and the operation permission, while the service
+re-checks organization membership, vertical, team scope, and store scope.
+Quarantine/manual-review holds are enforced independently of UI permissions.
 
 ## Warehouse stock permissions (2026-10-05)
 

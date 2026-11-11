@@ -50,7 +50,9 @@ interface RepairTarget {
 
 function option(name: string): string | undefined {
   const prefix = `--${name}=`;
-  return process.argv.find((arg) => arg.startsWith(prefix))?.slice(prefix.length);
+  return process.argv
+    .find((arg) => arg.startsWith(prefix))
+    ?.slice(prefix.length);
 }
 
 function hasFlag(name: string): boolean {
@@ -64,9 +66,11 @@ function expectedCompatibilityFromStoredRows(
     target.fitmentData,
     target.fitmentRows,
   );
-  return fitmentDataToCompatibilityPayload(source) ?? {
-    compatibleProducts: [],
-  };
+  return (
+    fitmentDataToCompatibilityPayload(source) ?? {
+      compatibleProducts: [],
+    }
+  );
 }
 
 async function main(): Promise<void> {
@@ -84,7 +88,7 @@ async function main(): Promise<void> {
     .map((sku) => sku.trim())
     .filter(Boolean);
   const explicitSkuScope = Boolean(skuFilter || skuList.length > 0);
-  const skuScope = skuList.length > 0 ? skuList.join(',') : skuFilter ?? null;
+  const skuScope = skuList.length > 0 ? skuList.join(',') : (skuFilter ?? null);
   const limit = Number(option('limit') ?? '0');
   // Keep the default scope explicit in SQL. A boolean bind parameter here is
   // surprisingly easy to invert during deployment and can turn a repair into
@@ -141,7 +145,7 @@ async function main(): Promise<void> {
       getRepositoryToken(EbayPublishedListing),
     );
 
-    const rows = (await dataSource.query(
+    const rows = await dataSource.query(
       `
         SELECT
           elc.id AS "channelId",
@@ -187,7 +191,7 @@ async function main(): Promise<void> {
         ORDER BY elc.ebay_account_id, elc.listing_id
       `,
       [skuScope],
-    )) as RepairTarget[];
+    );
 
     const targets = limit > 0 ? rows.slice(0, limit) : rows;
     console.log(
@@ -240,14 +244,13 @@ async function main(): Promise<void> {
           };
           const recoverWithFreshSku = async (): Promise<void> => {
             const canonical = await getCanonicalRecoverySource();
-            const fresh =
-              await reconciler.recreatePublishedOfferWithFreshSku(
-                target.storeId,
-                verifiedOfferId ?? target.offerId!,
-                verifiedSku,
-                expected,
-                canonical,
-              );
+            const fresh = await reconciler.recreatePublishedOfferWithFreshSku(
+              target.storeId,
+              verifiedOfferId ?? target.offerId!,
+              verifiedSku,
+              expected,
+              canonical,
+            );
             verifiedSku = fresh.sku;
             verifiedOfferId = fresh.offerId;
             verifiedListingId = fresh.listingId;
@@ -270,7 +273,9 @@ async function main(): Promise<void> {
               )) ?? verifiedListingId;
           } catch (refreshErr: unknown) {
             const message =
-              refreshErr instanceof Error ? refreshErr.message : String(refreshErr);
+              refreshErr instanceof Error
+                ? refreshErr.message
+                : String(refreshErr);
             if (!message.includes('status code 404')) throw refreshErr;
             // Some older channels retain a legacy Trading listing after the
             // Inventory offer row has disappeared. Repair that projection
@@ -286,7 +291,9 @@ async function main(): Promise<void> {
               verifiedListingId = target.listingId;
             } catch (legacyErr: unknown) {
               const legacyMessage =
-                legacyErr instanceof Error ? legacyErr.message : String(legacyErr);
+                legacyErr instanceof Error
+                  ? legacyErr.message
+                  : String(legacyErr);
               console.log(
                 `${label}: offer ${target.offerId} is gone; legacy fallback returned ${legacyMessage}; using a fresh Inventory SKU`,
               );
@@ -330,7 +337,9 @@ async function main(): Promise<void> {
               );
             } catch (sameSkuErr: unknown) {
               const sameSkuMessage =
-                sameSkuErr instanceof Error ? sameSkuErr.message : String(sameSkuErr);
+                sameSkuErr instanceof Error
+                  ? sameSkuErr.message
+                  : String(sameSkuErr);
               console.log(
                 `${label}: same-SKU recreation returned ${sameSkuMessage}; using a fresh Inventory SKU`,
               );
@@ -372,19 +381,18 @@ async function main(): Promise<void> {
           );
         }
         if (target.publishedListingId) {
-          await publishedRepo.update(
-            target.publishedListingId,
-            {
-              ebayItemId: verifiedListingId,
-              offerId: verifiedOfferId,
-              sku: verifiedSku,
-              listingUrl: `https://www.ebay.com/itm/${verifiedListingId}`,
-              compatibility: expected,
-              lastSyncedAt: new Date(),
-            } as any,
-          );
+          await publishedRepo.update(target.publishedListingId, {
+            ebayItemId: verifiedListingId,
+            offerId: verifiedOfferId,
+            sku: verifiedSku,
+            listingUrl: `https://www.ebay.com/itm/${verifiedListingId}`,
+            compatibility: expected,
+            lastSyncedAt: new Date(),
+          } as any);
         }
-        if (target.localCompatibilityRows === expected.compatibleProducts.length) {
+        if (
+          target.localCompatibilityRows === expected.compatibleProducts.length
+        ) {
           unchanged += 1;
         } else {
           repaired += 1;
@@ -409,22 +417,17 @@ async function main(): Promise<void> {
             [target.channelId],
           );
           if (target.publishedListingId) {
-            await publishedRepo.update(
-              target.publishedListingId,
-              {
-                compatibility: { compatibleProducts: [] },
-                lastSyncedAt: new Date(),
-              } as any,
-            );
+            await publishedRepo.update(target.publishedListingId, {
+              compatibility: { compatibleProducts: [] },
+              lastSyncedAt: new Date(),
+            } as any);
           }
           unchanged += 1;
           console.warn(`ENDED ${label}: ${message}`);
           continue;
         }
         failed += 1;
-        console.error(
-          `FAILED ${label}: ${message}`,
-        );
+        console.error(`FAILED ${label}: ${message}`);
       }
     }
 
@@ -438,6 +441,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err: unknown) => {
-  console.error(err instanceof Error ? err.stack ?? err.message : err);
+  console.error(err instanceof Error ? (err.stack ?? err.message) : err);
   process.exitCode = 1;
 });

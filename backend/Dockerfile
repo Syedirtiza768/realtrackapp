@@ -26,9 +26,11 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-# Healthcheck in docker-compose.yml uses wget
+# Healthcheck in docker-compose.yml uses wget.
+# fonts-dejavu-core: sharp/librsvg needs a system font to draw text in generated
+# Fashion size-chart images and photo banners (node:20-slim ships none).
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends wget python3 python3-pip \
+  && apt-get install -y --no-install-recommends wget python3 python3-pip fonts-dejavu-core \
   && pip3 install --no-cache-dir --break-system-packages msoffcrypto-tool \
   && ln -sf /usr/bin/python3 /usr/bin/python \
   && rm -rf /var/lib/apt/lists/*
@@ -41,6 +43,7 @@ RUN npm prune --omit=dev --no-audit --no-fund
 # Copy compiled output + shared platform data (runtime lookup: /app/shared/...)
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/shared ./shared
+COPY --from=builder /app/assets ./assets
 
 # Create uploads directory
 RUN mkdir -p uploads/catalog

@@ -286,8 +286,6 @@ export function fitmentDataToCompatibilityPayload(
 
     const trim = getString(raw, ['Trim', 'trim']) || undefined;
     const engine = getString(raw, ['Engine', 'engine']) || undefined;
-    const submodel =
-      getString(raw, ['Submodel', 'submodel', 'SubModel']) || undefined;
     const notes = normalizeNotes(raw);
 
     for (const year of years) {
@@ -298,7 +296,8 @@ export function fitmentDataToCompatibilityPayload(
       ];
       if (trim) properties.push({ name: 'Trim', value: trim });
       if (engine) properties.push({ name: 'Engine', value: engine });
-      if (submodel) properties.push({ name: 'Submodel', value: submodel });
+      // US Motors Inventory API compatibility properties are Year/Make/Model/Trim/Engine.
+      // Submodel is local catalog evidence only; sending it invalidates the whole row.
 
       const rowKey = properties
         .map((property) => `${property.name}:${property.value}`)
@@ -310,6 +309,71 @@ export function fitmentDataToCompatibilityPayload(
         ...(notes ? { notes } : {}),
       });
     }
+  }
+
+  if (compatibleProducts.length === 0) return undefined;
+  return { compatibleProducts };
+}
+
+const CORE_COMPATIBILITY_PROPERTY_NAMES = new Set(['make', 'model', 'year']);
+
+function propertyByName(
+  row: EbayCompatibilityPayload['compatibleProducts'][number],
+  name: string,
+): string {
+  const wanted = name.toLowerCase();
+  for (const property of row.compatibilityProperties ?? []) {
+    if (property.name.trim().toLowerCase() !== wanted) continue;
+    const value = property.value?.trim();
+    if (value) return value;
+  }
+  return '';
+}
+
+/** True when a payload includes notes or optional Trim/Engine/Submodel fields. */
+export function compatibilityHasOptionalFields(
+  payload?: EbayCompatibilityPayload | null,
+): boolean {
+  for (const row of payload?.compatibleProducts ?? []) {
+    if (row.notes?.trim()) return true;
+    for (const property of row.compatibilityProperties ?? []) {
+      const name = property.name.trim().toLowerCase();
+      if (name && !CORE_COMPATIBILITY_PROPERTY_NAMES.has(name)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Reduce an Inventory API compatibility payload to unique Make/Model/Year rows.
+ * Used when eBay accepts the PUT but rejects publish with error 25002 because
+ * Trim/Engine/notes are not in the live US Motors vocabulary.
+ */
+export function toCoreCompatibilityPayload(
+  payload?: EbayCompatibilityPayload | null,
+): EbayCompatibilityPayload | undefined {
+  if (!payload?.compatibleProducts?.length) return undefined;
+
+  const seenRows = new Set<string>();
+  const compatibleProducts: EbayCompatibilityPayload['compatibleProducts'] =
+    [];
+
+  for (const row of payload.compatibleProducts) {
+    const make = propertyByName(row, 'Make');
+    const model = propertyByName(row, 'Model');
+    const year = propertyByName(row, 'Year');
+    if (!make || !model || !year) continue;
+
+    const rowKey = `make:${make.toLowerCase()}|model:${model.toLowerCase()}|year:${year.toLowerCase()}`;
+    if (seenRows.has(rowKey)) continue;
+    seenRows.add(rowKey);
+    compatibleProducts.push({
+      compatibilityProperties: [
+        { name: 'Make', value: make },
+        { name: 'Model', value: model },
+        { name: 'Year', value: year },
+      ],
+    });
   }
 
   if (compatibleProducts.length === 0) return undefined;

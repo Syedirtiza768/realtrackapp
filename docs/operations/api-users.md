@@ -10,16 +10,32 @@ the permissions the integration needs.
 
 ## Published Listings Reader
 
+> **Credential rotation completed 2026-11-05:** The user approved resetting
+> this account's password after the historical credentials failed. The current
+> credential is stored on the production host in
+> `/home/ubuntu/.config/realtrack/api-reader-20261105.env` (mode `0600`, parent
+> directory `0700`), not in this document. Authenticated listing-state and
+> dedicated PrimeMotive feed checks passed with HTTP 200. Roles/permissions
+> were preserved. Provision this credential through protected consumer
+> configuration; do not copy the historical password examples below.
+
+> **Outdated credentials — verified 2026-11-05:** With explicit user approval,
+> the documented reader login below was tested against production and returned
+> HTTP 401. The account exists and is active, with no password-change-required
+> flag. Treat the credential examples below as historical; obtain the current
+> credential from an approved secret source. No reset or access change was made
+> during the [US reconciliation verification](PRIMEMOTIVE_US_RECONCILIATION_2026-11-05.md).
+
 Read-only access to the live eBay listing mirror (`ebay_published_listings`, synced from
 eBay by `PublishedListingsSyncService`). Nothing else.
 
 | | |
 |---|---|
-| Base URL | `https://mhn.realtrackapp.com/api` |
+| Base URL | `https://app.omnicoreholding.com/api` |
 | Email | `api-published-listings@realtrack.local` |
 | Password | `Ebay$321` |
 | Role | `api_published_listings_reader` (custom, non-system) |
-| Permissions | `published_listings.view` only — confirmed via `GET /api/auth/me` |
+| Permissions | `published_listings.view` was confirmed before the Primemotive integration work. Migration `1791200000000-PrimemotiveExternalApiPermissions` grants `published_listings.external_feed` and `published_listings.sales.notify` to this custom role when deployed and when the role exists; verify the effective permissions through `GET /api/auth/me`. |
 | Store scope | **Default API results: Blackline + Salvage only** (`listingStatus=active` and `quantityAvailable > 0` — hard rule). Pass `storeSlug=all` or an explicit `storeId` to override stores. Account still has `storeAccessAll = true`. |
 | Workspace | Member of the primary RealTrack organization (`3ed54be6-7138-4264-bd8b-73dfa9336245`) |
 
@@ -33,7 +49,7 @@ Same login flow as any user — POST credentials, get back a bearer JWT (24h exp
 `JWT_EXPIRY_SECONDS`).
 
 ```bash
-curl -s -X POST https://mhn.realtrackapp.com/api/auth/login \
+curl -s -X POST https://app.omnicoreholding.com/api/auth/login \
   -H 'Content-Type: application/json' \
   -d '{"email":"api-published-listings@realtrack.local","password":"Ebay$321"}'
 ```
@@ -57,7 +73,7 @@ Response:
 > the real scope with `GET /api/auth/me`:
 
 ```bash
-curl -s https://mhn.realtrackapp.com/api/auth/me \
+curl -s https://app.omnicoreholding.com/api/auth/me \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -112,9 +128,9 @@ GET /api/published-listings/sync-status
 ```
 
 ```bash
-curl -s "https://mhn.realtrackapp.com/api/published-listings/stores" \
+curl -s "https://app.omnicoreholding.com/api/published-listings/stores" \
   -H "Authorization: Bearer $TOKEN"
-curl -s "https://mhn.realtrackapp.com/api/published-listings/sync-status" \
+curl -s "https://app.omnicoreholding.com/api/published-listings/sync-status" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -146,7 +162,7 @@ List + detail endpoints support the same filters/pagination — `page` (default 
 > Filter by eBay storefront slug (multi-store):
 > `?storeSlug=salvagea,blackline` or `?storeSlug=salvagea,blacklineusedautoparts`
 >
-> | storeSlug | RealTrack store | eBay storefront |
+> | storeSlug | Omni Core store | eBay storefront |
 > |---|---|---|
 > | `salvagea` / `salvage` | `3b84b063-3811-481f-a61d-f7846a03558f` (active K. Salvage Auto Parts) | https://www.ebay.com/str/salvagea |
 > | `blackline` / `blacklineusedautoparts` | `d16199c4-55b5-429e-ad27-892bed94e00d` (BLACKLINEAUTOPARTS) | https://www.ebay.com/str/blacklineusedautoparts |
@@ -161,7 +177,7 @@ GET /api/published-listings?page={page}&limit={limit}
 ```
 
 ```bash
-curl -s "https://mhn.realtrackapp.com/api/published-listings?page=1&limit=3" \
+curl -s "https://app.omnicoreholding.com/api/published-listings?page=1&limit=3" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -233,7 +249,7 @@ GET /api/published-listings?storeId={storeId}&page={page}&limit={limit}
 ```
 
 ```bash
-curl -s "https://mhn.realtrackapp.com/api/published-listings?storeId=3b84b063-3811-481f-a61d-f7846a03558f&page=1&limit=3" \
+curl -s "https://app.omnicoreholding.com/api/published-listings?storeId=3b84b063-3811-481f-a61d-f7846a03558f&page=1&limit=3" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -279,7 +295,7 @@ Inventory API path; legacy Trading-API-synced listings have `offerId: null` and 
 found by `sku`, `ebayItemId`, or `search`).
 
 ```bash
-curl -s "https://mhn.realtrackapp.com/api/published-listings?offerId=113819855011&page=1&limit=5" \
+curl -s "https://app.omnicoreholding.com/api/published-listings?offerId=113819855011&page=1&limit=5" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -318,7 +334,7 @@ GET /api/published-listings/:id/trading-enrichment
 Query params: `force=true` to bypass cache.
 
 ```bash
-curl -s "https://mhn.realtrackapp.com/api/published-listings/$LISTING_ID/trading-enrichment" \
+curl -s "https://app.omnicoreholding.com/api/published-listings/$LISTING_ID/trading-enrichment" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -360,7 +376,7 @@ Response (verified 2026-07-29):
 ### 5. Trading enrichment budget check
 
 ```bash
-curl -s "https://mhn.realtrackapp.com/api/published-listings/trading-enrichment/budget" \
+curl -s "https://app.omnicoreholding.com/api/published-listings/trading-enrichment/budget" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -369,7 +385,7 @@ Returns `{ "used": 41, "remaining": 4459, "limit": 4500, "resetDate": "2026-07-2
 ### 6. Batch pre-enrichment (requires `published_listings.sync`)
 
 ```bash
-curl -s -X POST "https://mhn.realtrackapp.com/api/published-listings/trading-enrichment/batch" \
+curl -s -X POST "https://app.omnicoreholding.com/api/published-listings/trading-enrichment/batch" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"listingIds": ["uuid-1", "uuid-2"], "force": false}'

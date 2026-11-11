@@ -78,6 +78,7 @@ export interface ListingProgress {
 export interface PublishJob {
   id: string;
   mode: 'single' | 'bulk';
+  organizationId: string;
   listing?: SearchItem;
   listingIds?: string[];
   /** listingId → human-readable title, for bulk progress rows. */
@@ -219,6 +220,7 @@ export default function PublishProgressPanel({ job, onDismiss }: Props) {
           ids,
           storeIdArray,
           job.id,
+          job.organizationId,
         );
 
         // Listings the server couldn't resolve to a catalog product (e.g. deleted)
@@ -243,7 +245,10 @@ export default function PublishProgressPanel({ job, onDismiss }: Props) {
         }
 
         while (!cancelled) {
-          const targets = await fetchDurableBulkPublishTargets(submitted.jobId);
+          const targets = await fetchDurableBulkPublishTargets(
+            submitted.jobId,
+            job.organizationId,
+          );
           if (cancelled) return;
           const byListing = new Map<string, typeof targets>();
           for (const target of targets) {

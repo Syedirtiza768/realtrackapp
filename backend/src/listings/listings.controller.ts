@@ -59,8 +59,8 @@ export class ListingsController {
 
   @Post()
   @RequirePermissions('listings.create')
-  create(@Body() dto: CreateListingDto) {
-    return this.listingsService.create(dto);
+  create(@Body() dto: CreateListingDto, @CurrentUser() user: User) {
+    return this.listingsService.create(dto, user);
   }
 
   @Put(':id')
@@ -85,20 +85,20 @@ export class ListingsController {
 
   @Delete(':id')
   @RequirePermissions('listings.delete')
-  softDelete(@Param('id') id: string) {
-    return this.listingsService.softDelete(id);
+  softDelete(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.listingsService.softDelete(id, user);
   }
 
   @Post(':id/restore')
   @RequirePermissions('listings.update')
-  restore(@Param('id') id: string) {
-    return this.listingsService.restore(id);
+  restore(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.listingsService.restore(id, user);
   }
 
   @Post('bulk')
   @RequirePermissions('listings.update')
-  bulkUpdate(@Body() dto: BulkUpdateDto) {
-    return this.listingsService.bulkUpdate(dto);
+  bulkUpdate(@Body() dto: BulkUpdateDto, @CurrentUser() user: User) {
+    return this.listingsService.bulkUpdate(dto, user);
   }
 
   @Post('bulk-profiles')
@@ -109,8 +109,8 @@ export class ListingsController {
 
   @Post('bulk-delete')
   @RequirePermissions('listings.delete')
-  bulkDelete(@Body() body: { ids: string[] }) {
-    return this.listingsService.bulkSoftDelete(body.ids);
+  bulkDelete(@Body() body: { ids: string[] }, @CurrentUser() user: User) {
+    return this.listingsService.bulkSoftDelete(body.ids, user);
   }
 
   @Get('export')
@@ -135,11 +135,13 @@ export class ListingsController {
     @Param('id') id: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
+    @CurrentUser() user?: User,
   ) {
     return this.listingsService.getRevisions(
       id,
       Number(limit) || 20,
       Number(offset) || 0,
+      user,
     );
   }
 

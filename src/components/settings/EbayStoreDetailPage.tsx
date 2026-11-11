@@ -84,7 +84,7 @@ export default function EbayStoreDetailPage() {
     setMessage(null);
     try {
       await disconnectEbayAccount(accountId, organizationId ?? undefined);
-      navigate('/settings/integrations/ebay');
+      navigate('/auto-parts/settings/integrations/ebay');
     } catch (e: unknown) {
       setMessage(e instanceof Error ? e.message : 'Disconnect failed');
     }
@@ -125,7 +125,7 @@ export default function EbayStoreDetailPage() {
     <div className="mx-auto max-w-4xl space-y-6 p-6">
       <div className="flex items-center gap-3">
         <Link
-          to="/settings/integrations/ebay"
+          to="/auto-parts/settings/integrations/ebay"
           className="text-sm text-sky-400 hover:underline"
         >
           ← eBay stores
@@ -232,7 +232,7 @@ export default function EbayStoreDetailPage() {
                   </>
                 )}
                 <Link
-                  to={`/settings/integrations/ebay/${accountId}/policies`}
+                  to={`/auto-parts/settings/integrations/ebay/${accountId}/policies`}
                   className="rounded border border-slate-300 dark:border-slate-600 px-3 py-1.5 text-sm text-slate-600 dark:text-slate-200 hover:bg-slate-100 dark:bg-slate-800"
                 >
                   Policy mapping

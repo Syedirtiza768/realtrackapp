@@ -22,8 +22,10 @@ export async function getEbayWorkspace(): Promise<WorkspaceContext> {
 
 export type EbayAccountSummary = {
   id: string;
+  primaryStoreId: string;
   accountDisplayName: string;
   ebayUserId: string;
+  ebayUsername: string | null;
   environment: string;
   connectionStatus: string;
   connectionSource?: 'native_oauth' | 'sellerpundit';
@@ -32,6 +34,7 @@ export type EbayAccountSummary = {
   sellerpunditLastSyncAt?: string | null;
   sellerpunditLastPolicySyncAt?: string | null;
   lastSuccessfulSyncAt?: string | null;
+  lastTokenRefreshAt: string | null;
   lastListingsFetchedCount?: number;
   lastPoliciesFetchedCount?: number;
   lastErrorMessage?: string | null;

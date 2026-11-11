@@ -1,8 +1,8 @@
-# RealTrackApp — Map of Content
+# Omni Core — Map of Content
 
-**Last reviewed:** 2026-09-29
+**Last reviewed:** 2026-11-05
 
-Entry point for the vault. RealTrackApp (DB name `listingpro` — see
+Entry point for the vault. Omni Core (DB name `listingpro` — see
 [[areas/database-and-jobs|database-and-jobs]] for the branding note) is a full-stack
 eBay automotive-parts listing management and inventory pipeline platform: React
 frontend, NestJS backend, PostgreSQL + Redis/BullMQ, and a large surface of
@@ -42,6 +42,9 @@ this.
   which is older)
 - [[context/FEATURE_REGISTRY|context/FEATURE_REGISTRY.md]] — feature-by-feature
   maturity tracking
+- Fashion vertical: [[architecture/FASHION_WORKSPACE_COMPLETION|architecture/FASHION_WORKSPACE_COMPLETION.md]]
+  (workspace, review, publish) and [[architecture/FASHION_QUICK_CAPTURE|architecture/FASHION_QUICK_CAPTURE.md]]
+  (quick capture, measurement charts, photo slots, batch SKUs — 2026-09-28)
 
 - Warehouse stock (implemented 2026-10-05): [[architecture/WAREHOUSE_INVENTORY|architecture/WAREHOUSE_INVENTORY.md]]
   — ledger, warehouses/bins, orders, procurement (stock not on hand), channel quantity sync; plan and history in
@@ -76,11 +79,20 @@ treat the older one as a historical snapshot rather than current truth:
   [[backend-audit-report|backend-audit-report.md]], [[frontend-audit-report|frontend-audit-report.md]],
   [[UPGRADE_BLUEPRINT_GridxConnect_MergeKart|UPGRADE_BLUEPRINT_GridxConnect_MergeKart.md]],
   [[enterprise-implementation-blueprint|enterprise-implementation-blueprint.md]]
+- Integration (push, RealTrack → partsbazar360.com): [[integrations/partsbazar360-publish|integrations/partsbazar360-publish.md]]
 - Integration: [[integrations/partsbazar360-trading-enrichment|integrations/partsbazar360-trading-enrichment.md]] —
   see [[areas/ebay-and-partsbazar360-integration]] for the orientation summary
+- Integration: [[integrations/external-published-listings-api|external published listings API and sale events]]
+- MotoArk-specific production runbook: [[integrations/motoark-primemotive-api|MotoArk Primemotive listing, change, sale, and test integration]]
+- MotoArk lifecycle assessment (2026-11-02): [[integrations/motoark-order-lifecycle-gap-analysis|sales, cancellation, return, refund, and quantity gaps with implementation plan]]
+- MotoArk lifecycle (deployed 2026-11-03): [[architecture/MOTOARK_ORDER_LIFECYCLE|order-event API, stock/return semantics, committed quantity cursors, and production status]]
+- MotoArk production release: [[operations/MOTOARK_RELEASE_2026-11-02|backup, migrations, API verification, and rollback record]]
+- PrimeMotive US reconciliation (2026-11-05): [[operations/PRIMEMOTIVE_US_RECONCILIATION_2026-11-05|committed source reconciliation, current eBay evidence, verified backup, and remaining stock/sync gates]]
 - Ops: [[operations/SETUP|operations/SETUP.md]], [[operations/TESTING|operations/TESTING.md]],
-- Integration (push, RealTrack → partsbazar360.com): [[integrations/partsbazar360-publish|integrations/partsbazar360-publish.md]]
-  [[operations/TROUBLESHOOTING|operations/TROUBLESHOOTING.md]], [[operations/api-users|operations/api-users.md]]
+  [[operations/FASHION_CATALOG_IMAGE_CLEANUP_2026-11-09|Fashion catalog image-missing cleanup (2026-11-09)]],
+  [[operations/TROUBLESHOOTING|operations/TROUBLESHOOTING.md]], [[operations/api-users|operations/api-users.md]],
+  [[operations/DYNATRADE_CSV_ENRICHMENT|DynaTrade CSV enrichment and on-demand import]],
+  [[operations/DYNATRADE_COMPLETION_STRATEGY|DynaTrade completion strategy]]
 - Model comparison work: [[model-comparison/REPORT|model-comparison/REPORT.md]]
 
 ## Keeping this vault alive

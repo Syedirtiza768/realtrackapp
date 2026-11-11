@@ -7,6 +7,7 @@ import { StoreAccessService } from '../channels/store-access.service.js';
 import { User } from '../auth/entities/user.entity.js';
 import { TeamsService } from '../teams/teams.service.js';
 import { RbacService } from '../rbac/rbac.service.js';
+import { AutomotiveAccessScopeService } from '../auth/automotive-access-scope.service.js';
 
 /* ── Simple in-memory cache ───────────────────────────────── */
 interface CacheEntry<T> {
@@ -78,8 +79,10 @@ export interface SearchItem {
   teamId: string | null;
   teamName: string | null;
   teamColor: string | null;
-  /** Workflow status for catalog table: published | ready_to_publish | need_images */
+  /** Workflow status for catalog table, including catalog review holds. */
   catalogStatus: CatalogListingStatus;
+  /** True when the linked catalog product is on review or lifecycle hold. */
+  publishBlocked: boolean;
   shippingProfileName: string | null;
   /** FTS relevance score (0-1+), null if no search query */
   relevanceScore: number | null;
@@ -90,7 +93,8 @@ export interface SearchItem {
 export type CatalogListingStatus =
   | 'published'
   | 'ready_to_publish'
-  | 'need_images';
+  | 'need_images'
+  | 'needs_review';
 
 export interface SuggestionResult {
   suggestions: Suggestion[];
@@ -176,6 +180,21 @@ const PUBLISHED_SQL = `(
 
 const HAS_IMAGE_SQL = `(r."itemPhotoUrl" IS NOT NULL AND r."itemPhotoUrl" != '')`;
 
+/** Catalog review and lifecycle holds make an automotive listing ineligible to publish. */
+const PUBLISH_BLOCKED_SQL = `EXISTS (
+  SELECT 1
+  FROM catalog_products cp
+  WHERE cp.sku = r."customLabelSku"
+    AND (cp.organization_id IS NULL OR cp.organization_id = r.organization_id)
+    AND (cp.vertical IS NULL OR cp.vertical = 'automotive')
+    AND (
+      cp.manual_review = TRUE
+      OR cp.vertical_validation_status IN (
+        'needs_review', 'deleted', 'quarantined', 'blocked', 'rejected'
+      )
+    )
+)`;
+
 const SAFE_QTY = `COALESCE(
   r."quantityNum",
   NULLIF(REPLACE(r.quantity, ',', '.'), '')::numeric,
@@ -222,7 +241,10 @@ function deriveCatalogStatus(row: {
   itemPhotoUrl?: string | null;
   hasChannelInstance?: boolean;
   hasEbayPublishedListing?: boolean;
+  publishBlocked?: boolean;
 }): CatalogListingStatus {
+  if (row.publishBlocked === true) return 'needs_review';
+
   const isPublished =
     row.status === 'published' ||
     row.publishedAt != null ||
@@ -255,6 +277,7 @@ export class SearchService {
     private readonly storeAccess: StoreAccessService,
     private readonly teamsService: TeamsService,
     private readonly rbac: RbacService,
+    private readonly automotiveScope: AutomotiveAccessScopeService,
   ) {}
 
   /* ──────────────────────────────────────────────────────────
@@ -315,6 +338,7 @@ export class SearchService {
       `(SELECT EXISTS(SELECT 1 FROM ebay_published_listings epl WHERE epl.sku = r."customLabelSku" AND epl.listing_status = 'active' AND r."ebayListingId" IS NOT NULL AND r."ebayListingId" != ''))`,
       'hasEbayPublishedListing',
     );
+    qb.addSelect(PUBLISH_BLOCKED_SQL, 'publishBlocked');
 
     /* -- Full-text search scoring ------------------------------ */
     if (hasQuery) {
@@ -409,15 +433,9 @@ export class SearchService {
       qb.andWhere(`r."startPrice" IS NOT NULL AND r."startPrice" != ''`);
     }
 
-    /* -- Store-level access filter ------------------------------ */
-    const storeIds = await this.storeAccess.resolveStoreFilter(user);
-    if (storeIds !== undefined) {
-      if (storeIds.length === 0) {
-        qb.andWhere(StoreAccessService.UNSCOPED_LISTINGS_SQL);
-      } else {
-        qb.andWhere(StoreAccessService.SCOPED_LISTINGS_SQL, { storeIds });
-      }
-    }
+    /* -- Organization, vertical, and store access filter -------- */
+    const accessFilter = await this.buildStoreFilterSql(user);
+    if (accessFilter) qb.andWhere(accessFilter.sql, accessFilter.params);
 
     /* -- Team scope (membership + optional filter) ---------------- */
     await this.applyTeamScope(qb, dto, user);
@@ -447,6 +465,9 @@ export class SearchService {
       );
       if (hasQuery) {
         qb.addSelect(`similarity(r.title, :q)`, 'titleSim');
+      }
+      if (sort === 'stock_asc' || sort === 'stock_desc') {
+        qb.addSelect(SAFE_QTY, 'sortQty');
       }
 
       const [innerSql, innerParams] = qb.getQueryAndParameters();
@@ -479,8 +500,8 @@ export class SearchService {
         case 'price_desc':
           qb.orderBy(SAFE_PRICE, 'DESC', 'NULLS LAST');
           break;
-        case 'newest':
-          qb.orderBy('r.importedAt', 'DESC');
+        case 'oldest':
+          qb.orderBy('r.importedAt', 'ASC');
           break;
         case 'title_asc':
           qb.orderBy('r.title', 'ASC', 'NULLS LAST');
@@ -490,6 +511,16 @@ export class SearchService {
           break;
         case 'sku_asc':
           qb.orderBy('r."customLabelSku"', 'ASC', 'NULLS LAST');
+          break;
+        case 'sku_desc':
+          qb.orderBy('r."customLabelSku"', 'DESC', 'NULLS LAST');
+          break;
+        // team / condition / stock / status / ebay / image sorts are only
+        // implemented for the SKU-grouped path the catalog grid uses; other
+        // (ungrouped) callers fall back to newest-first.
+        case 'newest':
+        default:
+          qb.orderBy('r.importedAt', 'DESC');
           break;
       }
       qb.addOrderBy('r.id', 'ASC'); // stable tie-breaker
@@ -536,6 +567,7 @@ export class SearchService {
       teamColor: row.teamColor ?? null,
       shippingProfileName: row.r_shippingProfileName ?? null,
       ebayListingId: row.r_ebayListingId ?? null,
+      publishBlocked: row.publishBlocked === true,
       catalogStatus: deriveCatalogStatus({
         status: row.r_status,
         publishedAt: row.r_publishedAt,
@@ -544,6 +576,7 @@ export class SearchService {
         itemPhotoUrl: row.r_itemPhotoUrl,
         hasChannelInstance: row.hasChannelInstance === true,
         hasEbayPublishedListing: row.hasEbayPublishedListing === true,
+        publishBlocked: row.publishBlocked === true,
       }),
       relevanceScore: hasQuery ? parseFloat(row.relevanceScore ?? '0') : null,
       titleHighlight: hasQuery ? (row.titleHighlight ?? null) : null,
@@ -748,7 +781,7 @@ export class SearchService {
     user?: User,
   ): Promise<DynamicFacets> {
     // Check facet cache first (30s TTL)
-    const cacheKey = `facets:${JSON.stringify(dto)}`;
+    const cacheKey = `facets:${user?.id ?? 'system'}:${JSON.stringify(dto)}`;
     const cached = this.facetCache.get<DynamicFacets>(cacheKey);
     if (cached) return { ...cached, queryTimeMs: 0 };
 
@@ -925,12 +958,19 @@ export class SearchService {
       const statusArr = splitFilter(dto.catalogStatus);
       if (excludeDimension !== 'catalogStatus' && statusArr.length) {
         const clauses: string[] = [];
-        if (statusArr.includes('published')) clauses.push(PUBLISHED_SQL);
+        if (statusArr.includes('needs_review')) clauses.push(PUBLISH_BLOCKED_SQL);
+        if (statusArr.includes('published')) {
+          clauses.push(`(${PUBLISHED_SQL} AND NOT ${PUBLISH_BLOCKED_SQL})`);
+        }
         if (statusArr.includes('need_images')) {
-          clauses.push(`(NOT ${PUBLISHED_SQL} AND NOT ${HAS_IMAGE_SQL})`);
+          clauses.push(
+            `(NOT ${PUBLISHED_SQL} AND NOT ${PUBLISH_BLOCKED_SQL} AND NOT ${HAS_IMAGE_SQL})`,
+          );
         }
         if (statusArr.includes('ready_to_publish')) {
-          clauses.push(`(NOT ${PUBLISHED_SQL} AND ${HAS_IMAGE_SQL})`);
+          clauses.push(
+            `(NOT ${PUBLISHED_SQL} AND NOT ${PUBLISH_BLOCKED_SQL} AND ${HAS_IMAGE_SQL})`,
+          );
         }
         if (clauses.length) fb.andWhere(`(${clauses.join(' OR ')})`);
       }
@@ -1193,18 +1233,27 @@ export class SearchService {
 
   /* ── Private: apply multi-select filters to any QueryBuilder ── */
 
-  /** Build store filter SQL + params, or null if no filtering needed */
-  private async buildStoreFilterSql(
-    user?: User,
-  ): Promise<{ sql: string; params: Record<string, string[]> } | null> {
+  /** Build organization, vertical, and store filter SQL. */
+  private async buildStoreFilterSql(user?: User): Promise<{
+    sql: string;
+    params: Record<string, string | string[]>;
+  } | null> {
+    const accessFilter = await this.automotiveScope.buildFilter(user, 'r');
     const storeIds = await this.storeAccess.resolveStoreFilter(user);
-    if (storeIds === undefined) return null; // accessAll or no user
+    if (storeIds === undefined) return accessFilter;
     if (storeIds.length === 0) {
-      return { sql: StoreAccessService.UNSCOPED_LISTINGS_SQL, params: {} };
+      return {
+        sql: accessFilter
+          ? `(${accessFilter.sql}) AND (${StoreAccessService.UNSCOPED_LISTINGS_SQL})`
+          : StoreAccessService.UNSCOPED_LISTINGS_SQL,
+        params: accessFilter?.params ?? {},
+      };
     }
     return {
-      sql: StoreAccessService.SCOPED_LISTINGS_SQL,
-      params: { storeIds },
+      sql: accessFilter
+        ? `(${accessFilter.sql}) AND (${StoreAccessService.SCOPED_LISTINGS_SQL})`
+        : StoreAccessService.SCOPED_LISTINGS_SQL,
+      params: { ...(accessFilter?.params ?? {}), storeIds },
     };
   }
 
@@ -1321,14 +1370,21 @@ export class SearchService {
     const statusArr = splitFilter(dto.catalogStatus);
     if (statusArr.length) {
       const clauses: string[] = [];
+      if (statusArr.includes('needs_review')) {
+        clauses.push(PUBLISH_BLOCKED_SQL);
+      }
       if (statusArr.includes('published')) {
-        clauses.push(PUBLISHED_SQL);
+        clauses.push(`(${PUBLISHED_SQL} AND NOT ${PUBLISH_BLOCKED_SQL})`);
       }
       if (statusArr.includes('need_images')) {
-        clauses.push(`(NOT ${PUBLISHED_SQL} AND NOT ${HAS_IMAGE_SQL})`);
+        clauses.push(
+          `(NOT ${PUBLISHED_SQL} AND NOT ${PUBLISH_BLOCKED_SQL} AND NOT ${HAS_IMAGE_SQL})`,
+        );
       }
       if (statusArr.includes('ready_to_publish')) {
-        clauses.push(`(NOT ${PUBLISHED_SQL} AND ${HAS_IMAGE_SQL})`);
+        clauses.push(
+          `(NOT ${PUBLISHED_SQL} AND NOT ${PUBLISH_BLOCKED_SQL} AND ${HAS_IMAGE_SQL})`,
+        );
       }
       if (clauses.length) {
         qb.andWhere(`(${clauses.join(' OR ')})`);
@@ -1344,6 +1400,17 @@ export class SearchService {
   private buildDedupOrderSql(sort: string, hasQuery: boolean): string {
     const price = `NULLIF(REPLACE(sub."r_startPrice", ',', '.'), '')::numeric`;
     const tie = `sub."r_id" ASC`;
+    const hasImage = `(COALESCE(btrim(sub."r_itemPhotoUrl"), '') <> '')`;
+    const hasEbay = `(COALESCE(btrim(sub."r_ebayListingId"), '') <> '')`;
+    const isPublished = `(
+      sub."r_status" = 'published'
+      OR sub."r_publishedAt" IS NOT NULL
+      OR ${hasEbay}
+      OR COALESCE(btrim(sub."r_shopifyProductId"), '') <> ''
+      OR sub."hasChannelInstance"
+      OR sub."hasEbayPublishedListing"
+    )`;
+    const statusRank = `(CASE WHEN sub."publishBlocked" IS TRUE THEN 3 WHEN ${isPublished} THEN 2 WHEN ${hasImage} THEN 1 ELSE 0 END)`;
     switch (sort) {
       case 'relevance':
         return hasQuery
@@ -1359,6 +1426,36 @@ export class SearchService {
         return `sub."r_title" DESC NULLS LAST, ${tie}`;
       case 'sku_asc':
         return `sub."r_customLabelSku" ASC NULLS LAST, ${tie}`;
+      case 'sku_desc':
+        return `sub."r_customLabelSku" DESC NULLS LAST, ${tie}`;
+      case 'oldest':
+        return `sub."r_importedAt" ASC, ${tie}`;
+      case 'team_asc':
+        return `sub."teamName" ASC NULLS LAST, ${tie}`;
+      case 'team_desc':
+        return `sub."teamName" DESC NULLS LAST, ${tie}`;
+      case 'condition_asc':
+        return `NULLIF(btrim(sub."r_conditionId"), '') ASC NULLS LAST, ${tie}`;
+      case 'condition_desc':
+        return `NULLIF(btrim(sub."r_conditionId"), '') DESC NULLS LAST, ${tie}`;
+      case 'stock_asc':
+        return `sub."sortQty" ASC, ${tie}`;
+      case 'stock_desc':
+        return `sub."sortQty" DESC, ${tie}`;
+      // needs_review (3) > published (2) > ready_to_publish (1) > need_images (0), mirroring
+      // deriveCatalogStatus() on the outer-query columns.
+      case 'status_asc':
+        return `${statusRank} ASC, ${tie}`;
+      case 'status_desc':
+        return `${statusRank} DESC, ${tie}`;
+      case 'ebay_asc':
+        return `${hasEbay} ASC, ${tie}`;
+      case 'ebay_desc':
+        return `${hasEbay} DESC, ${tie}`;
+      case 'image_asc':
+        return `${hasImage} ASC, ${tie}`;
+      case 'image_desc':
+        return `${hasImage} DESC, ${tie}`;
       case 'newest':
       default:
         return `sub."r_importedAt" DESC, ${tie}`;

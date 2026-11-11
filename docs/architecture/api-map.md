@@ -84,7 +84,7 @@ fixed to drop the `api/` segment. Do **not** "fix" without checking the matching
 | POST | `/api/auth/register` | `AuthController.register` | Public | Create user (assigned `staff` role + default org) |
 | GET | `/api/auth/me` | `AuthController.me` | JWT | Current user profile + permissions + organizations |
 | POST | `/api/auth/logout` | `AuthController.logout` | JWT | Audit log only (client discards token) |
-| GET | `/api/auth/organizations` | `AuthController.listOrganizations` | JWT | Internal RealTrack workspaces (not eBay) |
+| GET | `/api/auth/organizations` | `AuthController.listOrganizations` | JWT | Internal Omni Core workspaces (not eBay) |
 
 Frontend usage: `src/lib/authApi.ts` (token storage), `src/components/auth/*`.
 

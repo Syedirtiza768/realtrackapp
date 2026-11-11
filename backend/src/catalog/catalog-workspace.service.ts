@@ -6,14 +6,16 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository, SelectQueryBuilder } from 'typeorm';
+import { In, IsNull, Repository, SelectQueryBuilder } from 'typeorm';
 import { User } from '../auth/entities/user.entity.js';
 import { UserOrganizationService } from '../auth/user-organization.service.js';
 import { CatalogProduct } from '../catalog-import/entities/catalog-product.entity.js';
+import { ListingRecord } from '../listings/listing-record.entity.js';
 import { StoreAccessService } from '../channels/store-access.service.js';
 import { ConnectedEbayAccount } from '../integrations/ebay/entities/connected-ebay-account.entity.js';
 import { EbayListingChannel } from '../integrations/ebay/entities/ebay-listing-channel.entity.js';
 import { ListingActionLog } from '../integrations/ebay/entities/listing-action-log.entity.js';
+import { EbayPublishedListing } from '../published-listings/entities/ebay-published-listing.entity.js';
 import { Team } from '../teams/entities/team.entity.js';
 import { TeamsService } from '../teams/teams.service.js';
 import { RbacService } from '../rbac/rbac.service.js';
@@ -127,6 +129,33 @@ export type CatalogFacetsResponse = {
 const SEARCH_SOURCE = `concat_ws(' ', p.sku, p.title, p.brand, p.mpn, p.category_id, p.category_name, p.description, p.part_type, p.source_file, p.location, cast(p.vertical_attributes as text))`;
 const SAFE_PRICE = `p.price`;
 const SAFE_QTY = `coalesce(p.quantity, 0)`;
+const LIVE_PUBLICATION_STATUSES = new Set(['published', 'active', 'out_of_stock']);
+
+export function isLivePublicationStatus(status: string | null | undefined) {
+  return LIVE_PUBLICATION_STATUSES.has(String(status ?? '').trim().toLowerCase());
+}
+
+export function resolvePublicationStatus(input: {
+  verticalValidationStatus: string;
+  manualReview: boolean;
+  ebayItemId?: string | null;
+  publications: Array<{ listingStatus: string }>;
+}): CatalogItem['publicationStatus'] {
+  if (
+    input.verticalValidationStatus === 'quarantined' ||
+    input.manualReview
+  )
+    return 'blocked';
+  if (
+    input.publications.some((publication) =>
+      isLivePublicationStatus(publication.listingStatus),
+    ) ||
+    input.verticalValidationStatus === 'published' ||
+    Boolean(input.ebayItemId?.trim())
+  )
+    return 'published';
+  return 'unpublished';
+}
 
 const ATTRIBUTE_KEYS: Record<ProductVertical, string[]> = {
   automotive: ['make', 'model', 'partType', 'placement', 'oemPartNumber'],
@@ -258,6 +287,10 @@ export class CatalogWorkspaceService {
     private readonly rbac: RbacService,
     private readonly fashion: FashionListingsService,
     private readonly businessIndustrial: BusinessIndustrialService,
+    @InjectRepository(EbayPublishedListing)
+    private readonly publishedListingRepo: Repository<EbayPublishedListing>,
+    @InjectRepository(ListingRecord)
+    private readonly listingRepo: Repository<ListingRecord>,
   ) {}
 
   async search(
@@ -491,7 +524,13 @@ export class CatalogWorkspaceService {
         })),
       ),
       Promise.resolve(
-        ['published', 'ready_to_publish', 'need_images'].map((value) => ({
+        [
+          'published',
+          'unpublished',
+          'blocked',
+          'ready_to_publish',
+          'need_images',
+        ].map((value) => ({
           value,
           label: label(value),
           count: 0,
@@ -663,7 +702,8 @@ export class CatalogWorkspaceService {
       throw new BadRequestException('At least one policy field is required');
     return this.bulkEach(dto.productIds, async (id) => {
       const product = await this.findScopedProduct(vertical, id, scope);
-      this.assertNotQuarantined(product);
+      if (!this.allowBusinessIndustrialOperatorBypass(vertical))
+        this.assertNotQuarantined(product);
       const before = {
         shippingProfile: product.shippingProfile,
         paymentProfile: product.paymentProfile,
@@ -710,14 +750,30 @@ export class CatalogWorkspaceService {
       const product = await this.findScopedProduct(vertical, id, scope);
       this.assertNotQuarantined(product);
       const published = await this.channelRepo.exists({
-        where: {
-          organizationId: scope.organizationId,
-          catalogProductId: id,
-          vertical,
-          listingStatus: 'published',
-        },
+        where: [
+          {
+            organizationId: scope.organizationId,
+            catalogProductId: id,
+            vertical,
+            listingStatus: 'published',
+          },
+          ...(vertical === 'automotive'
+            ? [
+                {
+                  organizationId: scope.organizationId,
+                  catalogProductId: id,
+                  vertical: IsNull(),
+                  listingStatus: 'published' as const,
+                },
+              ]
+            : []),
+        ],
       });
-      if (published || product.verticalValidationStatus === 'published')
+      if (
+        published ||
+        product.verticalValidationStatus === 'published' ||
+        Boolean(product.ebayItemId?.trim())
+      )
         throw new ConflictException(
           'Withdraw marketplace publications before deleting this product',
         );
@@ -826,6 +882,13 @@ export class CatalogWorkspaceService {
       })
       .andWhere('p.vertical = :vertical', { vertical })
       .andWhere("p.verticalValidationStatus <> 'deleted'");
+    // New photo-capture rows stay in Intake until an operator explicitly adds them.
+    // Older capture rows without the flag remain visible for compatibility.
+    if (vertical === 'fashion')
+      qb.andWhere(`(
+        COALESCE(p.vertical_attributes->>'_intakeSource', '') <> 'capture'
+        OR COALESCE(p.vertical_attributes->>'_catalogAdded', 'true') = 'true'
+      )`);
     if (!scope.manageAllTeams) {
       if (scope.teamIds.length)
         qb.andWhere('(p.teamId IS NULL OR p.teamId IN (:...visibleTeamIds))', {
@@ -906,15 +969,29 @@ export class CatalogWorkspaceService {
     const status = split(dto.catalogStatus);
     if (status.length) {
       const publishedSql = this.publishedSql(scope);
+      const blockedSql =
+        "(p.manual_review = true OR p.vertical_validation_status IN ('quarantined', 'blocked', 'rejected'))";
       const parts: string[] = [];
-      if (status.includes('published')) parts.push(publishedSql);
+      if (status.includes('published'))
+        parts.push(`(${publishedSql} AND NOT ${blockedSql})`);
+      if (status.includes('unpublished'))
+        parts.push(`(NOT ${publishedSql} AND NOT ${blockedSql})`);
+      if (status.includes('blocked')) parts.push(blockedSql);
       if (status.includes('need_images'))
         parts.push(
-          '(NOT ' + publishedSql + ' AND array_length(p.imageUrls, 1) IS NULL)',
+          '(NOT ' +
+            publishedSql +
+            ' AND NOT ' +
+            blockedSql +
+            ' AND array_length(p.imageUrls, 1) IS NULL)',
         );
       if (status.includes('ready_to_publish'))
         parts.push(
-          '(NOT ' + publishedSql + ' AND array_length(p.imageUrls, 1) > 0)',
+          '(NOT ' +
+            publishedSql +
+            ' AND NOT ' +
+            blockedSql +
+            ' AND array_length(p.imageUrls, 1) > 0)',
         );
       if (parts.length)
         qb.andWhere('(' + parts.join(' OR ') + ')').setParameters(
@@ -1080,19 +1157,35 @@ export class CatalogWorkspaceService {
     >();
     for (const review of reviews)
       reviewMap.set(review.catalogProductId, review);
-    const publications = await this.publications(ids, scope, vertical);
+    const publications = await this.publications(products, scope, vertical);
     return products.map((product) => {
       const productPublications = publications.get(product.id) ?? [];
       const review = reviewMap.get(product.id);
-      const status =
-        product.verticalValidationStatus === 'quarantined' ||
-        product.manualReview
-          ? 'blocked'
-          : productPublications.some(
-                (publication) => publication.listingStatus === 'published',
-              ) || product.verticalValidationStatus === 'published'
-            ? 'published'
-            : 'unpublished';
+      const status = resolvePublicationStatus({
+        verticalValidationStatus: product.verticalValidationStatus,
+        manualReview: product.manualReview,
+        ebayItemId: product.ebayItemId,
+        publications: productPublications,
+      });
+      if (
+        status === 'published' &&
+        product.ebayItemId &&
+        !productPublications.some((publication) =>
+          isLivePublicationStatus(publication.listingStatus),
+        )
+      ) {
+        productPublications.push({
+          id: product.id,
+          storeName: 'eBay',
+          marketplaceId: 'EBAY_US',
+          listingStatus: 'published',
+          listingUrl: `https://www.ebay.com/itm/${product.ebayItemId}`,
+          offerId: null,
+          listingId: product.ebayItemId,
+          lastErrorMessage: null,
+          updatedAt: product.updatedAt,
+        });
+      }
       return {
         id: product.id,
         vertical: product.vertical,
@@ -1142,19 +1235,103 @@ export class CatalogWorkspaceService {
   }
 
   private async publications(
-    ids: string[],
+    products: CatalogProduct[],
     scope: Scope,
     vertical: ProductVertical,
   ) {
-    const rows = await this.channelRepo.find({
-      where: {
-        organizationId: scope.organizationId,
-        catalogProductId: In(ids),
-        vertical,
-      },
-      order: { updatedAt: 'DESC' },
-    });
-    const accountIds = [...new Set(rows.map((row) => row.ebayAccountId))];
+    const ids = products.map((product) => product.id);
+    const skus = [
+      ...new Set(
+        products
+          .map((product) => product.sku?.trim())
+          .filter((sku): sku is string => Boolean(sku)),
+      ),
+    ];
+    const ebayItemIds = [
+      ...new Set(
+        products
+          .map((product) => product.ebayItemId?.trim())
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    const rows = ids.length
+      ? await this.channelRepo.find({
+          where: [
+            {
+              organizationId: scope.organizationId,
+              catalogProductId: In(ids),
+              vertical,
+            },
+            ...(vertical === 'automotive'
+              ? [
+                  {
+                    organizationId: scope.organizationId,
+                    catalogProductId: In(ids),
+                    vertical: IsNull(),
+                  },
+                ]
+              : []),
+          ],
+          order: { updatedAt: 'DESC' },
+        })
+      : [];
+    // Some older publishers and the listings sync write to
+    // ebay_published_listings instead of ebay_listing_channels. Include both
+    // projections so an item that is live on eBay cannot appear unpublished in
+    // the catalog merely because the newer channel row was not backfilled.
+    const legacyRows = ids.length
+      ? await this.publishedListingRepo.find({
+          where: [
+            {
+              organizationId: scope.organizationId,
+              catalogProductId: In(ids),
+            },
+            ...(ebayItemIds.length
+              ? [
+                  {
+                    organizationId: scope.organizationId,
+                    ebayItemId: In(ebayItemIds),
+                  },
+                ]
+              : []),
+          ],
+          order: { updatedAt: 'DESC' },
+        })
+      : [];
+    const listingRows = skus.length
+      ? await this.listingRepo.find({
+          where: [
+            {
+              organizationId: scope.organizationId,
+              customLabelSku: In(skus),
+              vertical,
+            },
+            ...(vertical === 'automotive'
+              ? [
+                  {
+                    organizationId: scope.organizationId,
+                    customLabelSku: In(skus),
+                    vertical: IsNull(),
+                  },
+                ]
+              : []),
+          ],
+          order: { updatedAt: 'DESC' },
+        })
+      : [];
+    const skuToProductId = new Map<string, string>();
+    const ebayItemToProductId = new Map<string, string>();
+    for (const product of products) {
+      if (product.sku?.trim()) skuToProductId.set(product.sku.trim(), product.id);
+      if (product.ebayItemId?.trim())
+        ebayItemToProductId.set(product.ebayItemId.trim(), product.id);
+    }
+    const accountIds = [
+      ...new Set([
+        ...rows.map((row) => row.ebayAccountId),
+        ...legacyRows.map((row) => row.ebayAccountId),
+      ]),
+    ];
     const accounts = accountIds.length
       ? await this.accountRepo.find({
           where: { organizationId: scope.organizationId, id: In(accountIds) },
@@ -1164,28 +1341,97 @@ export class CatalogWorkspaceService {
     const accountMap = new Map(
       accounts.map((account) => [account.id, account]),
     );
-    const output = new Map<string, PublicationSummary[]>();
+    const byKey = new Map<string, PublicationSummary>();
+    const add = (
+      productId: string,
+      accountId: string,
+      summary: PublicationSummary,
+    ) => {
+      const key = `${productId}:${accountId}:${summary.marketplaceId}`;
+      const existing = byKey.get(key);
+      if (
+        !existing ||
+        (!isLivePublicationStatus(existing.listingStatus) &&
+          isLivePublicationStatus(summary.listingStatus)) ||
+        (!existing.listingUrl && summary.listingUrl)
+      ) {
+        byKey.set(key, summary);
+      }
+    };
+    const storeAllowed = (storeId: string | null | undefined) =>
+      !scope.accessibleStoreIds?.length ||
+      (Boolean(storeId) && scope.accessibleStoreIds.includes(storeId!));
     for (const row of rows) {
       const account = accountMap.get(row.ebayAccountId);
-      if (!account?.primaryStore) continue;
-      if (
-        scope.accessibleStoreIds &&
-        !scope.accessibleStoreIds.includes(account.primaryStoreId)
-      )
-        continue;
-      const list = output.get(row.catalogProductId) ?? [];
-      list.push({
+      if (!storeAllowed(account?.primaryStoreId)) continue;
+      add(row.catalogProductId, row.ebayAccountId, {
         id: row.id,
-        storeName: account.primaryStore.storeName,
+        storeName:
+          account?.primaryStore?.storeName ??
+          account?.accountDisplayName ??
+          'eBay',
         marketplaceId: row.marketplaceId,
         listingStatus: row.listingStatus,
-        listingUrl: row.listingUrl,
+        listingUrl:
+          row.listingUrl ||
+          (row.listingId ? `https://www.ebay.com/itm/${row.listingId}` : null),
         offerId: row.offerId,
         listingId: row.listingId,
         lastErrorMessage: row.lastErrorMessage,
         updatedAt: row.updatedAt,
       });
-      output.set(row.catalogProductId, list);
+    }
+    for (const row of legacyRows) {
+      const productId =
+        row.catalogProductId ||
+        (row.ebayItemId ? ebayItemToProductId.get(row.ebayItemId) : undefined);
+      if (!productId) continue;
+      const account = accountMap.get(row.ebayAccountId);
+      if (!storeAllowed(account?.primaryStoreId ?? row.storeId)) continue;
+      add(productId, row.ebayAccountId, {
+        id: row.id,
+        storeName:
+          account?.primaryStore?.storeName ??
+          account?.accountDisplayName ??
+          'eBay',
+        marketplaceId: row.marketplaceId,
+        listingStatus: row.listingStatus,
+        listingUrl:
+          row.listingUrl ||
+          (row.ebayItemId
+            ? `https://www.ebay.com/itm/${row.ebayItemId}`
+            : null),
+        offerId: row.offerId,
+        listingId: row.ebayItemId,
+        lastErrorMessage: null,
+        updatedAt: row.updatedAt,
+      });
+    }
+    for (const row of listingRows) {
+      const sku = row.customLabelSku?.trim();
+      const productId = sku ? skuToProductId.get(sku) : undefined;
+      const listingId = row.ebayListingId?.trim();
+      if (!productId || !listingId) continue;
+      if (row.status === 'delisted' || row.status === 'archived') continue;
+      add(productId, `listing:${row.id}`, {
+        id: row.id,
+        storeName: 'eBay',
+        marketplaceId: row.marketplace ?? 'EBAY_US',
+        listingStatus:
+          row.status === 'published' || listingId ? 'published' : row.status,
+        listingUrl: `https://www.ebay.com/itm/${listingId}`,
+        offerId: null,
+        listingId,
+        lastErrorMessage: null,
+        updatedAt: row.updatedAt,
+      });
+    }
+    const output = new Map<string, PublicationSummary[]>();
+    for (const [key, summary] of byKey) {
+      const productId = key.split(':', 1)[0];
+      const list = output.get(productId) ?? [];
+      list.push(summary);
+      output.set(productId, list);
     }
     return output;
   }
@@ -1308,46 +1554,60 @@ export class CatalogWorkspaceService {
   ) {
     const source = () => (typeof base === 'function' ? base() : base.clone());
     const publishedSql = this.publishedSql(scope);
-    const published = source()
-      .andWhere(publishedSql)
-      .setParameters(this.publishedParameters(scope, vertical))
-      .getCount();
-    const [publishedCount, readyCount, missingCount] = await Promise.all([
-      published,
-      source()
-        .andWhere('NOT ' + publishedSql)
-        .setParameters(this.publishedParameters(scope, vertical))
-        .andWhere('array_length(p.imageUrls, 1) > 0')
-        .getCount(),
-      source()
-        .andWhere('NOT ' + publishedSql)
-        .setParameters(this.publishedParameters(scope, vertical))
-        .andWhere('array_length(p.imageUrls, 1) IS NULL')
-        .getCount(),
-    ]);
+    const blockedSql =
+      "(p.manual_review = true OR p.vertical_validation_status IN ('quarantined', 'blocked', 'rejected'))";
+    const notBlocked = 'NOT ' + blockedSql;
+    const [publishedCount, unpublishedCount, blockedCount, readyCount, missingCount] =
+      await Promise.all([
+        source()
+          .andWhere(`(${publishedSql} AND ${notBlocked})`)
+          .setParameters(this.publishedParameters(scope, vertical))
+          .getCount(),
+        source()
+          .andWhere(`(NOT ${publishedSql} AND ${notBlocked})`)
+          .setParameters(this.publishedParameters(scope, vertical))
+          .getCount(),
+        source().andWhere(blockedSql).getCount(),
+        source()
+          .andWhere(`(NOT ${publishedSql} AND ${notBlocked})`)
+          .setParameters(this.publishedParameters(scope, vertical))
+          .andWhere('array_length(p.imageUrls, 1) > 0')
+          .getCount(),
+        source()
+          .andWhere(`(NOT ${publishedSql} AND ${notBlocked})`)
+          .setParameters(this.publishedParameters(scope, vertical))
+          .andWhere('array_length(p.imageUrls, 1) IS NULL')
+          .getCount(),
+      ]);
     return {
       published: publishedCount,
+      unpublished: unpublishedCount,
+      blocked: blockedCount,
       ready_to_publish: readyCount,
       need_images: missingCount,
     };
   }
 
   private publishedSql(scope: Scope) {
-    const storePredicate = scope.accessibleStoreIds
-      ? scope.accessibleStoreIds.length
-        ? 'and pubAccount.primary_store_id in (:...publishedStoreIds)'
-        : 'and 1 = 0'
+    const storePredicate = scope.accessibleStoreIds?.length
+      ? 'and pubAccount.primary_store_id in (:...publishedStoreIds)'
+      : '';
+    const legacyStorePredicate = scope.accessibleStoreIds?.length
+      ? 'and legacy.store_id in (:...publishedStoreIds)'
       : '';
     return (
-      "(p.vertical_validation_status = 'published' OR exists (select 1 from ebay_listing_channels pub join connected_ebay_accounts pubAccount on pubAccount.id = pub.ebay_account_id and pubAccount.organization_id = pub.organization_id where pub.catalog_product_id = p.id and pub.organization_id = p.organization_id and pub.vertical = :publishedVertical and pub.listing_status = 'published' " +
+      "(p.vertical_validation_status = 'published' OR p.ebay_item_id IS NOT NULL OR exists (select 1 from ebay_listing_channels pub join connected_ebay_accounts pubAccount on pubAccount.id = pub.ebay_account_id and pubAccount.organization_id = pub.organization_id where pub.catalog_product_id = p.id and pub.organization_id = p.organization_id and (pub.vertical = :publishedVertical or (:includeLegacyNullVertical = true and pub.vertical is null)) and lower(pub.listing_status) in ('published', 'active', 'out_of_stock') " +
       storePredicate +
-      '))'
+      ") OR exists (select 1 from ebay_published_listings legacy where (legacy.catalog_product_id = p.id or (p.ebay_item_id is not null and legacy.ebay_item_id = p.ebay_item_id)) and legacy.organization_id = p.organization_id and lower(legacy.listing_status) in ('active', 'out_of_stock', 'published') " +
+      legacyStorePredicate +
+      ") OR exists (select 1 from listing_records lr where lr.\"customLabelSku\" = p.sku and (lr.organization_id = p.organization_id or (:includeLegacyNullVertical = true and lr.organization_id is null)) and (lr.vertical = :publishedVertical or (:includeLegacyNullVertical = true and lr.vertical is null)) and lr.\"ebayListingId\" is not null and lr.status not in ('delisted', 'archived')))"
     );
   }
 
   private publishedParameters(scope: Scope, vertical: ProductVertical) {
     return {
       publishedVertical: vertical,
+      includeLegacyNullVertical: vertical === 'automotive',
       ...(scope.accessibleStoreIds?.length
         ? { publishedStoreIds: scope.accessibleStoreIds }
         : {}),
@@ -1376,6 +1636,13 @@ export class CatalogWorkspaceService {
       throw new ForbiddenException(
         'Quarantined products require the vertical incident workflow',
       );
+  }
+
+  private allowBusinessIndustrialOperatorBypass(vertical: ProductVertical) {
+    return (
+      vertical === 'business_industrial' &&
+      process.env.BUSINESS_INDUSTRIAL_ALLOW_UNAPPROVED_PUBLISH === 'true'
+    );
   }
 
   private async bulkEach(

@@ -23,10 +23,10 @@ export default function EbayPolicyMappingPage() {
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6 text-slate-900 dark:text-slate-100">
       <div className="flex items-center gap-4">
-        <Link to="/settings/integrations/ebay" className="text-sm text-sky-400 hover:underline">
+        <Link to="/auto-parts/settings/integrations/ebay" className="text-sm text-sky-400 hover:underline">
           ← eBay stores
         </Link>
-        <Link to="/settings" className="text-sm text-sky-400 hover:underline">
+        <Link to="/auto-parts/settings" className="text-sm text-sky-400 hover:underline">
           Settings → Store policies
         </Link>
       </div>

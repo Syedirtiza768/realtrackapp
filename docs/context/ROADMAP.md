@@ -85,7 +85,7 @@ From [NEXT_STEPS.md](NEXT_STEPS.md):
 
 ## Next (High Priority)
 
-5. Standardize branding (RealTrackApp vs ListingPro)
+5. Branding standardized on Omni Core; retain legacy internal identifiers for compatibility
 6. Confirm DB hygiene (numeric columns, missing FKs, channel table consolidation)
 7. Finish or flag forgot-password flow
 8. Tenant isolation review

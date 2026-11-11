@@ -57,6 +57,18 @@ describe('ebay-german-listing.util', () => {
     });
   });
 
+  it('maps coolant hoses to the car coolant-hose leaf', () => {
+    expect(
+      resolveMotorsCategoryFromPart(
+        'AFTERMARKET',
+        'BMW X5 Coolant Hose with quick coupling',
+      ),
+    ).toEqual({
+      categoryId: '33601',
+      categoryName: 'Coolant Hoses',
+    });
+  });
+
   it('builds a substantive German description with buyer verification', () => {
     const html = buildGermanListingDescription(sampleInput);
     expect(html).toMatch(/Teilenummer/);

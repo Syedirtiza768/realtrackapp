@@ -80,7 +80,7 @@ Source of truth: `.env.example` (copy to `.env`). Docker passes these via
 | `OPENAI_TIMEOUT_MS` | `120000` | Chat completion timeout (ms) |
 | `OPENAI_MODEL_FLAGSHIP_MIN_PRICE` | `200` | Price threshold for flagship lane |
 | `AI_LOW_VALUE_MAX_PRICE` | `50` | SKUs below this use compact enrichment (no LLM fitment) |
-| `OPENAI_VISION_DETAIL` | `auto` | Vision image detail: `low`, `auto`, or `high` |
+| `OPENAI_VISION_DETAIL` | `auto` | Default vision image detail: `low`, `auto`, or `high`. Add Part/ECU label identification explicitly requests `high` so this default does not reduce label detail. |
 | `AI_FITMENT_MIN_ROWS` | `5` | Soft-fail threshold for fitment rows |
 | `AI_AUTO_APPROVE_MIN_SCORE` | `85` | Min validator score for auto-approve learning |
 | `AI_ROUTING_POLICY_PATH` | `config/ai-routing-policy.json` | Learned routing policy file |
@@ -100,6 +100,7 @@ Source of truth: `.env.example` (copy to `.env`). Docker passes these via
 | `EBAY_DEV_ID` | — | **Secret.** Dev ID |
 | `EBAY_ENVIRONMENT` | `SANDBOX` | `SANDBOX` or `PRODUCTION` |
 | `EBAY_SANDBOX` | — | Legacy override (takes precedence if set) |
+| `EBAY_LISTING_API_MODE` | `trading` | Standard new single-item listings use Trading API `AddFixedPriceItem` by default and can be edited in Seller Hub. Set `inventory` to explicitly create listings through Inventory API on this path. Variation-family item groups and existing Inventory API offer-backed listings keep their existing flows. FEBEST always uses Trading API. |
 | `EBAY_REDIRECT_URI` | eBay OAuth-enabled RuName | RuName passed to eBay; do not set this to the callback URL. Update the RuName’s Accept URL in the eBay Developer Portal to `https://app.omnicoreholding.com/api/integrations/ebay/oauth/callback`. |
 | `EBAY_DEFAULT_MERCHANT_LOCATION_KEY` | `AE_Dubai` | Key used when auto-provisioning an inventory location |
 | `EBAY_DEFAULT_INVENTORY_ADDRESS_LINE1` | `Dubai Warehouse` | Ship-from line 1 for auto-created locations |
@@ -142,7 +143,6 @@ Org-level credentials can override env via `PUT /api/integrations/ebay/sellerpun
 | `SELLERPUNDIT_POLICY_SYNC_MAX_AGE_HOURS` | `24` | TTL before publish re-syncs policies |
 | `SELLERPUNDIT_PUBLISH_FALLBACK` | `auto` | `auto` = try SP bulk-create then fall back to direct eBay on platform SQL error; `direct_ebay` = skip SP publish; `sellerpundit` = SP only |
 
-## Signed B&I enforcement webhook
 ## PartsBazar360 publishing (push channel)
 
 Publishes listings into partsbazar360.com. Feature is off until the key is set. See
@@ -160,10 +160,23 @@ Publishes listings into partsbazar360.com. Feature is off until the key is set. 
 | `PARTSBAZAR360_CONFIRM_TRIES` | `5` | Status polls inside the publish job before handing off to the delayed re-check |
 | `PARTSBAZAR360_CONFIRM_INTERVAL_MS` | `3000` | Gap between those polls |
 
+## Signed B&I enforcement webhook
 
 | Var | Default | Purpose |
 |-----|---------|---------|
 | `EBAY_WEBHOOK_SECRET` | — | Shared HMAC secret for `POST /api/business-industrial/webhooks/ebay-enforcement`; empty disables the endpoint |
+
+## Primemotive external sale webhook
+
+| Var | Default | Purpose |
+|-----|---------|---------|
+| `PRIMEMOTIVE_SALES_WEBHOOK_SECRET` | — | **Secret.** HMAC-SHA256 secret for `POST /api/published-listings/primemotive/webhooks/sales`; empty disables sale-event receipt |
+| `MOTOARK_ORDER_WEBHOOK_SECRET` | _(unset)_ | **Secret.** Separate key for signed MotoArk lifecycle events; missing value returns 503; forwarded by Compose and configured in production 2026-11-03 |
+| `PRIMEMOTIVE_LISTING_WEBHOOK_ORGANIZATION_ID` | _(unset)_ | Organization UUID required by the outbound sender; it resolves and restricts delivery to that organization's Primemotive store; not configured in production |
+| `PRIMEMOTIVE_LISTING_WEBHOOK_URL` | _(unset)_ | HTTPS callback that receives `listing.added`, `listing.updated`, and `listing.removed` events; empty disables outbound delivery |
+| `PRIMEMOTIVE_LISTING_WEBHOOK_SECRET` | _(unset)_ | **Secret.** HMAC-SHA256 signing key for outbound listing-change deliveries |
+| `PRIMEMOTIVE_SIMULATION_ENABLED` | `false` | When `true` or `1`, changes one seeded synthetic Primemotive listing's price or quantity each minute; no eBay API calls are made |
+| `PRIMEMOTIVE_SIMULATION_ORGANIZATION_ID` | _(empty)_ | Organization UUID containing the Primemotive store and the synthetic test listings to update |
 
 ## AWS S3 / storage
 
@@ -248,7 +261,8 @@ the same frontend origins as `CORS_ORIGIN`. Backend CORS alone is not enough.
 | FASHION_SEED_ADMIN_PASSWORD | Required initial password, minimum 12 characters; never reset or logged on rerun |
 | FASHION_SEED_ADMIN_NAME | Optional display name for a newly created user |
 | FASHION_SEED_ADMIN_ORGANIZATION_NAME | Optional name for a newly created workspace |
-| FASHION_AI_MODEL | Optional Fashion vision model override |
+| FASHION_AI_MODEL | Fashion vision model (default `google/gemini-3.1-flash-lite`) |
+| FASHION_AI_FALLBACK_MODEL | Fashion fallback model (default `google/gemma-4-31b-it`; `none` disables) |
 
 ## Business & Industrial admin seed
 
@@ -258,3 +272,16 @@ the same frontend origins as `CORS_ORIGIN`. Backend CORS alone is not enough.
 | BUSINESS_INDUSTRIAL_SEED_ADMIN_PASSWORD | Required initial password, minimum 12 characters; never reset or logged on rerun |
 | BUSINESS_INDUSTRIAL_SEED_ADMIN_NAME | Optional display name for a newly created user |
 | BUSINESS_INDUSTRIAL_SEED_ADMIN_ORGANIZATION_NAME | Optional name for a newly created workspace |
+
+
+## Temporary Business & Industrial publish bypass
+
+| Var | Default | Purpose |
+|-----|---------|---------|
+| `BUSINESS_INDUSTRIAL_ALLOW_UNAPPROVED_PUBLISH` | `false` | When `true`, B&I eBay publish endpoints and bulk policy/profile edits allow operator-authorized users to work with listings whose compliance review is not approved or is marked for manual review. Review records remain unchanged. This is temporary and should be disabled after the operator-led publishing window. |
+| `BUSINESS_INDUSTRIAL_DEFAULT_DISPATCH_LOCATION` | `United States` | Dispatch location applied to image-intake drafts when no explicit value was detected or supplied. |
+| `BUSINESS_INDUSTRIAL_DEFAULT_SHIPPING_COVERAGE` | `United States` | Shipping coverage applied to image-intake drafts when no explicit value was supplied. |
+
+## One-time PrimeMotive API verification (2026-11-05)
+
+RECON_VERIFY_EMAIL and RECON_VERIFY_PASSWORD are operational environment variables used by workspaces/primemotive-us-reconciliation-20261105/verify-api.cjs. The generated production credential is stored only in a protected server-side environment file (see the production reconciliation record); never commit its value. RECON_RESET_MODE selects prepare/apply for the explicitly authorized one-time reset helper, and RECON_RESET_BACKUP_CONFIRMED=1 is required before apply. These are maintenance-process variables, not application or Compose configuration. The authorized reset has completed and must not be rerun without fresh authorization.

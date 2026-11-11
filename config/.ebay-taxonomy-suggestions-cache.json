@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "scopes": {
+    "EBAY_MOTORS_US:production": {
+      "suggestions": {
+        "0::men's t-shirt": {
+          "result": {
+            "categoryId": "15687",
+            "categoryName": "T-Shirts"
+          },
+          "cachedAt": 1790601272198
+        }
+      },
+      "aspects": {},
+      "compatibility": {},
+      "dailyUsage": {
+        "2026-09-28": 1
+      }
+    }
+  }
+}

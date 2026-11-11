@@ -1,6 +1,6 @@
 # AGENT_SYSTEM_MEMORY.md
 
-> **START HERE** — This is the primary entry point for any AI agent working on RealTrackApp.
+> **START HERE** — This is the primary entry point for any AI agent working on Omni Core.
 > Read this first, then follow the links to deeper documentation.
 > 
 > **Note (2026-06-06)**: The documentation has been reorganized into the Self-Sustaining AI Project Context framework. See individual `/docs/context/`, `/docs/architecture/`, `/docs/frontend/`, `/docs/backend/`, `/docs/planning/`, `/docs/operations/` directories for the new structure.
@@ -9,7 +9,7 @@
 
 ## 1. Application Summary
 
-**RealTrackApp** (internal name: `listingpro`) is a full-stack **automotive parts listing & operations platform**. It enables businesses to:
+**Omni Core** (internal name: `listingpro`) is a full-stack **automotive parts listing & operations platform**. It enables businesses to:
 
 - Ingest product data via CSV/catalog import
 - Enrich products with AI (OpenAI vision + text)
@@ -274,7 +274,7 @@ npm run dev                        # :3911 (proxies /api → :4191)
 1. **Double `/api` prefix** exists in two controllers — verify before fixing
 2. **Uncommitted working tree** has many modified files — needs triage
 3. **Forgot-password UI** exists but backend reset flow unverified
-4. **Branding inconsistency** — "RealTrackApp" vs "ListingPro" (DB name, login screen)
+4. **Branding** — Omni Core is the canonical user-facing name; `listingpro` remains the internal database identifier.
 5. **TEXT-typed price columns** — Partially fixed by migration, verify remaining
 6. **Missing foreign keys** — Historical issue, needs audit
 7. **Sparse tests** — 24 backend specs, 0 e2e, no frontend tests

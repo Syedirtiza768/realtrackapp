@@ -1,5 +1,82 @@
 # Testing
 
+## PrimeMotive US reconciliation — committed 2026-11-05
+
+Data-only operational repair; application code/builds were not changed.
+JavaScript syntax checks passed for the operational helpers. A production
+rollback trial performed 71,911 mirror updates and 18,624 inserts and verified
+all 90,535 source rows with zero mismatches before rolling back. A separate
+publication-link rollback trial verified 5,222 links with zero mismatches.
+The combined production transaction then committed and an independent
+post-commit pass again verified all 90,535 mirror rows and 5,222 links with
+zero mismatches. The verified population has 50,935 active, 37,940 out of stock,
+1,660 ended, and 62,221 advertised available units. Backend health was HTTP 200.
+After historical credentials returned 401, the user explicitly approved a
+reader-password reset. It committed with an audit record and protected server
+credential/rollback files. Authenticated checks then passed with HTTP 200 for
+representative active (qty 1), out-of-stock (qty 0), and ended (qty 0) records,
+and for the dedicated PrimeMotive feed. Item IDs, statuses, and quantities were
+asserted; syntax checks passed for the reset and verification helpers. Roles
+and permissions were unchanged. Consumer applications still need the rotated
+credential before their own authentication is considered verified. See the
+[production record](PRIMEMOTIVE_US_RECONCILIATION_2026-11-05.md) for scope,
+backup integrity, source/live-report checksums, and remaining gates.
+
+## MotoArk lifecycle — deployed 2026-11-03
+
+Backend `npm run build` passes. Targeted, non-mutating ESLint on
+`src/integrations/motoark/*.ts` and the two new migrations passes with
+**0 errors / 0 warnings**. The normal backend lint command uses `--fix` across
+the repository, so it was not used to rewrite unrelated files.
+
+The complete focused run passed **42 tests across 4 suites**:
+
+```bash
+cd backend
+# Set STOCK_IT_DATABASE_URL to an isolated disposable PostgreSQL >= 15 database.
+npm test -- --runInBand --runTestsByPath \
+  src/integrations/motoark/motoark.int.spec.ts \
+  src/orders/orders.service.spec.ts \
+  src/published-listings/published-listings.spec.ts \
+  src/published-listings/published-listings-response.util.spec.ts
+```
+
+The database suite covers atomic duplicate delivery and payload conflict,
+last-unit contention, partial shipments/cancellations, quarantine/inspection/
+disposal, refund without restock, tracked unit identity, crash rollback and
+retry, permission/store/organization boundaries, late-commit sequence cursors,
+outbound organization isolation/order, successful absolute quantity pushes,
+and down/up migration roundtrips in a rollback transaction. Existing
+published-listing offer-resolution coverage was corrected to use an Inventory
+API fixture and the current constructor dependencies. Two final snapshot UUID
+cursor regression cases are also included in that suite.
+
+Final follow-up verification passed **9 selected cases** (35 others skipped by
+the explicit name filter): the revised partial-lifecycle projection, outbound
+claims, acknowledged channel quantity changes, migration roundtrip, signatures,
+UUID snapshot cursors, and protected generic order actions. The first attempt
+at this follow-up lost its idle SSH tunnel; reconnecting with keep-alives and
+rerunning passed. This was isolated test connectivity, not a production or
+application database failure.
+
+A candidate derived from `realtrackapp-backend:ebay-revise-00aad7cd` first
+started against a **schema-only** production copy plus separate test
+Redis/PostgreSQL, without production application data or credentials. Both
+migrations applied there. Its app-module merge preserves production's
+PartsSearch module, absent from this checkout.
+
+The reviewed image was deployed to production on 2026-11-03 after a full
+pre-migration backup passed archive validation. The backend and public health
+checks returned 200; unauthenticated MotoArk and legacy sales routes returned
+401. An existing external-reader account verified the snapshot and committed
+change feed, unmapped quantity behavior, signed synthetic event handling,
+deduplication, payload conflict, invalid signature, strict validation, status
+lookup, and fixture-only legacy receipt. The external reader had no physical
+return permissions. The test synthetic lifecycle event created zero orders and
+zero stock movements. The lifecycle key is separate from the preserved legacy
+key; marketplace stock pushing remains off. See the
+[contract and production release record](../operations/MOTOARK_RELEASE_2026-11-02.md).
+
 > Fashion completion candidate (2026-09-09): see docs/architecture/FASHION_WORKSPACE_COMPLETION.md for route/API changes, scoped services, password_change_required migration and seed variable names, test evidence, deployment procedure, and explicitly unimplemented requirements. This candidate is not yet deployed.
 
 > **Note**: Lightweight stub. Omni Core has sparse automated test coverage.
@@ -14,6 +91,16 @@
 - **Framework**: Jest (backend only)
 
 ## Running Tests
+
+Fashion catalogue import (2026-10-20): backend and frontend production builds passed. `cd backend` then `npm test -- --runInBand --runTestsByPath src/catalog-import/catalog-import.service.spec.ts src/verticals/fashion-catalog-export.spec.ts src/verticals/fashion.config.spec.ts src/verticals/fashion-measurements.spec.ts` — 27 tests passed. This covers source-specific column mapping (including category ID/name), item-specific mapping, unit-unspecified measurement preservation, custom specifics publishing, and existing Fashion validation/chart behavior. No production import or S3 write was run.
+
+Fashion bulk marketplace selection (2026-11-07). Frontend and backend builds passed. The focused `ebay-multi-store-listing.service.spec.ts` suite passed all eight tests, including enabled marketplace selection and rejection of disabled marketplaces before queueing. A local browser fixture verified that switching a Germany-default seller to the US loads the US shipping policy and submits the US marketplace and policy together. Frontend lint lacks an ESLint configuration, and the backend lint run reported formatting and typing findings in the touched files.
+
+Fashion inventory location (2026-11-07). The inventory client, inventory-location utility, publisher and bulk publisher suites passed all 79 tests. Coverage confirms that Fashion uses the enabled location requested by the target marketplace, blocks missing or disabled keys, and sends Dallas, TX 75234 as the item location when publishing through the Trading API. eBay confirmed the new `US_Dallas_75234` warehouse on the intended production account. The RealTrack mapping depends on deployment of the location fix.
+
+Catalog import recovery (2026-10-22): `cd backend` then `npm run build` passed; `npm test -- --runInBand --runTestsByPath src/catalog-import/processors/csv-import.processor.spec.ts src/catalog-import/catalog-import.service.spec.ts` — 5 tests passed. The focused checks cover preserving original image URLs for resume, transient versus permanent image failures, and transient database retry classification. The production worker changes remain local pending deployment; this verification made no production writes.
+
+Add Part recovery regressions (2026-10-13): `cd backend` then `npm test -- --runInBand --testPathPatterns="part-photo-evidence|add-part-recovery"` — six tests passed. Backend build and isolated production-image checks also passed. These cover bounded default AI requests, preservation of provider errors, billing classification, complete OCR token matching, and alternate printed identifiers. Production-image checks additionally cover explicit ECU prompt parsing and high image detail; see [recovery record](ADD_PART_RECOVERY_2026-10-13.md).
 
 ```bash
 # Backend

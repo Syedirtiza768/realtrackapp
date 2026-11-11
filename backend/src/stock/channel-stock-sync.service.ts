@@ -127,6 +127,10 @@ export class ChannelStockSyncService {
     return { desired, onHandAvailable, sourceable, bufferQty, maxQty, pushEnabled: !!row.push_enabled, itemActive };
   }
 
+  async globalPushEnabled(): Promise<boolean> {
+    return this.flags.isEnabled(STOCK_CHANNEL_PUSH_FLAG).catch(() => false);
+  }
+
   async findTargets(storeId: string, itemId: string): Promise<ChannelTarget[]> {
     const [store] = (await this.db.query(`SELECT channel FROM stores WHERE id = $1`, [storeId])) as Array<{ channel: string }>;
     if (!store) return [];
@@ -246,7 +250,9 @@ export class ChannelStockSyncService {
     }
     const published = targets.filter((t) => t.kind !== 'pb360').map((t) => (t as { publishedListingId: string }).publishedListingId);
     if (published.length)
-      await this.db.query(`UPDATE ebay_published_listings SET quantity_available = $2, updated_at = now() WHERE id = ANY($1::uuid[])`, [published, qty]);
+      await this.db.query(`UPDATE ebay_published_listings SET quantity_available = $2,
+        listing_status = CASE WHEN $2::int > 0 THEN 'active' ELSE 'out_of_stock' END,
+        updated_at = now() WHERE id = ANY($1::uuid[])`, [published, qty]);
   }
 
   /**

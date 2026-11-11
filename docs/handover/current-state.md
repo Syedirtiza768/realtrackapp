@@ -1,5 +1,31 @@
 > ⚠️ MOVED → [/docs/context/CURRENT_STATE.md](../context/CURRENT_STATE.md) (2026-06-06)
 
+## Subsequent production update (2026-10-07)
+
+Auto Parts catalog photo replacement and part identification safeguards are
+deployed. The frontend and backend use the `catalog-photo-part-lookup-20261007`
+image tags; the backend health endpoint returned `status: ok`, and public
+`/catalog` plus internal `/auto-parts/catalog` returned HTTP 200. PostgreSQL,
+Redis, and PgBouncer were left running. See the top `CHANGELOG.md` entry and
+`docs/architecture/deployment.md` for behavior, image tags, and rollback details.
+
+## Subsequent production update (2026-09-30)
+
+The NAPA image visibility fix is deployed. Catalog listing detail views merge
+listing and catalog-product image URLs, and NAPA media uses a fixed-host,
+same-origin image proxy with an nginx cache. The site and frontend returned
+HTTP 200 after rollout. See the top entry in `CHANGELOG.md` for the behavior
+change.
+
+## Subsequent production update (2026-10-01)
+
+The Trading API fixed-price publisher now retains the seller SKU while using
+`InventoryTrackingMethod=ItemID`, allowing custom-label edits in Seller Hub for
+new listings published through the application. The backend image was updated
+and its health endpoint returned `status: ok`; the running compiled publisher
+was verified. Existing listings created with SKU tracking still require
+relisting. See the top entry in `CHANGELOG.md` for the behavior change.
+
 # Current State
 
 _Snapshot date: 2026-05-29. This file is frozen-in-time; for live state use
@@ -7,7 +33,7 @@ _Snapshot date: 2026-05-29. This file is frozen-in-time; for live state use
 
 ## Where the project is
 
-RealTrackApp is a substantial, actively developed full-stack platform (NestJS +
+Omni Core is a substantial, actively developed full-stack platform (NestJS +
 React + Postgres + Redis/BullMQ) focused on **eBay** automotive-parts listing,
 catalog import, AI enrichment, fitment, inventory, orders, and multi-store
 management. The architecture is mature (23 backend modules, ~79 entities, 21

@@ -130,6 +130,11 @@ export function normalizeVerticalConfig(value: unknown): VerticalConfig {
   };
 }
 
+export function isDedicatedFashionStore(value: unknown): boolean {
+  const { enabledVerticals } = normalizeVerticalConfig(value);
+  return enabledVerticals.length === 1 && enabledVerticals[0] === 'fashion';
+}
+
 function normalizeAttributeKey(key: string): string {
   const trimmed = key.trim();
   if (trimmed.startsWith('_')) return trimmed;

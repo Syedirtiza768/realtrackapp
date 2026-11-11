@@ -149,6 +149,81 @@ function mapListingStatus(
   return 'draft';
 }
 
+/**
+ * "Has price" = the same test computeMissingFields() uses for its `Price`
+ * flag: a non-blank startPrice text or a numeric startPriceNum.
+ */
+const inventoryHasPriceSql = (a: string) =>
+  `NOT (COALESCE(btrim(${a}."startPrice"), '') = '' AND ${a}."startPriceNum" IS NULL)`;
+
+/**
+ * SQL sort key per inventory table column, over the `ranked` CTE rows
+ * (alias `f`, joined to `pj` = the row's pipeline job). Derived columns mirror
+ * their JS counterparts: Validation ↔ computeMissingFields() (issue count),
+ * Enrichment ↔ InventoryAutoTriggerService.deriveStatus(), Status ↔
+ * mapListingStatus(), Fitments ↔ max(part_fitments, catalog fitment_data).
+ */
+function inventorySortKeySql(column: string): string {
+  const blank = (col: string) => `COALESCE(btrim(f."${col}"), '') = ''`;
+  const flag = (cond: string) => `(CASE WHEN ${cond} THEN 1 ELSE 0 END)`;
+  const imageCount = `(SELECT COUNT(*) FROM unnest(string_to_array(COALESCE(f."itemPhotoUrl", ''), '|')) u WHERE btrim(u) <> '')`;
+  const enrichmentRank = `(CASE
+    WHEN f."enrichmentStage" IN ('vision_lookup','enrichment','generating_us','generating_au','generating_de') THEN 2
+    WHEN f."enrichmentStage" = 'completed' THEN 4
+    WHEN f."enrichmentStage" = 'needs_review' THEN 3
+    WHEN f."enrichmentStage" = 'failed' THEN 5
+    WHEN pj.id IS NOT NULL THEN (CASE
+      WHEN pj.optimization_status IN ('pending','running') THEN 2
+      WHEN pj.optimization_status = 'completed' THEN 4
+      WHEN pj.optimization_status = 'needs_review' THEN 3
+      WHEN pj.optimization_status = 'failed' THEN 5
+      WHEN pj.status = 'completed' THEN 4
+      WHEN pj.status = 'failed' THEN 5
+      ELSE 2 END)
+    WHEN ${imageCount} >= 2 THEN 1
+    ELSE 0 END)`;
+
+  switch (column) {
+    case 'image':
+      return imageCount;
+    case 'sku':
+      return `LOWER(f."customLabelSku")`;
+    case 'brand':
+      return `LOWER(COALESCE(NULLIF(btrim(f."cBrand"), ''), 'Generic'))`;
+    case 'location':
+      return `(CASE WHEN f."origin" = 'add_part' THEN LOWER(NULLIF(btrim(f."location"), '')) END)`;
+    case 'team':
+      return `(SELECT LOWER(t.name) FROM teams t WHERE t.id = f."team_id")`;
+    case 'fitments':
+      return `GREATEST(
+        (SELECT COUNT(*) FROM part_fitments pf WHERE pf.listing_id = f.id)::int,
+        COALESCE((SELECT CASE WHEN jsonb_typeof(cp.fitment_data) = 'array' THEN jsonb_array_length(cp.fitment_data) END
+                  FROM catalog_products cp WHERE cp.sku = f."customLabelSku" LIMIT 1), 0))`;
+    case 'validation':
+      return `(${[
+        flag(blank('title')),
+        flag(blank('cBrand')),
+        flag(`${blank('cOeOemPartNumber')} AND ${blank('cManufacturerPartNumber')}`),
+        flag(`${imageCount} < 2`),
+        flag(`${blank('startPrice')} AND f."startPriceNum" IS NULL`),
+        flag(`${blank('quantity')} AND f."quantityNum" IS NULL`),
+        flag(`${blank('categoryId')} AND ${blank('categoryName')}`),
+        flag(blank('description')),
+      ].join(' + ')})`;
+    case 'price':
+      // Text fallback is regex-guarded so a dirty startPrice can't fail the query.
+      return `COALESCE(f."startPriceNum", CASE WHEN btrim(f."startPrice") ~ '^[0-9]+([.,][0-9]+)?$' THEN REPLACE(btrim(f."startPrice"), ',', '.')::numeric END)`;
+    case 'status':
+      return `(CASE f.status WHEN 'published' THEN 2 WHEN 'ready' THEN 1 ELSE 0 END)`;
+    case 'enrichment':
+      return enrichmentRank;
+    case 'catalog':
+      return flag(`${enrichmentRank} = 4`);
+    default:
+      return 'NULL';
+  }
+}
+
 @Injectable()
 export class InventoryWorkbenchService {
   private readonly logger = new Logger(InventoryWorkbenchService.name);
@@ -408,7 +483,20 @@ export class InventoryWorkbenchService {
       params.push(query.maxWeight);
     }
 
+    if (query.hasPrice === '1') {
+      whereClauses.push(inventoryHasPriceSql('l'));
+    }
+
     const whereSql = whereClauses.join(' AND ');
+
+    // `<column>_<asc|desc>`; validated against INVENTORY_SORT_MODES by the DTO,
+    // so the parsed column/direction are safe to interpolate.
+    const sortMatch = /^([a-z]+)_(asc|desc)$/.exec(query.sort ?? '');
+    const sortKeySql = sortMatch ? inventorySortKeySql(sortMatch[1]) : null;
+    const sortDir = sortMatch?.[2] === 'desc' ? 'DESC' : 'ASC';
+    const orderSql = sortKeySql
+      ? `sort_key ${sortDir} NULLS LAST, "importedAt" DESC, id ASC`
+      : `"importedAt" DESC`;
 
     const countSql = `
       WITH filtered AS (
@@ -445,6 +533,7 @@ export class InventoryWorkbenchService {
       ),
       ranked AS (
         SELECT f.id, f."importedAt",
+          ${sortKeySql ?? 'NULL'} AS sort_key,
           ROW_NUMBER() OVER (
             PARTITION BY COALESCE(f."customLabelSku", f.id::text)
             ORDER BY
@@ -453,10 +542,11 @@ export class InventoryWorkbenchService {
               f."importedAt" DESC
           ) AS rn
         FROM filtered f
+        LEFT JOIN pipeline_jobs pj ON pj.id = f."pipeline_job_id"
       )
       SELECT id FROM ranked
       WHERE rn = 1
-      ORDER BY "importedAt" DESC
+      ORDER BY ${orderSql}
       LIMIT $${paramIdx++} OFFSET $${paramIdx++}
     `;
 
@@ -609,11 +699,14 @@ export class InventoryWorkbenchService {
         pipelineJobStatus: primaryJob?.status,
         hasCompletedPipelineJob,
         enrichmentStatus,
-        ...(enrichmentStatus === 'failed'
+        ...(enrichmentStatus === 'failed' || enrichmentStatus === 'needs_review'
           ? {
               failureReason: listing.enrichmentLastFailureReason ?? undefined,
               failureClass:
-                classifyFailureForUi(listing.enrichmentLastFailureReason) ??
+                classifyFailureForUi(
+                  listing.enrichmentLastFailureReason,
+                  imageUrls.length,
+                ) ??
                 undefined,
             }
           : {}),
@@ -875,7 +968,10 @@ export class InventoryWorkbenchService {
       enrichmentPermanentFail: listing.enrichmentPermanentFail,
       failureReason: listing.enrichmentLastFailureReason ?? undefined,
       failureClass:
-        classifyFailureForUi(listing.enrichmentLastFailureReason) ?? undefined,
+        classifyFailureForUi(
+          listing.enrichmentLastFailureReason,
+          parseImageUrls(listing.itemPhotoUrl).length,
+        ) ?? undefined,
       importedAt: listing.importedAt,
       updatedAt: listing.updatedAt,
       publishedAt: listing.publishedAt,
@@ -932,7 +1028,8 @@ export class InventoryWorkbenchService {
       title: string;
     }>;
   }> {
-    // Stage 1: Part identification (Browse-first, then vision/text fallback)
+    // Stage 1: photo-first part identification; MPN search is only used when
+    // photos are unavailable on non-Add-Part lookup paths.
     this.logger.log(`Inline enrich [vision_lookup]: listing ${listingId}`);
     await setStage('vision_lookup');
     const { lookup: partLookup } =
@@ -1004,15 +1101,18 @@ export class InventoryWorkbenchService {
       };
       const enrichmentResult =
         await this.enrichmentPipeline.enrich(enrichInput);
-      enrichedPlacement = enrichmentResult.placement;
 
       // AI-driven validity check: EnrichmentPipeline already computes a real
-      // score + hard/soft fails via ListingQualityValidator, but nothing
-      // previously acted on it — every result was applied unconditionally.
-      // Gate on it here instead of trusting the AI's output blindly.
+      // score + hard/soft fails via ListingQualityValidator. Persist no
+      // generated fields unless the result explicitly passes that gate.
       const autoApproveMinScore =
         this.modelRouter.getThresholds().autoApproveMinScore;
-      const passedGate = enrichmentResult.passedGate ?? true;
+      const passedGate = enrichmentResult.passedGate === true;
+      const preservePhotoIdentity = partLookup.source === 'vision';
+      enrichedPlacement =
+        passedGate && !preservePhotoIdentity
+          ? enrichmentResult.placement
+          : null;
       const score = enrichmentResult.validationScore ?? 100;
       if (!passedGate) {
         // Hard fails (MPN mismatch, cross-make fitment, hallucinated part
@@ -1036,21 +1136,29 @@ export class InventoryWorkbenchService {
         );
       }
 
-      // Apply enrichment results back to the base listing
-      if (enrichmentResult.title)
-        baseListing.title = enrichmentResult.title.slice(0, 80);
-      if (enrichmentResult.brand) baseListing.cBrand = enrichmentResult.brand;
-      if (enrichmentResult.description)
-        baseListing.description = enrichmentResult.description;
-      if (enrichmentResult.partType)
-        baseListing.cType = enrichmentResult.partType;
-      if (enrichmentResult.mpn)
-        baseListing.cManufacturerPartNumber = enrichmentResult.mpn;
-      if (enrichmentResult.oemNumber)
-        baseListing.cOeOemPartNumber = enrichmentResult.oemNumber;
-      if (enrichmentResult.features?.length)
+      // The photo lookup owns identity fields (title, type, brand, MPN, and
+      // description). A later free-form model must not replace that evidence.
+      if (passedGate && !preservePhotoIdentity) {
+        if (enrichmentResult.title)
+          baseListing.title = enrichmentResult.title.slice(0, 80);
+        if (enrichmentResult.brand) baseListing.cBrand = enrichmentResult.brand;
+        if (enrichmentResult.description)
+          baseListing.description = enrichmentResult.description;
+        if (enrichmentResult.partType)
+          baseListing.cType = enrichmentResult.partType;
+        if (enrichmentResult.mpn)
+          baseListing.cManufacturerPartNumber = enrichmentResult.mpn;
+        if (enrichmentResult.oemNumber)
+          baseListing.cOeOemPartNumber = enrichmentResult.oemNumber;
+      }
+      if (passedGate && enrichmentResult.features?.length)
         baseListing.cFeatures = enrichmentResult.features.join(' | ');
-      if (browseCorroboration.found && browseCorroboration.categoryId) {
+      if (
+        passedGate &&
+        !preservePhotoIdentity &&
+        browseCorroboration.found &&
+        browseCorroboration.categoryId
+      ) {
         // Real matching listings already told us the category — more
         // authoritative than a Taxonomy suggestion guess, and skips that
         // API call entirely.
@@ -1061,7 +1169,7 @@ export class InventoryWorkbenchService {
           `Category from Browse API corroboration for listing ${listingId}: ` +
             `"${baseListing.categoryName}" (${baseListing.categoryId})`,
         );
-      } else if (enrichmentResult.suggestedCategory) {
+      } else if (passedGate && enrichmentResult.suggestedCategory) {
         baseListing.categoryName = enrichmentResult.suggestedCategory;
         for (const query of this.buildCategoryQueryCandidates(baseListing)) {
           const resolved = await this.resolveCategoryFromQuery(query, 'US');
@@ -1147,6 +1255,7 @@ export class InventoryWorkbenchService {
       listingId: string;
       title: string;
     }> = [];
+    const generatedMarketplaceListingIds: string[] = [];
     const MARKETPLACES: Array<'US' | 'AU' | 'DE'> = ['US'];
     let anyCategoryResolved = Boolean(baseListing.categoryId);
 
@@ -1238,8 +1347,14 @@ export class InventoryWorkbenchService {
           customLabelSku: sku,
           categoryId: mktCategory?.categoryId ?? baseListing.categoryId,
           categoryName: mktCategory?.categoryName ?? baseListing.categoryName,
-          title: aiResult.title.slice(0, 80),
-          description: aiResult.description,
+          title:
+            partLookup.source === 'vision'
+              ? baseListing.title
+              : aiResult.title.slice(0, 80),
+          description:
+            partLookup.source === 'vision'
+              ? baseListing.description
+              : aiResult.description,
           startPrice: baseListing.startPrice,
           startPriceNum: baseListing.startPriceNum,
           quantity: baseListing.quantity,
@@ -1265,10 +1380,14 @@ export class InventoryWorkbenchService {
         });
 
         const saved = await this.listingRepo.save(newListing);
+        generatedMarketplaceListingIds.push(saved.id);
         marketplaceListings.push({
           marketplace: mkt,
           listingId: saved.id,
-          title: aiResult.title,
+          title:
+            partLookup.source === 'vision'
+              ? (baseListing.title ?? '')
+              : aiResult.title,
         });
         this.logger.log(
           `Inline enrich [${stageName}]: created ${mkt} listing for SKU ${sku}`,
@@ -1318,7 +1437,7 @@ export class InventoryWorkbenchService {
     }
 
     // Mark base listing as 'ready'
-    if (baseListing.status === 'draft') {
+    if (baseListing.status === 'draft' && !enrichmentGateFailReason) {
       baseListing.status = 'ready';
       await this.listingRepo.save(baseListing);
     }
@@ -1358,6 +1477,23 @@ export class InventoryWorkbenchService {
     if (composedTitle) {
       baseListing.title = composedTitle;
       await this.listingRepo.update(listingId, { title: composedTitle });
+      const generatedListingPatch: Partial<ListingRecord> = {
+        title: composedTitle,
+      };
+      if (partLookup.source === 'vision') {
+        generatedListingPatch.description = baseListing.description;
+      }
+      for (const generatedListingId of generatedMarketplaceListingIds) {
+        await this.listingRepo.update(
+          generatedListingId,
+          generatedListingPatch,
+        );
+        const responseListing = marketplaceListings.find(
+          (item) => item.listingId === generatedListingId,
+        );
+        if (responseListing) responseListing.title = composedTitle;
+      }
+      await this.upsertCatalogProductFromListing(baseListing);
       this.logger.log(
         `Inline enrich: deterministic title for listing ${listingId}: "${composedTitle}"`,
       );
@@ -1856,6 +1992,9 @@ export class InventoryWorkbenchService {
       if (listing.categoryId) patch.categoryId = listing.categoryId;
       if (listing.categoryName) patch.categoryName = listing.categoryName;
       if (listing.cBrand) patch.brand = listing.cBrand;
+      if (listing.cType) patch.partType = listing.cType;
+      if (listing.description) patch.description = listing.description;
+      if (listing.cFeatures) patch.features = listing.cFeatures;
       if (listing.cManufacturerPartNumber)
         patch.mpn = listing.cManufacturerPartNumber;
       if (listing.cOeOemPartNumber)
@@ -1917,6 +2056,8 @@ export class InventoryWorkbenchService {
     );
 
     const existing = parseImageUrls(listing.itemPhotoUrl);
+    const existingImageSet = new Set(existing);
+    const hasNewImages = incoming.some((url) => !existingImageSet.has(url));
     const merged = [...existing];
     for (const url of incoming) {
       if (!merged.includes(url)) merged.push(url);
@@ -1938,6 +2079,7 @@ export class InventoryWorkbenchService {
     if (mergedCount >= 2) {
       const stage = listing.enrichmentStage;
       const mayEnqueue =
+        hasNewImages ||
         !stage ||
         stage === INLINE_ENRICH_STAGES.FAILED ||
         stage === INLINE_ENRICH_STAGES.NEEDS_REVIEW ||
@@ -1949,7 +2091,7 @@ export class InventoryWorkbenchService {
         // actually resumed enrichment; it just sat "failed" forever until
         // someone hit the manual reset-enrichment-retry endpoint.
         await this.autoTrigger.enqueueAutoEnrich(listingId, {
-          force: listing.enrichmentPermanentFail,
+          force: hasNewImages || listing.enrichmentPermanentFail,
         });
       }
     }
@@ -2496,6 +2638,9 @@ export class InventoryWorkbenchService {
           addParam(`l."weight" >= $?`, query.minWeight);
         if (query.maxWeight != null)
           addParam(`l."weight" <= $?`, query.maxWeight);
+      }
+      if (exclude !== 'hasPrice' && query.hasPrice === '1') {
+        clauses.push(inventoryHasPriceSql('l'));
       }
 
       return { sql: clauses.join(' AND '), params };

@@ -29,7 +29,7 @@ type PublishTargetInput = {
   requestedReturnPolicyName?: string;
 };
 
-function targetPolicyOverrides(target: PublishTargetInput): Record<string, string> {
+function targetPolicyOverrides(target: Partial<PublishTargetInput>): Record<string, string> {
   const values: Record<string, string | undefined> = {
     fulfillmentPolicyId: target.fulfillmentPolicyId,
     paymentPolicyId: target.paymentPolicyId,
@@ -87,6 +87,9 @@ export class EbayMultiStoreListingService {
     requestedByUserId: string;
     listingIds: string[];
     storeIds: string[];
+    policyOverrides?: Pick<PublishTargetInput, 'requestedFulfillmentPolicyName' | 'requestedPaymentPolicyName' | 'requestedReturnPolicyName'>;
+    policyOverridesByStore?: Record<string, Pick<PublishTargetInput, 'requestedFulfillmentPolicyName' | 'requestedPaymentPolicyName' | 'requestedReturnPolicyName'>>;
+    marketplaceByStore?: Record<string, string>;
     idempotencyKey?: string;
   }): Promise<{
     job: EbayListingJob;
@@ -136,7 +139,7 @@ export class EbayMultiStoreListingService {
         primaryStoreId: In(storeIds),
         connectionStatus: 'active',
       },
-      relations: ['primaryStore'],
+      relations: ['primaryStore', 'marketplaces'],
     });
     const accountByStore = new Map(
       accounts.map((account) => [account.primaryStoreId, account]),
@@ -146,6 +149,21 @@ export class EbayMultiStoreListingService {
       throw new BadRequestException(
         `${missingStores.length} selected store(s) are not active eBay stores in this organization`,
       );
+    }
+    for (const [storeId, marketplaceId] of Object.entries(
+      input.marketplaceByStore ?? {},
+    )) {
+      const account = accountByStore.get(storeId);
+      if (
+        !account?.marketplaces?.some(
+          (marketplace) =>
+            marketplace.enabled && marketplace.marketplaceId === marketplaceId,
+        )
+      ) {
+        throw new BadRequestException(
+          'The requested marketplace is not enabled for the selected eBay store',
+        );
+      }
     }
 
     const resolvedProducts: Array<{
@@ -194,23 +212,31 @@ export class EbayMultiStoreListingService {
         idempotencyKey: input.idempotencyKey ?? null,
       }),
     );
-
     const targets = resolvedProducts.flatMap((product) =>
-      accounts.map((account) =>
-        this.targetRepo.create({
+      accounts.map((account) => {
+        const storePolicyOverrides = targetPolicyOverrides(
+          input.policyOverridesByStore?.[account.primaryStoreId] ?? input.policyOverrides ?? {},
+        );
+        return this.targetRepo.create({
           listingJobId: savedJob.id,
           catalogProductId: product.catalogProductId,
           ebayAccountId: account.id,
           vertical: product.vertical,
           marketplaceId:
+            input.marketplaceByStore?.[account.primaryStoreId] ??
             account.primaryStore?.ebayMarketplaceId ??
             (typeof account.primaryStore?.config?.marketplace === 'string'
               ? account.primaryStore.config.marketplace
               : 'EBAY_US'),
           status: 'pending',
-          resultPayload: { sourceListingId: product.sourceListingId },
-        }),
-      ),
+          resultPayload: {
+            sourceListingId: product.sourceListingId,
+            ...(Object.keys(storePolicyOverrides).length
+              ? { policyOverrides: storePolicyOverrides }
+              : {}),
+          },
+        });
+      }),
     );
     const savedTargets = await this.targetRepo.save(targets, { chunk: 500 });
     await this.publishQueue.addBulk(

@@ -10,6 +10,7 @@ import { ListingActionLog } from '../integrations/ebay/entities/listing-action-l
 import { RbacService } from '../rbac/rbac.service.js';
 import { StoreAccessService } from '../channels/store-access.service.js';
 import { TeamsService } from '../teams/teams.service.js';
+import { AutomotiveAccessScopeService } from '../auth/automotive-access-scope.service.js';
 
 const mockUser = {
   id: 'user-1',
@@ -66,6 +67,12 @@ describe('ListingsService concurrency', () => {
                 save,
                 update: jest.fn().mockResolvedValue({ affected: 1 }),
                 create: jest.fn((_entity, data) => data),
+                createQueryBuilder: jest.fn(() => ({
+                  where: jest.fn().mockReturnThis(),
+                  andWhere: jest.fn().mockReturnThis(),
+                  withDeleted: jest.fn().mockReturnThis(),
+                  getOne: findOne,
+                })),
               }),
             ),
           },
@@ -88,11 +95,20 @@ describe('ListingsService concurrency', () => {
         },
         {
           provide: StoreAccessService,
-          useValue: { getAccessibleStoreIds: jest.fn().mockResolvedValue([]) },
+          useValue: {
+            resolveStoreFilter: jest.fn().mockResolvedValue(undefined),
+          },
         },
         {
           provide: TeamsService,
           useValue: { getUserTeamIds: jest.fn().mockResolvedValue([]) },
+        },
+        {
+          provide: AutomotiveAccessScopeService,
+          useValue: {
+            buildFilter: jest.fn().mockResolvedValue(null),
+            resolveWriteOrganizationId: jest.fn().mockResolvedValue('org-1'),
+          },
         },
       ],
     }).compile();
@@ -172,6 +188,12 @@ describe('ListingsService concurrency', () => {
           save,
           update,
           create: jest.fn((_entity: unknown, data: unknown) => data),
+          createQueryBuilder: jest.fn(() => ({
+            where: jest.fn().mockReturnThis(),
+            andWhere: jest.fn().mockReturnThis(),
+            withDeleted: jest.fn().mockReturnThis(),
+            getOne: findOne,
+          })),
         }),
       ),
     };
@@ -209,12 +231,12 @@ describe('ListingsService concurrency', () => {
     expect(result.listing.startPriceNum).toBe(59);
     expect(update).toHaveBeenCalledWith(
       CatalogProduct,
-      { sku: 'BLA-18699' },
+      expect.objectContaining({ sku: 'BLA-18699' }),
       { price: 59 },
     );
     expect(update).toHaveBeenCalledWith(
       ListingRecord,
-      { customLabelSku: 'BLA-18699' },
+      expect.objectContaining({ customLabelSku: 'BLA-18699' }),
       { startPrice: '59', startPriceNum: 59 },
     );
   });

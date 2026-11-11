@@ -390,8 +390,26 @@ export const PERMISSION_REGISTRY: PermissionDefinition[] = [
     'published_listings',
     READ_ONLY,
   ),
+  p(
+    'published_listings.external_feed',
+    'Read the Primemotive external listing feed',
+    'published_listings',
+    [],
+    'Dedicated access to the server-scoped Primemotive JSON listing feed.',
+  ),
+  p(
+    'published_listings.sales.notify',
+    'Report external sales for Primemotive listings',
+    'published_listings',
+    [],
+    'Allows a service account to submit idempotent sale events for its organization’s Primemotive listings.',
+  ),
 
   // ── Settings (tenant operational) ──
+  p('motoark.orders.notify', 'Report MotoArk order lifecycle events', 'motoark', ADMIN_UP, 'Submit signed organization/store-scoped purchase, shipment, cancellation, return and refund facts.'),
+  p('motoark.orders.view', 'Read MotoArk event and quantity results', 'motoark', ADMIN_UP, 'Read authorized lifecycle processing and stock results.'),
+  p('motoark.returns.receive', 'Confirm physical MotoArk returns', 'motoark', ADMIN_UP),
+  p('motoark.returns.restock', 'Inspect and dispose MotoArk returns', 'motoark', ADMIN_UP),
   p('settings.view', 'View settings', 'settings', READ_ONLY),
   p('settings.manage', 'Manage settings', 'settings', ADMIN_UP),
 

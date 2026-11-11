@@ -119,7 +119,7 @@ export default function StoreDefaultPoliciesTab() {
           </div>
           <div className="flex flex-wrap gap-2 shrink-0">
             <Link
-              to="/settings/integrations/ebay"
+              to="/auto-parts/settings/integrations/ebay"
               className="inline-flex items-center gap-1.5 text-sm rounded-md border border-slate-300 dark:border-slate-600 px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800"
             >
               Manage connections
@@ -167,7 +167,7 @@ export default function StoreDefaultPoliciesTab() {
                 No eBay stores connected yet.
               </p>
               <Link
-                to="/settings/integrations/ebay"
+                to="/auto-parts/settings/integrations/ebay"
                 className="inline-flex text-sm text-sky-400 hover:underline"
               >
                 Connect a store

@@ -103,7 +103,7 @@ export default function InventoryListingEditor() {
         </p>
         <button
           type="button"
-          onClick={() => navigate('/inventory')}
+          onClick={() => navigate('/auto-parts/inventory')}
           className="text-sm text-blue-400 hover:underline"
         >
           Back to Inventory
@@ -119,7 +119,7 @@ export default function InventoryListingEditor() {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => navigate('/inventory')}
+            onClick={() => navigate('/auto-parts/inventory')}
             className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
             <ArrowLeft className="h-5 w-5 text-slate-500" />

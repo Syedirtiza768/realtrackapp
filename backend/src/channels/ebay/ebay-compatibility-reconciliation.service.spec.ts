@@ -16,7 +16,10 @@ describe('EbayCompatibilityReconciliationService', () => {
       getCompatibility: jest.fn().mockResolvedValue({ compatibleProducts: [] }),
       setCompatibility: jest.fn(),
     };
-    const trading = { getItemDetails: jest.fn(), replaceItemCompatibility: jest.fn() };
+    const trading = {
+      getItemDetails: jest.fn(),
+      replaceItemCompatibility: jest.fn(),
+    };
     const service = new EbayCompatibilityReconciliationService(
       inventory as any,
       trading as any,
@@ -49,6 +52,25 @@ describe('EbayCompatibilityReconciliationService', () => {
         compatibleProducts: [row('2018')],
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejects a readback that is missing expected rows', async () => {
+    const inventory = {
+      deleteCompatibility: jest.fn(),
+      getCompatibility: jest.fn().mockResolvedValue({ compatibleProducts: [] }),
+      setCompatibility: jest.fn().mockResolvedValue(undefined),
+    };
+    const service = new EbayCompatibilityReconciliationService(
+      inventory as any,
+      {} as any,
+    );
+
+    await expect(
+      service.syncInventory('store-1', 'SKU-1', {
+        compatibleProducts: [row('2018')],
+      }),
+    ).rejects.toThrow(/1 expected row\(s\) missing/);
+    expect(inventory.setCompatibility).toHaveBeenCalled();
   });
 
   it('refreshes an Inventory offer without calling the Trading revise path', async () => {
@@ -87,8 +109,12 @@ describe('EbayCompatibilityReconciliationService', () => {
     const trading = {
       getItemDetails: jest
         .fn()
-        .mockResolvedValueOnce({ compatibility: { compatibleProducts: [row('2007')] } })
-        .mockResolvedValueOnce({ compatibility: { compatibleProducts: [row('2018')] } }),
+        .mockResolvedValueOnce({
+          compatibility: { compatibleProducts: [row('2007')] },
+        })
+        .mockResolvedValueOnce({
+          compatibility: { compatibleProducts: [row('2018')] },
+        }),
       replaceItemCompatibility: jest.fn().mockResolvedValue(undefined),
     };
     const service = new EbayCompatibilityReconciliationService(

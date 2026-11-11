@@ -1,6 +1,6 @@
 # eBay integration & the PartsBazar360 relationship
 
-**Last reviewed:** 2026-09-29
+**Last reviewed:** 2026-10-30
 
 ## eBay
 RealTrackApp's core purpose is eBay automotive-parts listing management: multi-store
@@ -15,8 +15,52 @@ entries):
   circular dependency between the `channels` and `fitment` modules.
 - Publish failures with eBay errorId `25005` (invalid category) trigger a
   purge-and-recreate-offer retry, not just a plain retry.
+- eBay Motors publishing resolves a missing or malformed primary category to
+  the existing safe leaf category `9886` and persists it to catalog/listing
+  records. The Trading API validates category IDs before sending requests, so
+  a blank `PrimaryCategory.CategoryID` is stopped locally rather than returned
+  by eBay as error 37.
 - Item-specific values are sanitized to eBay's 65-character aspect limit before
   publish.
+- Standard new Trading API fixed-price single-item listings keep the seller's
+  value in `Item.SKU` while tracking the listing by `ItemID`, leaving eBay's
+  Custom Label editable after publish. Trading API is now the default for this
+  publishing path; `EBAY_LISTING_API_MODE=inventory` is an explicit override.
+  Variation-family multi-SKU item groups still use the Inventory API. Existing
+  Inventory API offers still use Inventory API for in-place edits. Existing
+  listings created with ManageBySKU cannot change
+  tracking mode in place and need a relist to change their label. Listings
+  created in eBay's Inventory API model also cannot be revised through
+  Seller Hub's standard listing editor or Trading API calls; the app must use
+  the Inventory API offer/item operations for in-place edits. To make one
+  Seller Hub-editable, `backend/src/scripts/migrate-ebay-inventory-to-trading.ts`
+  can preflight and recreate it through Trading API, including listings that
+  only have an `ebay_listing_channels` mapping. That operation ends the
+  old listing and changes its eBay Item ID; it is dry-run by default and
+  requires both `--apply` and `--confirm` to make live changes. Use
+  `--item-id=<eBay Item ID>` to scope the preflight to one listing.
+- A publishing attempt that finds a channel with an Inventory API offer always
+  revises that offer through the Inventory API, even while
+  `EBAY_LISTING_API_MODE=trading`. It uses the channel's stored eBay SKU,
+  including a conflict-safe alias. Active offers are updated in place;
+  `UNPUBLISHED` offers are updated and then published again using the same
+  offer. Unknown offer states stop before writing to eBay to avoid duplicates.
+  A legacy Trading API channel without an Inventory offer is revised by its
+  existing listing ID.
+- A successful `ReviseFixedPriceItem` response is the confirmation for a
+  legacy Trading API revision. Do not immediately require an exact `GetItem`
+  readback: eBay may return a stale snapshot after accepting the revision,
+  which previously marked successful changes as failed bulk targets. Later
+  listing sync refreshes the remote projection.
+- Trading API publish errors retain eBay's `LongMessage`, `Message`, and
+  `ShortMessage` details when present. Account policy restrictions, including
+  restricted vehicle-part categories, remain eBay-side blockers and are shown
+  with their specific rejection text.
+- An Inventory offer lookup failure `25713` is recovered only after Trading API
+  GetItem confirms the channel's mapped listing is `Completed` or `Ended`. The
+  publisher deletes only the stale offer, keeps its Inventory item/SKU, and
+  reuses a candidate offer only after verifying its SKU, marketplace, and
+  status. Published listing IDs may be nested under `listing.listingId`.
 - Inventory location defaults to Dubai / `AE_Dubai`, not Houston / `US_77001`; see
   [[../context/CURRENT_STATE|CURRENT_STATE.md]] (reason for the Dubai default
   itself isn't documented anywhere found in this repo — TODO below).

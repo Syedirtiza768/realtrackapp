@@ -1,6 +1,5 @@
 import {
   SingleListingFormService,
-  PART_LOOKUP_MIN_VISION_IMAGES,
   type CreateIntakePartDto,
 } from './single-listing-form.service.js';
 import { SKU_PREFIX } from '../constants/automotive-oem-brands.js';
@@ -11,28 +10,56 @@ describe('SingleListingFormService SKU allocation', () => {
   });
 });
 
-/**
- * createIntakePart no longer requires photos at submission time — parts
- * save to inventory as drafts and can be enriched from OEM/MPN via the
- * eBay Browse API. Photos remain optional at intake and can be added on
- * Inventory before publish.
- */
+/** Photo-optional drafts save independently of optional image lookups. */
 describe('SingleListingFormService.createIntakePart — photos optional', () => {
-  function buildService(): SingleListingFormService {
-    const stub = {} as never;
-    return new SingleListingFormService(
-      stub,
-      stub,
-      stub,
-      stub,
-      stub,
-      stub,
-      stub,
-      stub,
-      stub,
-      stub,
-      stub,
+  function buildService(imageLookup: Promise<Array<{ cdnUrl: string }>>) {
+    let savedListing: Record<string, unknown> | null = null;
+    const listingRepo = {
+      query: jest.fn().mockResolvedValue([{ nextval: '1' }]),
+      create: jest.fn((value) => value),
+      save: jest.fn(async (value: Record<string, unknown>) => {
+        savedListing = { id: 'listing-1', ...value };
+        return savedListing;
+      }),
+      findOne: jest.fn(async () => savedListing),
+    };
+    const catalogProductRepo = {
+      create: jest.fn((value) => value),
+      save: jest.fn(async (value: Record<string, unknown>) => ({
+        id: 'catalog-1',
+        ...value,
+      })),
+      findOne: jest.fn(),
+    };
+    const imageAssetRepo = {
+      find: jest.fn().mockResolvedValue([]),
+      save: jest.fn().mockResolvedValue([]),
+    };
+    const storageService = {
+      mirrorRemoteImageUrls: jest.fn(async (urls: string[]) => urls),
+      isTempKey: jest.fn().mockReturnValue(false),
+    };
+    const imageDriveService = {
+      findByPartNumber: jest.fn(() => imageLookup),
+    };
+    const queue = { add: jest.fn().mockResolvedValue(undefined) };
+
+    const service = new SingleListingFormService(
+      listingRepo as never,
+      catalogProductRepo as never,
+      imageAssetRepo as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      storageService as never,
+      imageDriveService as never,
+      {} as never,
+      {} as never,
+      queue as never,
     );
+
+    return { service, listingRepo, imageDriveService };
   }
 
   function baseDto(imageUrls: string[] = []): CreateIntakePartDto {
@@ -46,20 +73,37 @@ describe('SingleListingFormService.createIntakePart — photos optional', () => 
     };
   }
 
-  it('does not reject a submission with zero photos on the photo-count gate', async () => {
-    const service = buildService();
-    await expect(service.createIntakePart(baseDto([]))).rejects.not.toThrow(
-      new RegExp(`At least ${PART_LOOKUP_MIN_VISION_IMAGES} photos`),
-    );
+  it('saves a zero-photo draft without waiting for Image Drive', async () => {
+    let finishLookup!: (images: Array<{ cdnUrl: string }>) => void;
+    const imageLookup = new Promise<Array<{ cdnUrl: string }>>((resolve) => {
+      finishLookup = resolve;
+    });
+    const { service, listingRepo, imageDriveService } =
+      buildService(imageLookup);
+
+    const result = await service.createIntakePart(baseDto([]));
+
+    expect(result.listing.status).toBe('draft');
+    expect(result.listing.itemPhotoUrl).toBeNull();
+    expect(listingRepo.save).toHaveBeenCalledTimes(1);
+    expect(imageDriveService.findByPartNumber).toHaveBeenCalledWith('ABC123');
+
+    finishLookup([]);
+    await new Promise((resolve) => setImmediate(resolve));
   });
 
-  it('does not reject a submission with only one photo on the photo-count gate', async () => {
-    const service = buildService();
-    await expect(
-      service.createIntakePart(baseDto(['https://cdn.example.com/a.jpg'])),
-    ).rejects.not.toThrow(
-      new RegExp(`At least ${PART_LOOKUP_MIN_VISION_IMAGES} photos`),
+  it('saves a one-photo draft and skips the optional Image Drive search', async () => {
+    const { service, listingRepo, imageDriveService } = buildService(
+      Promise.resolve([]),
     );
+    const photo = 'https://cdn.example.com/a.jpg';
+
+    const result = await service.createIntakePart(baseDto([photo]));
+
+    expect(result.listing.status).toBe('draft');
+    expect(result.listing.itemPhotoUrl).toBe(photo);
+    expect(listingRepo.save).toHaveBeenCalledTimes(1);
+    expect(imageDriveService.findByPartNumber).not.toHaveBeenCalled();
   });
 });
 
@@ -82,6 +126,7 @@ describe('SingleListingFormService.lookupPart — eBay Browse primary', () => {
       stub,
       (overrides.config ?? stub) as never,
       (overrides.mvl ?? stub) as never,
+      stub,
       stub,
       stub,
       stub,
@@ -129,7 +174,11 @@ describe('SingleListingFormService.lookupPart — eBay Browse primary', () => {
     expect(result.estimatedCostUsd).toBe(0);
     expect(result.confidence).toBe('high');
     expect(result.mvlMatched).toBe(true);
-    expect(browseApi.searchByMpn).toHaveBeenCalled();
+    expect(browseApi.searchByMpn).toHaveBeenCalledWith(
+      'Maserati',
+      '2055402328',
+      { limit: 10, retryOnRateLimit: false },
+    );
   });
 
   it('falls through to AI paths when Browse finds nothing', async () => {

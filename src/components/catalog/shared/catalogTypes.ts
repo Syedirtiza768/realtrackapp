@@ -115,6 +115,8 @@ export type CatalogConfig = {
   accent: string;
   route: string;
   editorUrl: (id?: string) => string;
+  addLabel?: string;
+  searchPlaceholder?: string;
   attributes: Array<{ key: string; label: string; valueLabels?: Record<string, string> }>;
   quickAttributes: string[];
   protectedStatuses: string[];

@@ -33,13 +33,17 @@ function mockInventoryApi() {
     response: { status: 404 },
   });
   return {
-    createOrReplaceItem: jest.fn().mockImplementation((_storeId, _sku, payload) => {
-      item = payload;
-      return Promise.resolve(undefined);
-    }),
-    getItem: jest.fn().mockImplementation(() =>
-      item ? Promise.resolve(item) : Promise.reject(notFound),
-    ),
+    createOrReplaceItem: jest
+      .fn()
+      .mockImplementation((_storeId, _sku, payload) => {
+        item = payload;
+        return Promise.resolve(undefined);
+      }),
+    getItem: jest
+      .fn()
+      .mockImplementation(() =>
+        item ? Promise.resolve(item) : Promise.reject(notFound),
+      ),
     createOffer: jest.fn().mockImplementation((_storeId, payload) => {
       offer = { ...payload, offerId: 'offer-123' };
       return Promise.resolve({ offerId: 'offer-123' });
@@ -62,10 +66,17 @@ function mockInventoryApi() {
       compatibility = { compatibleProducts: [] };
       return Promise.resolve(undefined);
     }),
-    getOffer: jest.fn().mockImplementation(() =>
-      Promise.resolve(offer ?? { offerId: 'offer-123' }),
-    ),
+    getOffer: jest
+      .fn()
+      .mockImplementation(() =>
+        Promise.resolve(offer ?? { offerId: 'offer-123' }),
+      ),
     withdrawOffer: jest.fn().mockResolvedValue(undefined),
+    deleteOffer: jest.fn().mockResolvedValue(undefined),
+    deleteItem: jest.fn().mockImplementation(() => {
+      item = null;
+      return Promise.resolve(undefined);
+    }),
     bulkUpdatePriceQuantity: jest.fn().mockResolvedValue(undefined),
     ensureMerchantLocation: jest
       .fn()
@@ -91,7 +102,9 @@ function mockEbayMediaApi() {
     hostImages: jest
       .fn()
       .mockImplementation((_storeId: string, imageUrls: string[]) =>
-        Promise.resolve(imageUrls.map((url) => `https://i.ebayimg.com/hosted${url}`)),
+        Promise.resolve(
+          imageUrls.map((url) => `https://i.ebayimg.com/hosted${url}`),
+        ),
       ),
   };
 }
@@ -128,9 +141,14 @@ describe('EbayPublishService', () => {
       expect(conflictSafeSkuFor('BLA-A2123520202')).toBe('BLAP-A2123520202');
     });
 
-    it('does not create a second fallback namespace or an invalid SKU', () => {
-      expect(conflictSafeSkuFor('BLAP-19279')).toBeNull();
-      expect(conflictSafeSkuFor('SKU-19279')).toBeNull();
+    it('does not stack the BLAP namespace or create an invalid SKU', () => {
+      // Non-BLA families (including BLAP-* itself) get the bounded,
+      // hash-suffixed namespace; callers must still prove it is unused.
+      const blapAlternate = conflictSafeSkuFor('BLAP-19279');
+      expect(blapAlternate).toMatch(/^BLAP-19279-RT[A-Z0-9]{7}$/);
+      expect(conflictSafeSkuFor('SKU-19279')).toMatch(
+        /^SKU-19279-RT[A-Z0-9]{7}$/,
+      );
       expect(conflictSafeSkuFor(`BLA-${'x'.repeat(50)}`)).toBeNull();
     });
   });
@@ -177,6 +195,12 @@ describe('EbayPublishService', () => {
   let catalogRepo: ReturnType<typeof createRepo>;
   let ebayCategoryRepo: ReturnType<typeof createRepo>;
   let inventoryApi: ReturnType<typeof mockInventoryApi>;
+  let tradingApi: {
+    addFixedPriceItem: jest.Mock;
+    reviseFixedPriceItem: jest.Mock;
+    relistFixedPriceItem: jest.Mock;
+    getItemDetails: jest.Mock;
+  };
   let auth: ReturnType<typeof mockAuth>;
   let ebayMedia: ReturnType<typeof mockEbayMediaApi>;
   let compatibilityReconciler: {
@@ -200,14 +224,28 @@ describe('EbayPublishService', () => {
     catalogRepo = createRepo();
     ebayCategoryRepo = createRepo();
     inventoryApi = mockInventoryApi();
+    tradingApi = {
+      addFixedPriceItem: jest
+        .fn()
+        .mockResolvedValue({ itemId: 'trading-listing-456' }),
+      reviseFixedPriceItem: jest.fn().mockResolvedValue(undefined),
+      relistFixedPriceItem: jest
+        .fn()
+        .mockResolvedValue({ itemId: 'trading-relisted-789' }),
+      getItemDetails: jest
+        .fn()
+        .mockResolvedValue({ listingStatus: 'Completed' }),
+    };
     auth = mockAuth();
     ebayMedia = mockEbayMediaApi();
     compatibilityReconciler = {
-      syncInventory: jest.fn().mockImplementation((storeId, sku, payload) =>
-        payload
-          ? inventoryApi.setCompatibility(storeId, sku, payload)
-          : inventoryApi.deleteCompatibility(storeId, sku),
-      ),
+      syncInventory: jest
+        .fn()
+        .mockImplementation((storeId, sku, payload) =>
+          payload
+            ? inventoryApi.setCompatibility(storeId, sku, payload)
+            : inventoryApi.deleteCompatibility(storeId, sku),
+        ),
       refreshPublishedOffer: jest.fn().mockResolvedValue('listing-456'),
       syncLiveListing: jest.fn(),
     };
@@ -225,8 +263,12 @@ describe('EbayPublishService', () => {
     };
 
     svc = new EbayPublishService(
-      mockConfig(),
+      // Trading API is the production default for new listings. Most of this
+      // suite exercises the Inventory API path, so pin it explicitly; tests
+      // that cover Trading override `config` (see 'Trading API selection').
+      mockConfig({ EBAY_LISTING_API_MODE: 'inventory' }),
       inventoryApi as any,
+      tradingApi as any,
       taxonomyApi as any,
       {} as any, // taxonomyCache
       auth as any,
@@ -303,20 +345,538 @@ describe('EbayPublishService', () => {
       expect(inventoryApi.createOrReplaceItem).toHaveBeenCalled();
       expect(inventoryApi.createOffer).toHaveBeenCalled();
       expect(inventoryApi.publishOffer).toHaveBeenCalled();
-      expect(compatibilityReconciler.refreshPublishedOffer).toHaveBeenCalledWith(
-        'store-1',
-        'offer-123',
-        'SKU-001',
-        undefined,
-      );
+      expect(
+        compatibilityReconciler.refreshPublishedOffer,
+      ).toHaveBeenCalledWith('store-1', 'offer-123', 'SKU-001', undefined);
       expect(compatibilityReconciler.syncLiveListing).not.toHaveBeenCalled();
-      expect(ebayMedia.hostImages).toHaveBeenCalledWith(
-        'store-1',
-        ['https://img.example.com/1.jpg'],
-      );
+      expect(ebayMedia.hostImages).toHaveBeenCalledWith('store-1', [
+        'https://img.example.com/1.jpg',
+      ]);
       expect(
         inventoryApi.createOrReplaceItem.mock.calls[0][2].product.imageUrls,
       ).toEqual(['https://i.ebayimg.com/hostedhttps://img.example.com/1.jpg']);
+    });
+
+    it('revises an active Inventory API offer without calling publish again', async () => {
+      const store = {
+        id: 'store-1',
+        storeName: 'My Store',
+        config: {
+          marketplace: 'EBAY_US',
+          locationKey: 'default-loc',
+          fulfillmentPolicyId: 'fp-1',
+          paymentPolicyId: 'pp-1',
+          returnPolicyId: 'rp-1',
+        },
+        locationKey: 'default-loc',
+      };
+      const req = validRequest({
+        fulfillmentPolicyId: 'fp-1',
+        paymentPolicyId: 'pp-1',
+        returnPolicyId: 'rp-1',
+        merchantLocationKey: 'default-loc',
+      });
+      const channel = {
+        internalSku: req.sku,
+        ebayInventorySku: req.sku,
+        offerId: 'offer-123',
+        listingId: 'listing-456',
+      };
+      inventoryApi.getOffer.mockResolvedValue({
+        offerId: 'offer-123',
+        sku: req.sku,
+        marketplaceId: 'EBAY_US',
+        status: 'PUBLISHED',
+        listingId: 'listing-456',
+        merchantLocationKey: 'default-loc',
+        listingPolicies: {
+          fulfillmentPolicyId: 'fp-1',
+          paymentPolicyId: 'pp-1',
+          returnPolicyId: 'rp-1',
+        },
+      });
+
+      const result = await (svc as any).reviseExistingInventoryListing(
+        store,
+        'store-1',
+        req,
+        null,
+        channel,
+      );
+
+      expect(result).toMatchObject({
+        success: true,
+        offerId: 'offer-123',
+        listingId: 'listing-456',
+      });
+      expect(inventoryApi.createOrReplaceItem).toHaveBeenCalledWith(
+        'store-1',
+        req.sku,
+        expect.any(Object),
+      );
+      expect(inventoryApi.updateOffer).toHaveBeenCalledWith(
+        'store-1',
+        'offer-123',
+        expect.objectContaining({ sku: req.sku }),
+      );
+      expect(inventoryApi.publishOffer).not.toHaveBeenCalled();
+      expect(tradingApi.reviseFixedPriceItem).not.toHaveBeenCalled();
+    });
+
+    it('republishes the same Inventory API offer only when eBay says it is unpublished', async () => {
+      const store = {
+        id: 'store-1',
+        storeName: 'My Store',
+        config: {
+          marketplace: 'EBAY_US',
+          locationKey: 'default-loc',
+          fulfillmentPolicyId: 'fp-1',
+          paymentPolicyId: 'pp-1',
+          returnPolicyId: 'rp-1',
+        },
+        locationKey: 'default-loc',
+      };
+      const req = validRequest({
+        fulfillmentPolicyId: 'fp-1',
+        paymentPolicyId: 'pp-1',
+        returnPolicyId: 'rp-1',
+        merchantLocationKey: 'default-loc',
+      });
+      const channel = {
+        internalSku: req.sku,
+        ebayInventorySku: req.sku,
+        offerId: 'offer-123',
+        listingId: 'ended-listing-123',
+      };
+      inventoryApi.getOffer.mockResolvedValue({
+        offerId: 'offer-123',
+        sku: req.sku,
+        marketplaceId: 'EBAY_US',
+        status: 'UNPUBLISHED',
+        merchantLocationKey: 'default-loc',
+        listingPolicies: {
+          fulfillmentPolicyId: 'fp-1',
+          paymentPolicyId: 'pp-1',
+          returnPolicyId: 'rp-1',
+        },
+      });
+
+      const result = await (svc as any).reviseExistingInventoryListing(
+        store,
+        'store-1',
+        req,
+        null,
+        channel,
+      );
+
+      expect(result).toMatchObject({
+        success: true,
+        offerId: 'offer-123',
+        listingId: 'listing-456',
+      });
+      expect(inventoryApi.updateOffer).toHaveBeenCalledWith(
+        'store-1',
+        'offer-123',
+        expect.objectContaining({ sku: req.sku }),
+      );
+      expect(inventoryApi.publishOffer).toHaveBeenCalledWith(
+        'store-1',
+        'offer-123',
+      );
+      expect(channel.listingId).toBe('listing-456');
+    });
+
+    it('replaces only an unavailable unpublished offer and keeps its Inventory SKU', async () => {
+      const store = {
+        id: 'store-1',
+        storeName: 'My Store',
+        config: {
+          marketplace: 'EBAY_US',
+          locationKey: 'default-loc',
+          fulfillmentPolicyId: 'fp-1',
+          paymentPolicyId: 'pp-1',
+          returnPolicyId: 'rp-1',
+        },
+        locationKey: 'default-loc',
+      };
+      const req = validRequest({
+        fulfillmentPolicyId: 'fp-1',
+        paymentPolicyId: 'pp-1',
+        returnPolicyId: 'rp-1',
+        merchantLocationKey: 'default-loc',
+      });
+      const channel = {
+        internalSku: req.sku,
+        ebayInventorySku: req.sku,
+        offerId: 'stale-offer',
+        listingId: 'ended-listing-123',
+      };
+      const unavailable = Object.assign(
+        new Error('This Offer is not available.'),
+        {
+          response: {
+            data: {
+              errors: [
+                {
+                  errorId: 25713,
+                  message: 'This Offer is not available.',
+                },
+              ],
+            },
+          },
+        },
+      );
+      inventoryApi.getOffer.mockResolvedValue({
+        offerId: 'stale-offer',
+        sku: req.sku,
+        marketplaceId: 'EBAY_US',
+        status: 'UNPUBLISHED',
+        merchantLocationKey: 'default-loc',
+        listingPolicies: {
+          fulfillmentPolicyId: 'fp-1',
+          paymentPolicyId: 'pp-1',
+          returnPolicyId: 'rp-1',
+        },
+      });
+      inventoryApi.updateOffer.mockRejectedValueOnce(unavailable);
+      inventoryApi.createOffer.mockResolvedValueOnce({
+        offerId: 'fresh-offer',
+      });
+
+      const result = await (svc as any).reviseExistingInventoryListing(
+        store,
+        'store-1',
+        req,
+        null,
+        channel,
+      );
+
+      expect(result).toMatchObject({
+        success: true,
+        offerId: 'fresh-offer',
+        listingId: 'listing-456',
+      });
+      expect(inventoryApi.deleteOffer).toHaveBeenCalledWith(
+        'store-1',
+        'stale-offer',
+      );
+      expect(inventoryApi.deleteItem).not.toHaveBeenCalled();
+      expect(inventoryApi.createOffer).toHaveBeenCalledWith(
+        'store-1',
+        expect.objectContaining({ sku: req.sku }),
+      );
+      expect(inventoryApi.publishOffer).toHaveBeenCalledWith(
+        'store-1',
+        'fresh-offer',
+      );
+      expect(channel.offerId).toBe('fresh-offer');
+      expect(channel.ebayInventorySku).toBe(req.sku);
+    });
+
+    it('reuses a verified existing offer after GetOffer reports an ended listing unavailable', async () => {
+      const store = {
+        id: 'store-1',
+        storeName: 'My Store',
+        config: {
+          marketplace: 'EBAY_US',
+          locationKey: 'default-loc',
+          fulfillmentPolicyId: 'fp-1',
+          paymentPolicyId: 'pp-1',
+          returnPolicyId: 'rp-1',
+        },
+        locationKey: 'default-loc',
+      };
+      const req = validRequest({
+        fulfillmentPolicyId: 'fp-1',
+        paymentPolicyId: 'pp-1',
+        returnPolicyId: 'rp-1',
+        merchantLocationKey: 'default-loc',
+      });
+      const channel = {
+        internalSku: req.sku,
+        ebayInventorySku: req.sku,
+        offerId: 'stale-offer',
+        listingId: 'ended-listing-123',
+      };
+      const unavailable = Object.assign(
+        new Error('This Offer is not available.'),
+        {
+          response: {
+            data: {
+              errors: [
+                {
+                  errorId: 25713,
+                  message: 'This Offer is not available.',
+                },
+              ],
+            },
+          },
+        },
+      );
+      const offerExists = Object.assign(
+        new Error('Offer entity already exists.'),
+        {
+          response: {
+            data: {
+              errors: [
+                {
+                  errorId: 25002,
+                  message: 'Offer entity already exists.',
+                  parameters: [{ name: 'offerId', value: 'existing-offer' }],
+                },
+              ],
+            },
+          },
+        },
+      );
+      const existingOffer = {
+        ...(svc as any).buildOffer(req, store),
+        offerId: 'existing-offer',
+        status: 'PUBLISHED',
+        listing: {
+          listingId: 'listing-789',
+          listingStatus: 'ACTIVE',
+        },
+      };
+      inventoryApi.getOffer
+        .mockRejectedValueOnce(unavailable)
+        .mockResolvedValue(existingOffer);
+      inventoryApi.createOffer.mockRejectedValueOnce(offerExists);
+      tradingApi.getItemDetails.mockResolvedValue({
+        listingStatus: 'Completed',
+      });
+
+      const result = await (svc as any).reviseExistingInventoryListing(
+        store,
+        'store-1',
+        req,
+        null,
+        channel,
+      );
+
+      expect(result).toMatchObject({
+        success: true,
+        offerId: 'existing-offer',
+        listingId: 'listing-789',
+      });
+      expect(tradingApi.getItemDetails).toHaveBeenCalledWith(
+        'store-1',
+        'ended-listing-123',
+        'EBAY_US',
+      );
+      expect(inventoryApi.updateOffer).toHaveBeenCalledWith(
+        'store-1',
+        'existing-offer',
+        expect.objectContaining({ sku: req.sku }),
+      );
+      expect(inventoryApi.publishOffer).not.toHaveBeenCalled();
+      expect(channel.offerId).toBe('existing-offer');
+      expect(channel.listingId).toBe('listing-789');
+    });
+
+    it('does not replace an unavailable offer while its linked listing is active', async () => {
+      const store = {
+        id: 'store-1',
+        storeName: 'My Store',
+        config: {
+          marketplace: 'EBAY_US',
+          locationKey: 'default-loc',
+          fulfillmentPolicyId: 'fp-1',
+          paymentPolicyId: 'pp-1',
+          returnPolicyId: 'rp-1',
+        },
+        locationKey: 'default-loc',
+      };
+      const req = validRequest({
+        fulfillmentPolicyId: 'fp-1',
+        paymentPolicyId: 'pp-1',
+        returnPolicyId: 'rp-1',
+        merchantLocationKey: 'default-loc',
+      });
+      const channel = {
+        internalSku: req.sku,
+        ebayInventorySku: req.sku,
+        offerId: 'stale-offer',
+        listingId: 'possibly-active-listing',
+      };
+      const unavailable = Object.assign(
+        new Error('This Offer is not available.'),
+        {
+          response: {
+            data: {
+              errors: [
+                {
+                  errorId: 25713,
+                  message: 'This Offer is not available.',
+                },
+              ],
+            },
+          },
+        },
+      );
+      inventoryApi.getOffer.mockRejectedValueOnce(unavailable);
+      tradingApi.getItemDetails.mockResolvedValue({ listingStatus: 'Active' });
+
+      const result = await (svc as any).reviseExistingInventoryListing(
+        store,
+        'store-1',
+        req,
+        null,
+        channel,
+      );
+
+      expect(result).toMatchObject({ success: false });
+      expect(result.error).toContain('ACTIVE');
+      expect(inventoryApi.deleteOffer).not.toHaveBeenCalled();
+      expect(inventoryApi.createOffer).not.toHaveBeenCalled();
+    });
+
+    it('uses the channel’s stored effective eBay SKU when it differs from the catalog SKU', async () => {
+      const store = {
+        id: 'store-1',
+        storeName: 'My Store',
+        config: {
+          marketplace: 'EBAY_US',
+          locationKey: 'default-loc',
+          fulfillmentPolicyId: 'fp-1',
+          paymentPolicyId: 'pp-1',
+          returnPolicyId: 'rp-1',
+        },
+        locationKey: 'default-loc',
+      };
+      const req = validRequest({
+        sku: 'BLA-18762',
+        fulfillmentPolicyId: 'fp-1',
+        paymentPolicyId: 'pp-1',
+        returnPolicyId: 'rp-1',
+        merchantLocationKey: 'default-loc',
+      });
+      const channel = {
+        internalSku: 'BLA-18762',
+        ebayInventorySku: 'BLAP-18762',
+        offerId: 'offer-123',
+        listingId: 'listing-456',
+      };
+      inventoryApi.getOffer.mockResolvedValue({
+        offerId: 'offer-123',
+        sku: 'BLAP-18762',
+        marketplaceId: 'EBAY_US',
+        status: 'PUBLISHED',
+        listingId: 'listing-456',
+        merchantLocationKey: 'default-loc',
+        listingPolicies: {
+          fulfillmentPolicyId: 'fp-1',
+          paymentPolicyId: 'pp-1',
+          returnPolicyId: 'rp-1',
+        },
+      });
+
+      const result = await (svc as any).reviseExistingInventoryListing(
+        store,
+        'store-1',
+        req,
+        null,
+        channel,
+      );
+
+      expect(result).toMatchObject({
+        success: true,
+        effectiveSku: 'BLAP-18762',
+        listingId: 'listing-456',
+      });
+      expect(inventoryApi.createOrReplaceItem).toHaveBeenCalledWith(
+        'store-1',
+        'BLAP-18762',
+        expect.any(Object),
+      );
+      expect(inventoryApi.updateOffer).toHaveBeenCalledWith(
+        'store-1',
+        'offer-123',
+        expect.objectContaining({ sku: 'BLAP-18762' }),
+      );
+      expect(channel.internalSku).toBe('BLA-18762');
+      expect(channel.ebayInventorySku).toBe('BLAP-18762');
+    });
+
+    it('routes mapped Inventory API listings through the Inventory API in Trading mode', async () => {
+      const store = {
+        id: 'store-1',
+        storeName: 'My Store',
+        config: {
+          marketplace: 'EBAY_US',
+          locationKey: 'default-loc',
+          fulfillmentPolicyId: 'fp-1',
+          paymentPolicyId: 'pp-1',
+          returnPolicyId: 'rp-1',
+        },
+        locationKey: 'default-loc',
+      };
+      const account = {
+        id: 'account-1',
+        primaryStoreId: 'store-1',
+        connectionSource: 'native_oauth',
+      };
+      const channel = {
+        internalSku: 'SKU-001',
+        ebayInventorySku: 'SKU-001',
+        offerId: 'offer-123',
+        listingId: 'listing-456',
+      };
+      const req = validRequest({
+        fulfillmentPolicyId: 'fp-1',
+        paymentPolicyId: 'pp-1',
+        returnPolicyId: 'rp-1',
+        merchantLocationKey: 'default-loc',
+      });
+      (svc as any).config = mockConfig({ EBAY_LISTING_API_MODE: 'trading' });
+      (svc as any).categoryRequiresCompatibility = jest
+        .fn()
+        .mockResolvedValue(false);
+      (svc as any).enrichPoliciesFromMarketplace = jest
+        .fn()
+        .mockResolvedValue(req);
+      storeRepo.findOneBy = jest.fn().mockResolvedValue(store);
+      connectedAccountRepo.findOne = jest.fn().mockResolvedValue(account);
+      channelRepo.findOne = jest.fn().mockResolvedValue(channel);
+      inventoryApi.getOffer.mockResolvedValue({
+        offerId: 'offer-123',
+        sku: req.sku,
+        marketplaceId: 'EBAY_US',
+        status: 'PUBLISHED',
+        listingId: 'listing-456',
+        merchantLocationKey: 'default-loc',
+        listingPolicies: {
+          fulfillmentPolicyId: 'fp-1',
+          paymentPolicyId: 'pp-1',
+          returnPolicyId: 'rp-1',
+        },
+      });
+
+      const result = await (svc as any).publishToStore('store-1', req);
+
+      expect(result).toMatchObject({
+        success: true,
+        offerId: 'offer-123',
+        listingId: 'listing-456',
+      });
+      expect(inventoryApi.updateOffer).toHaveBeenCalled();
+      expect(inventoryApi.publishOffer).not.toHaveBeenCalled();
+      expect(tradingApi.addFixedPriceItem).not.toHaveBeenCalled();
+      expect(tradingApi.reviseFixedPriceItem).not.toHaveBeenCalled();
+    });
+
+    it('recovers the catalog custom label SKU when the listing row is unavailable', async () => {
+      listingRepo.findOne = jest.fn().mockResolvedValue(null);
+      catalogRepo.findOne = jest.fn().mockResolvedValue({
+        id: 'listing-1',
+        sku: 'JAGUAR-6281-TAIL-2',
+      });
+
+      const enriched = await (svc as any).enrichPublishRequest(
+        validRequest({ sku: 'listing-1' }),
+      );
+
+      expect(enriched.sku).toBe('JAGUAR-6281-TAIL-2');
     });
 
     it('fails closed when the eBay SKU belongs to an unrelated remote item', async () => {
@@ -480,6 +1040,110 @@ describe('EbayPublishService', () => {
       );
     });
 
+    it('fills a missing Motors category before creating a Trading API listing', async () => {
+      storeRepo.findOneBy = jest.fn().mockResolvedValue({
+        id: 'store-1',
+        storeName: 'Motors Store',
+        config: { marketplace: 'EBAY_MOTORS_US', locationKey: 'default-loc' },
+        locationKey: 'default-loc',
+        fulfillmentPolicyId: 'fp-1',
+        paymentPolicyId: 'pp-1',
+        returnPolicyId: 'rp-1',
+      });
+      connectedAccountRepo.findOne = jest.fn().mockResolvedValue(null);
+      (inventoryApi as any).getLocation = jest.fn().mockResolvedValue({
+        name: 'Warehouse',
+        location: { address: { country: 'US' } },
+      });
+
+      const results = await svc.publish(
+        validRequest({
+          categoryId: '',
+          aspects: { Brand: ['FEBEST'], Type: ['Brake Pad'] },
+        }),
+      );
+
+      expect(results[0]).toMatchObject({
+        success: true,
+        listingId: 'trading-listing-456',
+      });
+      expect(tradingApi.addFixedPriceItem).toHaveBeenCalledWith(
+        'store-1',
+        expect.objectContaining({ categoryId: '9886' }),
+        'EBAY_MOTORS_US',
+      );
+      expect(listingRepo.update).toHaveBeenCalledWith(
+        { customLabelSku: 'SKU-001' },
+        expect.objectContaining({
+          categoryId: '9886',
+          categoryName: 'Other Car & Truck Parts & Accessories',
+        }),
+      );
+    });
+
+    it('repairs a legacy motorcycle category when the listing text identifies a car coolant hose', async () => {
+      storeRepo.findOneBy = jest.fn().mockResolvedValue({
+        id: 'store-1',
+        storeName: 'Motors Store',
+        config: { marketplace: 'EBAY_MOTORS_US', locationKey: 'default-loc' },
+        locationKey: 'default-loc',
+        fulfillmentPolicyId: 'fp-1',
+        paymentPolicyId: 'pp-1',
+        returnPolicyId: 'rp-1',
+      });
+      connectedAccountRepo.findOne = jest.fn().mockResolvedValue(null);
+      listingRepo.findOne = jest.fn().mockResolvedValue({
+        id: 'listing-1',
+        customLabelSku: 'SKU-001',
+        title: 'FEBI 103451 Coolant Hose with quick coupling BMW X5',
+        cType: 'AFTERMARKET',
+        categoryId: '177983',
+        categoryName: 'Radiators',
+      });
+      catalogRepo.findOne = jest.fn().mockResolvedValue({
+        id: 'catalog-1',
+        sku: 'SKU-001',
+        title: '2006-2013 BMW X5 Coolant Hose',
+        partType: 'AFTERMARKET',
+        categoryId: '177983',
+        categoryName: 'Radiators',
+        optimizationPayload: {},
+      });
+      taxonomyApi.getCategorySubtree.mockResolvedValue({
+        categorySubtreeNode: {
+          category: { categoryId: '33601', categoryName: 'Coolant Hoses' },
+          categoryTreeNodeLevel: 5,
+          leafCategoryTreeNode: true,
+        },
+      });
+
+      const results = await svc.publish(
+        validRequest({
+          title: 'FEBI 103451 Coolant Hose with quick coupling BMW X5',
+          categoryId: '177983',
+        }),
+      );
+
+      expect(results[0].success).toBe(true);
+      expect(inventoryApi.createOffer.mock.calls[0][1].categoryId).toBe(
+        '33601',
+      );
+      expect(catalogRepo.update).toHaveBeenCalledWith(
+        'catalog-1',
+        expect.objectContaining({
+          categoryId: '33601',
+          categoryName: 'Coolant Hoses',
+        }),
+      );
+      expect(listingRepo.update).toHaveBeenCalledWith(
+        { customLabelSku: 'SKU-001' },
+        expect.objectContaining({
+          categoryId: '33601',
+          categoryName: 'Coolant Hoses',
+        }),
+      );
+    });
+
     it('keeps the reviewed request title even when structured fields differ', async () => {
       storeRepo.findOneBy = jest.fn().mockResolvedValue({
         id: 'store-1',
@@ -598,7 +1262,13 @@ describe('EbayPublishService', () => {
         id: 'cp-1',
         sku: 'SKU-001',
         fitmentData: [
-          { Make: 'Toyota', Model: 'Camry', Year: '2018', Trim: 'LE' },
+          {
+            Make: 'Toyota',
+            Model: 'Camry',
+            Year: '2018',
+            Trim: 'LE',
+            MvlStatus: 'valid',
+          },
         ],
       });
 
@@ -656,11 +1326,19 @@ describe('EbayPublishService', () => {
       expect(inventoryApi.publishOffer).toHaveBeenCalled();
     });
 
-    it('blocks a fitment-capable Motors category when structured rows are missing', async () => {
+    // Since a7b1b9f0 (2026-07-12) a fitment-capable Motors category without
+    // structured rows publishes with description-only fitment and a warning
+    // instead of being blocked (docs/decisions.md). Stale structured rows must
+    // still be cleared so eBay does not keep compatibility from a prior publish.
+    it('publishes a fitment-capable Motors category without structured rows after clearing stale compatibility', async () => {
       storeRepo.findOneBy = jest.fn().mockResolvedValue({
         id: 'store-1',
         storeName: 'My Store',
         config: { marketplace: 'EBAY_US', locationKey: 'default-loc' },
+        locationKey: 'default-loc',
+        fulfillmentPolicyId: 'fp-1',
+        paymentPolicyId: 'pp-1',
+        returnPolicyId: 'rp-1',
       });
       connectedAccountRepo.findOne = jest.fn().mockResolvedValue(null);
       listingRepo.findOne = jest.fn().mockResolvedValue({ cBrand: 'TRW' });
@@ -675,9 +1353,14 @@ describe('EbayPublishService', () => {
         validRequest({ compatibility: undefined }),
       );
 
-      expect(results[0].success).toBe(false);
-      expect(results[0].error).toContain('no validated structured fitment');
-      expect(inventoryApi.publishOffer).not.toHaveBeenCalled();
+      expect(results[0].success).toBe(true);
+      expect(compatibilityReconciler.syncInventory).toHaveBeenCalledWith(
+        'store-1',
+        'SKU-001',
+        undefined,
+      );
+      expect(inventoryApi.setCompatibility).not.toHaveBeenCalled();
+      expect(inventoryApi.publishOffer).toHaveBeenCalled();
     });
 
     it('does not publish when eBay compatibility readback is missing rows', async () => {
@@ -686,12 +1369,24 @@ describe('EbayPublishService', () => {
         storeName: 'My Store',
         config: { marketplace: 'EBAY_US', locationKey: 'default-loc' },
         locationKey: 'default-loc',
+        fulfillmentPolicyId: 'fp-1',
+        paymentPolicyId: 'pp-1',
+        returnPolicyId: 'rp-1',
       });
       connectedAccountRepo.findOne = jest.fn().mockResolvedValue(null);
       listingRepo.findOne = jest.fn().mockResolvedValue({ cBrand: 'TRW' });
       inventoryApi.getCompatibility = jest.fn().mockResolvedValue({
         compatibleProducts: [],
       });
+      // Readback verification lives in EbayCompatibilityReconciliationService
+      // (covered by its own spec); simulate its failure here so this suite
+      // asserts the publish flow stops before publishOffer.
+      compatibilityReconciler.syncInventory.mockRejectedValue(
+        new BadRequestException(
+          'eBay compatibility verification failed for SKU SKU-001 (Inventory API): ' +
+            '1 expected row(s) missing and 0 stale row(s) present.',
+        ),
+      );
 
       const results = await svc.publish(
         validRequest({
@@ -712,6 +1407,90 @@ describe('EbayPublishService', () => {
       expect(results[0].success).toBe(false);
       expect(results[0].error).toContain('compatibility verification failed');
       expect(inventoryApi.publishOffer).not.toHaveBeenCalled();
+    });
+
+    it('retries invalid compatibilities with validated core vehicle fields', async () => {
+      storeRepo.findOneBy = jest.fn().mockResolvedValue({
+        id: 'store-1',
+        storeName: 'My Store',
+        config: { marketplace: 'EBAY_MOTORS_US', locationKey: 'default-loc' },
+        locationKey: 'default-loc',
+        fulfillmentPolicyId: 'fp-1',
+        paymentPolicyId: 'pp-1',
+        returnPolicyId: 'rp-1',
+      });
+      connectedAccountRepo.findOne = jest.fn().mockResolvedValue(null);
+      listingRepo.findOne = jest.fn().mockResolvedValue(null);
+
+      const compatibility = {
+        compatibleProducts: [
+          {
+            compatibilityProperties: [
+              { name: 'Make', value: 'BMW' },
+              { name: 'Model', value: 'X5' },
+              { name: 'Year', value: '2008' },
+              { name: 'Trim', value: 'xDrive30i' },
+              { name: 'Engine', value: '2996 ccm, 200 KW, 272 PS' },
+            ],
+            notes: 'Platform E70',
+          },
+        ],
+      };
+      const invalidCompatibilities = Object.assign(
+        new Error('All compatibilities are invalid'),
+        {
+          response: {
+            data: {
+              errors: [
+                {
+                  errorId: 25002,
+                  message:
+                    'A user error has occurred. All compatibilities are invalid, Item not listed.',
+                },
+              ],
+            },
+          },
+        },
+      );
+      inventoryApi.publishOffer = jest
+        .fn()
+        .mockRejectedValueOnce(invalidCompatibilities)
+        .mockResolvedValueOnce({ listingId: 'listing-456' });
+
+      const results = await svc.publish(validRequest({ compatibility }));
+
+      const coreCompatibility = {
+        compatibleProducts: [
+          {
+            compatibilityProperties: [
+              { name: 'Make', value: 'BMW' },
+              { name: 'Model', value: 'X5' },
+              { name: 'Year', value: '2008' },
+            ],
+          },
+        ],
+      };
+      expect(results[0].success).toBe(true);
+      expect(inventoryApi.setCompatibility).toHaveBeenNthCalledWith(
+        1,
+        'store-1',
+        expect.any(String),
+        compatibility,
+      );
+      expect(inventoryApi.setCompatibility).toHaveBeenNthCalledWith(
+        2,
+        'store-1',
+        expect.any(String),
+        coreCompatibility,
+      );
+      expect(
+        compatibilityReconciler.refreshPublishedOffer,
+      ).toHaveBeenLastCalledWith(
+        'store-1',
+        'offer-123',
+        'SKU-001',
+        coreCompatibility,
+      );
     });
 
     it('handles offer-already-exists (25002) by updating existing offer', async () => {
@@ -748,6 +1527,44 @@ describe('EbayPublishService', () => {
         expect.any(Object),
       );
       expect(results[0].success).toBe(true);
+    });
+
+    // The purge-and-recreate 25713 recovery was superseded on 2026-09-30
+    // (CHANGELOG): recovery now runs only on the mapped-channel revise path
+    // after eBay confirms the listing ended, and never deletes the Inventory
+    // item. A fresh publish must fail closed instead.
+    it('fails closed without purging inventory when a fresh offer is reported unavailable', async () => {
+      storeRepo.findOneBy = jest.fn().mockResolvedValue({
+        id: 'store-1',
+        storeName: 'My Store',
+        config: { marketplace: 'EBAY_US', locationKey: 'default-loc' },
+        locationKey: 'default-loc',
+        fulfillmentPolicyId: 'fp-1',
+        paymentPolicyId: 'pp-1',
+        returnPolicyId: 'rp-1',
+      });
+      connectedAccountRepo.findOne = jest.fn().mockResolvedValue(null);
+      listingRepo.findOne = jest.fn().mockResolvedValue(null);
+      inventoryApi.publishOffer.mockRejectedValueOnce(
+        Object.assign(new Error('This Offer is not available.'), {
+          response: {
+            data: {
+              errors: [
+                { errorId: 25713, message: 'This Offer is not available.' },
+              ],
+            },
+          },
+        }),
+      );
+
+      const results = await svc.publish(validRequest());
+
+      expect(results[0].success).toBe(false);
+      expect(results[0].error).toContain('This Offer is not available');
+      expect(inventoryApi.deleteItem).not.toHaveBeenCalled();
+      expect(inventoryApi.deleteOffer).not.toHaveBeenCalled();
+      expect(inventoryApi.createOffer).toHaveBeenCalledTimes(1);
+      expect(inventoryApi.publishOffer).toHaveBeenCalledTimes(1);
     });
 
     it('processes multiple stores', async () => {
@@ -796,6 +1613,180 @@ describe('EbayPublishService', () => {
       expect(req.storeIds).toEqual(['store-1']);
       expect(req.condition).toBe('NEW'); // placeholder
       expect(req.price).toBe(0);
+    });
+  });
+
+  describe('Trading API selection', () => {
+    it('publishes the verified Fashion warehouse address to Trading', async () => {
+      (svc as any).config = mockConfig();
+      storeRepo.findOneBy = jest.fn().mockResolvedValue({
+        id: 'store-1',
+        storeName: 'Fashion Store',
+        config: { marketplace: 'EBAY_US' },
+        verticalConfig: { enabledVerticals: ['fashion'] },
+        locationKey: 'AE_Dubai',
+        fulfillmentPolicyId: 'fp-1',
+        paymentPolicyId: 'pp-1',
+        returnPolicyId: 'rp-1',
+      });
+      (inventoryApi as any).getLocation = jest.fn().mockResolvedValue({
+        merchantLocationKey: 'US_Dallas_75234',
+        merchantLocationStatus: 'ENABLED',
+        name: 'Prime Wardrobe warehouse',
+        location: {
+          address: {
+            city: 'Dallas',
+            stateOrProvince: 'TX',
+            postalCode: '75234',
+            country: 'US',
+          },
+        },
+      });
+
+      const [result] = await svc.publish(
+        validRequest({ merchantLocationKey: 'US_Dallas_75234' }),
+      );
+
+      expect(result.success).toBe(true);
+      expect(tradingApi.addFixedPriceItem).toHaveBeenCalledWith(
+        'store-1',
+        expect.objectContaining({
+          location: 'Dallas, TX',
+          postalCode: '75234',
+          country: 'US',
+        }),
+        'EBAY_US',
+      );
+    });
+
+    it('defaults new listings to Trading API when no mode is configured', () => {
+      (svc as any).config = mockConfig();
+      expect(
+        (svc as any).shouldUseTradingApi(
+          validRequest({ aspects: { Brand: ['TRW'] } }),
+        ),
+      ).toBe(true);
+    });
+
+    it('routes FEBEST by brand even when the global mode is inventory', () => {
+      expect(
+        (svc as any).shouldUseTradingApi(
+          validRequest({ aspects: { Brand: ['FEBEST'] } }),
+        ),
+      ).toBe(true);
+      expect(
+        (svc as any).shouldUseTradingApi(
+          validRequest({ aspects: { Brand: ['TRW'] } }),
+        ),
+      ).toBe(false);
+    });
+
+    it('accepts the Trading API revise response without a timing-sensitive GetItem readback', async () => {
+      const store = { id: 'store-1', storeName: 'Test Store' } as any;
+      const channel = {
+        listingId: 'listing-legacy-123',
+        internalSku: 'OLD-SKU',
+        channelPrice: '1.00',
+        channelQuantity: 1,
+        listingStatus: 'published',
+        lastErrorCode: 'previous-error',
+        lastErrorMessage: 'previous failure',
+      } as any;
+      const req = validRequest({ currency: 'USD' });
+
+      const result = await (svc as any).reviseExistingTradingListing(
+        store,
+        'store-1',
+        req,
+        null,
+        'EBAY_MOTORS_US',
+        channel,
+      );
+
+      expect(tradingApi.reviseFixedPriceItem).toHaveBeenCalledWith(
+        'store-1',
+        'listing-legacy-123',
+        expect.objectContaining({ title: req.title, quantity: req.quantity }),
+        'EBAY_MOTORS_US',
+      );
+      expect(tradingApi.getItemDetails).not.toHaveBeenCalled();
+      expect(channelRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          internalSku: req.sku,
+          listingStatus: 'published',
+          lastErrorCode: null,
+          lastErrorMessage: null,
+        }),
+      );
+      expect(result).toMatchObject({
+        success: true,
+        listingId: 'listing-legacy-123',
+        effectiveSku: req.sku,
+      });
+    });
+
+    it('re-lists an ended legacy listing on error 291 and stores its new item ID', async () => {
+      tradingApi.reviseFixedPriceItem.mockRejectedValueOnce(
+        new Error(
+          'ReviseFixedPriceItem failed (291): You are not allowed to revise ended listings.',
+        ),
+      );
+      const store = { id: 'store-1', storeName: 'Test Store' } as any;
+      const channel = {
+        listingId: 'listing-ended-123',
+        listingUrl: 'https://www.ebay.com/itm/listing-ended-123',
+        internalSku: 'OLD-SKU',
+        channelPrice: '1.00',
+        channelQuantity: 1,
+        listingStatus: 'published',
+      } as any;
+      const req = validRequest({ currency: 'USD' });
+
+      const result = await (svc as any).reviseExistingTradingListing(
+        store,
+        'store-1',
+        req,
+        null,
+        'EBAY_MOTORS_US',
+        channel,
+      );
+
+      expect(tradingApi.relistFixedPriceItem).toHaveBeenCalledWith(
+        'store-1',
+        'listing-ended-123',
+        expect.objectContaining({ title: req.title, quantity: req.quantity }),
+        'EBAY_MOTORS_US',
+      );
+      expect(channelRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          listingId: 'trading-relisted-789',
+          listingUrl: 'https://www.ebay.com/itm/trading-relisted-789',
+          listingStatus: 'published',
+        }),
+      );
+      expect(result).toMatchObject({
+        success: true,
+        listingId: 'trading-relisted-789',
+        effectiveSku: req.sku,
+      });
+    });
+
+    it('does not re-list when a Trading API revise fails with another error', async () => {
+      tradingApi.reviseFixedPriceItem.mockRejectedValueOnce(
+        new Error('ReviseFixedPriceItem failed (240): policy restriction.'),
+      );
+
+      const result = await (svc as any).reviseExistingTradingListing(
+        { id: 'store-1', storeName: 'Test Store' },
+        'store-1',
+        validRequest({ currency: 'USD' }),
+        null,
+        'EBAY_MOTORS_US',
+        { listingId: 'listing-legacy-123' },
+      );
+
+      expect(tradingApi.relistFixedPriceItem).not.toHaveBeenCalled();
+      expect(result).toMatchObject({ success: false });
     });
   });
 
@@ -1004,7 +1995,68 @@ describe('EbayPublishService', () => {
       expect(mpRepo.save).toHaveBeenCalledWith(mpRow);
     });
 
-    it('blocks a missing named profile instead of using the default', async () => {
+    it('normalizes a persisted USA default before publishing', async () => {
+      const mpRow = {
+        enabled: true,
+        defaultInventoryLocationKey: 'USA',
+        defaultFulfillmentPolicyId: '10000000001',
+        defaultPaymentPolicyId: '10000000002',
+        defaultReturnPolicyId: '10000000003',
+      };
+      mpRepo.findOne = jest.fn().mockResolvedValue(mpRow);
+      inventoryApi.ensureMerchantLocation.mockResolvedValue('AE_Dubai');
+
+      const result = await (svc as any).enrichPoliciesFromMarketplace(
+        account,
+        store,
+        validRequest({
+          merchantLocationKey: 'USA',
+          fulfillmentPolicyId: '10000000001',
+          paymentPolicyId: '10000000002',
+          returnPolicyId: '10000000003',
+        }),
+      );
+
+      // ensureMerchantLocation owns legacy-key normalization (USA/default →
+      // AE_Dubai, UAE-only verification); see ebay-inventory-location.util.spec.
+      expect(inventoryApi.ensureMerchantLocation).toHaveBeenCalledWith(
+        'store-1',
+        'USA',
+      );
+      expect(result.merchantLocationKey).toBe('AE_Dubai');
+      expect(mpRow.defaultInventoryLocationKey).toBe('AE_Dubai');
+      expect(mpRepo.save).toHaveBeenCalledWith(mpRow);
+    });
+
+    const namedPoliciesWithoutShipping = [
+      {
+        policyType: 'payment',
+        name: 'Managed Payments',
+        ebayPolicyId: '20000000002',
+        isDefault: false,
+        rawPayload: {},
+      },
+      {
+        policyType: 'return',
+        name: 'Returns 30 Days',
+        ebayPolicyId: '20000000003',
+        isDefault: false,
+        rawPayload: {},
+      },
+    ];
+    const missingShippingRequest = () =>
+      validRequest({
+        requestedFulfillmentPolicyName: 'Missing Shipping Policy',
+        requestedPaymentPolicyName: 'Managed Payments',
+        requestedReturnPolicyName: 'Returns 30 Days',
+        merchantLocationKey: 'loc-1',
+      });
+
+    // Since 2026-08-08 (e7de0fed) a named profile missing on the target store
+    // falls back to that marketplace's default policy, so cross-store
+    // publishes (e.g. US listing → EBAY_DE account) use the target's own
+    // policies instead of an ID from another account.
+    it('falls back to the marketplace default when a named profile is missing', async () => {
       mpRepo.findOne = jest.fn().mockResolvedValue({
         enabled: true,
         defaultInventoryLocationKey: 'loc-1',
@@ -1012,33 +2064,35 @@ describe('EbayPublishService', () => {
         defaultPaymentPolicyId: '10000000002',
         defaultReturnPolicyId: '10000000003',
       });
-      policyRepo.find = jest.fn().mockResolvedValue([
-        {
-          policyType: 'payment',
-          name: 'Managed Payments',
-          ebayPolicyId: '20000000002',
-          isDefault: false,
-          rawPayload: {},
-        },
-        {
-          policyType: 'return',
-          name: 'Returns 30 Days',
-          ebayPolicyId: '20000000003',
-          isDefault: false,
-          rawPayload: {},
-        },
-      ]);
+      policyRepo.find = jest
+        .fn()
+        .mockResolvedValue(namedPoliciesWithoutShipping);
+
+      const result = await (svc as any).enrichPoliciesFromMarketplace(
+        account,
+        store,
+        missingShippingRequest(),
+      );
+
+      expect(result.fulfillmentPolicyId).toBe('10000000001');
+      expect(result.paymentPolicyId).toBe('20000000002');
+      expect(result.returnPolicyId).toBe('20000000003');
+    });
+
+    it('blocks a missing named profile when no default policy is set', async () => {
+      mpRepo.findOne = jest.fn().mockResolvedValue({
+        enabled: true,
+        defaultInventoryLocationKey: 'loc-1',
+      });
+      policyRepo.find = jest
+        .fn()
+        .mockResolvedValue(namedPoliciesWithoutShipping);
 
       await expect(
         (svc as any).enrichPoliciesFromMarketplace(
           account,
           store,
-          validRequest({
-            requestedFulfillmentPolicyName: 'Missing Shipping Policy',
-            requestedPaymentPolicyName: 'Managed Payments',
-            requestedReturnPolicyName: 'Returns 30 Days',
-            merchantLocationKey: 'loc-1',
-          }),
+          missingShippingRequest(),
         ),
       ).rejects.toThrow(/Missing Shipping Policy/);
     });

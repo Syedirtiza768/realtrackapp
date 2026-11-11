@@ -2,7 +2,7 @@
 
 # RBAC and Security
 
-> Authentication, authorization, and security model for RealTrackApp.
+> Authentication, authorization, and security model for Omni Core.
 > For implementation details, see `backend/src/auth/` and `backend/src/rbac/`.
 
 ---
@@ -289,8 +289,8 @@ Permissions returned from `GET /api/auth/me`:
 defaultCorsOrigins = [
   'http://localhost:3911',    // Vite dev
   'http://localhost:8050',    // Docker frontend
-  'https://mhn.realtrackapp.com',
-  'http://mhn.realtrackapp.com',
+  'https://app.omnicoreholding.com',
+  'http://app.omnicoreholding.com',
 ];
 ```
 

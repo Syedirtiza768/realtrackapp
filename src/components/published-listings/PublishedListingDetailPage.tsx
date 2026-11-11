@@ -6,6 +6,7 @@ import {
   Loader2,
   RefreshCw,
   AlertTriangle,
+  Info,
   Store,
   Package,
   DollarSign,
@@ -121,7 +122,7 @@ export default function PublishedListingDetailPage() {
 
   return (
     <div className="space-y-6 p-6 max-w-6xl mx-auto">
-      <Link to="/published-listings" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-emerald-500">
+      <Link to="/auto-parts/published-listings" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-emerald-500">
         <ArrowLeft size={16} /> Back to Published Listings
       </Link>
 
@@ -203,6 +204,23 @@ export default function PublishedListingDetailPage() {
                 ))}
               </CardContent>
             </Card>
+          )}
+
+          {listing.offerId && (
+            <div
+              role="note"
+              className="rounded-lg border border-blue-500/30 bg-blue-500/5 px-4 py-3 text-sm text-slate-600 dark:text-slate-300"
+            >
+              <div className="flex items-start gap-2">
+                <Info size={16} className="mt-0.5 shrink-0 text-blue-500" />
+                <p>
+                  This listing is managed through the eBay Inventory API. eBay
+                  Seller Hub cannot edit Inventory API listings, so use the
+                  Quick revise form below to change the price, quantity, title,
+                  or other supported fields.
+                </p>
+              </div>
+            </div>
           )}
 
           {canManage && (

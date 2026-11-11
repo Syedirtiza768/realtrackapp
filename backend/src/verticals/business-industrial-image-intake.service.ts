@@ -23,7 +23,10 @@ import { OpenAiService } from '../common/openai/openai.service.js';
 import { AiRunLogService } from '../common/openai/ai-run-log.service.js';
 import { ModelRouter } from '../common/openai/model-router.js';
 import { EbayTaxonomyApiService } from '../channels/ebay/ebay-taxonomy-api.service.js';
+import { EbayBrowseApiService } from '../channels/ebay/ebay-browse-api.service.js';
+import { PricingAnalysisPipeline } from '../common/openai/pipelines/pricing-analysis.pipeline.js';
 import { BusinessIndustrialService } from './business-industrial.service.js';
+import { CatalogProduct } from '../catalog-import/entities/catalog-product.entity.js';
 import {
   BUSINESS_INDUSTRIAL_CATEGORY_FAMILIES,
   validateBusinessIndustrialAttributes,
@@ -43,16 +46,24 @@ import {
   parseInstanceFolderName,
   partFolderFromRelativePath,
   safeIntakePath,
+  normalizeDetectedBusinessIndustrialAttributes,
+  applyBusinessIndustrialFulfillmentDefaults,
+  mapWithConcurrency,
 } from './business-industrial-image-intake.util.js';
 
 const MAX_BATCH_FILES = 50;
 const MAX_FILE_BYTES = 25 * 1024 * 1024;
 const MAX_JOB_IMAGES = 5000;
 const MAX_VISION_IMAGES = 12;
-const MAX_DRIVE_ITEMS = 200;
-const MAX_DRIVE_IMAGES = MAX_DRIVE_ITEMS * MAX_VISION_IMAGES;
+const DRIVE_FOLDER_CONCURRENCY = 2;
+const DRIVE_IMAGE_CONCURRENCY = 4;
+const GROUP_PROCESSING_CONCURRENCY = 2;
+const DRIVE_DOWNLOAD_ATTEMPTS = 3;
+const STALE_GROUP_PROCESSING_MS = 15 * 60 * 1000;
+const LUNA_MODEL = 'openai/gpt-5.6-luna-20260709';
 const PROMPT_VERSION = 'business-industrial-image-intake-v1';
 const ENRICHMENT_PROMPT_VERSION = 'bi-listing-enrichment-v1';
+const PRICING_PROMPT_VERSION = 'bi-pricing-v1';
 const DRIVE_FOLDER_MIME = 'application/vnd.google-apps.folder';
 const DRIVE_API_ROOT = 'https://www.googleapis.com/drive/v3/files';
 type JsonRecord = Record<string, unknown>;
@@ -64,6 +75,22 @@ type DriveFile = {
   webContentLink?: string;
 };
 type DriveImage = DriveFile & { relativePath: string };
+type MarketSummary = {
+  totalListings: number;
+  avgPrice: number | null;
+  medianPrice: number | null;
+  minPrice: number | null;
+  maxPrice: number | null;
+};
+type OptimalPriceResult = {
+  price: number | null;
+  source: 'market_ai' | 'vision_estimate' | 'unavailable';
+  confidence: number | null;
+  competitorCount: number;
+  marketSummary: MarketSummary;
+  reasoning: string | null;
+  warning?: string;
+};
 const CATEGORY_FAMILY_IDS = new Set<string>(
   BUSINESS_INDUSTRIAL_CATEGORY_FAMILIES.map((family) => family.id),
 );
@@ -95,6 +122,8 @@ export class BusinessIndustrialImageIntakeService {
     private readonly modelRouter: ModelRouter,
     private readonly taxonomy: EbayTaxonomyApiService,
     private readonly businessIndustrial: BusinessIndustrialService,
+    private readonly ebayBrowse: EbayBrowseApiService,
+    private readonly pricingPipeline: PricingAnalysisPipeline,
     @InjectQueue('business-industrial-image-intake')
     private readonly intakeQueue: Queue,
     @InjectRepository(BusinessIndustrialImageIntakeJob)
@@ -107,6 +136,8 @@ export class BusinessIndustrialImageIntakeService {
     private readonly userRepo: Repository<User>,
     @InjectRepository(ListingRecord)
     private readonly listingRepo: Repository<ListingRecord>,
+    @InjectRepository(CatalogProduct)
+    private readonly catalogProductRepo: Repository<CatalogProduct>,
   ) {}
 
   async createJob(
@@ -174,7 +205,7 @@ export class BusinessIndustrialImageIntakeService {
         'import-drive',
         {
           jobId: job.id,
-          maxItems: dto.maxItems ?? 200,
+          maxItems: dto.maxItems,
           autoCreateDrafts: dto.autoCreateDrafts ?? true,
           skipFolderNames: dto.skipFolderNames ?? [],
         },
@@ -208,15 +239,126 @@ export class BusinessIndustrialImageIntakeService {
     });
     return {
       jobs: await Promise.all(
-        jobs.map(async (job) => this.jobSummaryWithCost(job)),
+        jobs.map((job) => this.jobSummary(job)),
       ),
     };
   }
 
   async getJob(user: User, id: string, organizationId?: string) {
-    return this.jobSummaryWithCost(
-      await this.findJob(user, id, organizationId),
+    return this.jobSummary(await this.findJob(user, id, organizationId));
+  }
+
+  /**
+   * Reprice existing B&I catalog products with live eBay Browse evidence and
+   * the shared AI pricing pipeline. Products without defensible evidence are
+   * left unchanged and returned as skipped instead of receiving a fabricated
+   * zero or arbitrary price.
+   */
+  async refreshBusinessIndustrialPrices(
+    user: User,
+    organizationId?: string,
+    limit = 200,
+    onProgress?: (progress: {
+      processed: number;
+      total: number;
+      updated: number;
+      skipped: number;
+      etaSeconds: number | null;
+    }) => void,
+    onlyMissing = false,
+  ) {
+    await this.businessIndustrial.assertEnabled();
+    const org = await this.userOrgs.resolveOrganizationId(
+      user.id,
+      organizationId,
     );
+    const productQuery = this.catalogProductRepo
+      .createQueryBuilder('product')
+      .where('product.organizationId = :organizationId', {
+        organizationId: org.organizationId,
+      })
+      .andWhere('product.vertical = :vertical', {
+        vertical: 'business_industrial',
+      })
+      .orderBy('product.updatedAt', 'ASC')
+      .take(Math.min(Math.max(Number(limit) || 200, 1), 200));
+    if (onlyMissing)
+      productQuery.andWhere('(product.price IS NULL OR product.price <= 0)');
+    const products = await productQuery.getMany();
+    const results: Array<Record<string, unknown>> = [];
+    let updated = 0;
+    const startedAt = Date.now();
+    for (const product of products) {
+      const pricing = await this.getOptimalPrice({
+        title: product.title,
+        partNumber: product.mpn ?? product.oemPartNumber,
+        brand: product.brand,
+        condition: product.conditionLabel,
+        fallbackPrice: null,
+        model: LUNA_MODEL,
+        sku: product.sku,
+        partType: product.partType ?? 'business_industrial',
+      });
+      if (pricing.price === null) {
+        results.push({
+          sku: product.sku,
+          catalogProductId: product.id,
+          status: 'skipped',
+          currentPrice: product.price,
+          pricing,
+        });
+        const processed = results.length;
+        const rate = processed / Math.max((Date.now() - startedAt) / 1000, 1);
+        onProgress?.({
+          processed,
+          total: products.length,
+          updated,
+          skipped: processed - updated,
+          etaSeconds:
+            rate > 0
+              ? Math.max(
+                  0,
+                  Math.ceil((products.length - processed) / rate),
+                )
+              : null,
+        });
+        continue;
+      }
+      product.price = pricing.price;
+      product.optimizationPayload = {
+        ...asRecord(product.optimizationPayload),
+        pricing,
+      };
+      await this.catalogProductRepo.save(product);
+      await this.syncInventoryProjectionFromCatalogProduct(product);
+      updated++;
+      results.push({
+        sku: product.sku,
+        catalogProductId: product.id,
+        status: 'updated',
+        price: pricing.price,
+        pricing,
+      });
+      const processed = results.length;
+      const rate = processed / Math.max((Date.now() - startedAt) / 1000, 1);
+      onProgress?.({
+        processed,
+        total: products.length,
+        updated,
+        skipped: processed - updated,
+        etaSeconds:
+          rate > 0
+            ? Math.max(0, Math.ceil((products.length - processed) / rate))
+            : null,
+      });
+    }
+    return {
+      organizationId: org.organizationId,
+      processed: products.length,
+      updated,
+      skipped: products.length - updated,
+      results,
+    };
   }
 
   async uploadBatch(
@@ -290,7 +432,7 @@ export class BusinessIndustrialImageIntakeService {
         );
         const parsedFolder = parseInstanceFolderName(sourceFolderName);
         const basePartNormalized = normalizeImageIntakePartName(
-          parsedFolder.baseFolderName,
+          parsedFolder.rawFolderName,
         );
         if (!basePartNormalized || basePartNormalized === 'unassigned')
           throw new Error('The image is not inside a part folder');
@@ -302,7 +444,7 @@ export class BusinessIndustrialImageIntakeService {
             id: randomUUID(),
             organizationId: job.organizationId,
             jobId: job.id,
-            basePartName: parsedFolder.baseFolderName,
+            basePartName: parsedFolder.rawFolderName,
             basePartNormalized,
             rawFolderNames: [],
             instanceSuffixes: [],
@@ -318,15 +460,10 @@ export class BusinessIndustrialImageIntakeService {
             'This part group already created a draft; add images to the draft instead',
           );
         const rawFolders = new Set(group.rawFolderNames ?? []);
-        const suffixes = new Set(group.instanceSuffixes ?? []);
-        if (!rawFolders.has(parsedFolder.rawFolderName)) {
-          rawFolders.add(parsedFolder.rawFolderName);
-          if (parsedFolder.instanceSuffix)
-            suffixes.add(parsedFolder.instanceSuffix);
-          group.rawFolderNames = [...rawFolders];
-          group.instanceSuffixes = [...suffixes];
-          group.instanceCount = rawFolders.size;
-        }
+        rawFolders.add(parsedFolder.rawFolderName);
+        group.rawFolderNames = [...rawFolders];
+        group.instanceSuffixes = [];
+        group.instanceCount = 1;
         group.errorMessage = null;
         await this.groupRepo.save(group);
         const canonical = await this.imageProcessor.convertBufferToWebp(
@@ -381,7 +518,11 @@ export class BusinessIndustrialImageIntakeService {
 
   async startJob(user: User, id: string, organizationId?: string) {
     const job = await this.findJob(user, id, organizationId);
-    if (job.status === 'processing') return this.jobSummary(job);
+    const staleJob =
+      job.status === 'processing' &&
+      this.isStaleProcessingTimestamp(job.updatedAt ?? job.startedAt);
+    if (job.status === 'processing' && !staleJob)
+      return this.jobSummary(job);
     const groups = await this.groupRepo.find({
       where: { jobId: job.id, organizationId: job.organizationId },
     });
@@ -389,10 +530,9 @@ export class BusinessIndustrialImageIntakeService {
       throw new BadRequestException(
         'Upload at least one part folder before starting detection',
       );
-    const retryable = groups.filter(
-      (group) =>
-        group.detectionStatus === 'pending' ||
-        group.detectionStatus === 'failed',
+    await this.resetStaleProcessingGroups(groups);
+    const retryable = groups.filter((group) =>
+      ['pending', 'failed'].includes(group.detectionStatus),
     );
     if (!retryable.length) {
       if (job.status !== 'completed') {
@@ -479,6 +619,10 @@ export class BusinessIndustrialImageIntakeService {
       );
     if (group.catalogProductId)
       return { catalogProductId: group.catalogProductId, created: false };
+    const job = await this.jobRepo.findOne({
+      where: { id: group.jobId, organizationId: org.organizationId },
+    });
+    if (!job) throw new NotFoundException('Business & Industrial intake run not found');
     const detail = asRecord(group.detection);
     const candidate = asRecord(detail.candidate);
     const category = asRecord(detail.category);
@@ -490,29 +634,49 @@ export class BusinessIndustrialImageIntakeService {
         'Choose a deliberate Business & Industrial category family before creating a draft',
       );
     const candidateAttributes = asRecord(candidate.verticalAttributes);
+    const enrichedItemSpecifics = asRecord(enrichment.itemSpecifics);
     const overrideAttributes = asRecord(dto.verticalAttributes);
-    const attributes = {
-      ...candidateAttributes,
-      ...overrideAttributes,
-      categoryFamily,
-      ...((dto.brand ?? stringValue(candidate.brand))
-        ? { manufacturer: dto.brand ?? stringValue(candidate.brand) }
-        : {}),
-      ...((dto.model ?? stringValue(candidate.model))
-        ? { model: dto.model ?? stringValue(candidate.model) }
-        : {}),
-      ...((dto.mpn ?? stringValue(candidate.mpn))
-        ? { mpn: dto.mpn ?? stringValue(candidate.mpn) }
-        : {}),
-      inventoryMode:
-        overrideAttributes.inventoryMode ??
-        candidateAttributes.inventoryMode ??
-        'single',
-      shippingMode:
-        overrideAttributes.shippingMode ??
-        candidateAttributes.shippingMode ??
-        'parcel',
-    };
+    const resolvedMpn =
+      dto.mpn?.trim() ||
+      stringValue(candidate.mpn) ||
+      stringValue(candidate.model) ||
+      'Does Not Apply';
+    const attributes = applyBusinessIndustrialFulfillmentDefaults(
+      normalizeDetectedBusinessIndustrialAttributes({
+        ...candidateAttributes,
+        ...enrichedItemSpecifics,
+        ...overrideAttributes,
+        categoryFamily,
+        ...((dto.brand ?? stringValue(candidate.brand))
+          ? { manufacturer: dto.brand ?? stringValue(candidate.brand) }
+          : {}),
+        ...((dto.model ?? stringValue(candidate.model))
+          ? { model: dto.model ?? stringValue(candidate.model) }
+          : {}),
+        ...(stringValue(candidate.partType)
+          ? { partType: stringValue(candidate.partType) }
+          : {}),
+        mpn: resolvedMpn,
+        inventoryMode:
+          overrideAttributes.inventoryMode ??
+          candidateAttributes.inventoryMode ??
+          'single',
+        shippingMode:
+          overrideAttributes.shippingMode ??
+          candidateAttributes.shippingMode ??
+          'parcel',
+      }),
+      {
+        dispatchLocation: this.config.get<string>(
+          'BUSINESS_INDUSTRIAL_DEFAULT_DISPATCH_LOCATION',
+          'United States',
+        ),
+        shippingCoverage: this.config.get<string>(
+          'BUSINESS_INDUSTRIAL_DEFAULT_SHIPPING_COVERAGE',
+          'United States',
+        ),
+      },
+    );
     const validation = validateBusinessIndustrialAttributes(attributes);
     if (validation.errors.length)
       throw new BadRequestException({
@@ -526,11 +690,30 @@ export class BusinessIndustrialImageIntakeService {
         order: { createdAt: 'ASC' },
       })
     ).map((asset) => asset.cdnUrl);
+    const resolvedCategoryId =
+      dto.categoryId ?? stringValue(category.categoryId) ?? undefined;
+    const optimalPrice =
+      dto.price ??
+      numberValue(enrichment.optimalPrice) ??
+      numberValue(candidate.priceEstimate) ??
+      (await this.catalogMedianPrice(
+        org.organizationId,
+        resolvedCategoryId ?? null,
+      )) ??
+      undefined;
+    const sourceMarker = {
+      jobId: job.id,
+      groupId: group.id,
+      sourceReferenceUrl: job.sourceReferenceUrl,
+      sourceFolderName: group.basePartName,
+    };
+    const intakeSku = await this.resolveCatalogSku(
+      this.catalogSkuFromFolderName(group.basePartName),
+      group.organizationId,
+      sourceMarker,
+    );
     const draft: CreateBusinessIndustrialDraftDto = {
-      sku: (
-        dto.sku?.trim() ||
-        `BI-${group.basePartNormalized.slice(0, 96)}-${group.id.slice(0, 8)}`
-      ).slice(0, 160),
+      sku: (dto.sku?.trim() || intakeSku).slice(0, 160),
       title: (
         dto.title?.trim() ||
         stringValue(enrichment.optimizedTitle) ||
@@ -544,17 +727,19 @@ export class BusinessIndustrialImageIntakeService {
         undefined,
       brand: dto.brand ?? stringValue(candidate.brand) ?? undefined,
       model: dto.model ?? stringValue(candidate.model) ?? undefined,
-      mpn: dto.mpn ?? stringValue(candidate.mpn) ?? undefined,
-      conditionId: dto.conditionId?.trim() || undefined,
+      mpn: resolvedMpn,
+      conditionId:
+        dto.conditionId?.trim() ||
+        conditionIdForLabel(stringValue(candidate.conditionLabel)) ||
+        undefined,
       conditionLabel:
         dto.conditionLabel ??
         stringValue(candidate.conditionLabel) ??
         undefined,
-      price: dto.price ?? numberValue(candidate.priceEstimate) ?? undefined,
+      price: optimalPrice,
       quantity: dto.quantity ?? group.instanceCount,
       imageUrls,
-      categoryId:
-        dto.categoryId ?? stringValue(category.categoryId) ?? undefined,
+      categoryId: resolvedCategoryId,
       categoryName:
         dto.categoryName ?? stringValue(category.categoryName) ?? undefined,
       verticalAttributes: attributes,
@@ -566,11 +751,74 @@ export class BusinessIndustrialImageIntakeService {
         stringValue(enrichment.optimizedDescription) ??
         stringValue(candidate.description) ??
         undefined,
-      optimizationPayload: enrichment,
+      optimizationPayload: {
+        ...enrichment,
+        __businessIndustrialIntake: sourceMarker,
+      },
       seoScore: scoreValue(enrichment.seoScore),
       readinessScore: scoreValue(enrichment.readinessScore),
     };
-    const listing = await this.businessIndustrial.createListing(
+    const existing = await this.findExistingCatalogProduct(
+      group.organizationId,
+      group.basePartNormalized,
+      job.sourceReferenceUrl,
+      group.basePartName,
+    );
+    if (existing) {
+      // Re-intake is authoritative for the exact source-folder SKU. Replace
+      // listing content and images in place, while retaining the product ID,
+      // marketplace linkage, and seller policies.
+      existing.sku = draft.sku;
+      existing.title = draft.title;
+      existing.description = draft.description ?? null;
+      existing.brand = draft.brand ?? null;
+      existing.mpn = draft.mpn ?? null;
+      existing.partType = stringValue(attributes.partType);
+      existing.features = jsonText(attributes.features);
+      existing.oemPartNumber = stringValue(attributes.oemPartNumber);
+      existing.conditionId = draft.conditionId ?? null;
+      existing.conditionLabel = draft.conditionLabel ?? null;
+      existing.price = draft.price ?? existing.price;
+      existing.quantity = draft.quantity ?? 1;
+      existing.categoryId = draft.categoryId ?? null;
+      existing.categoryName = draft.categoryName ?? null;
+      existing.imageUrls = imageUrls;
+      existing.imagesVariantsGeneratedAt = null;
+      existing.verticalAttributes = attributes as CatalogProduct['verticalAttributes'];
+      existing.optimizedTitle = draft.optimizedTitle ?? null;
+      existing.optimizedDescription = draft.optimizedDescription ?? null;
+      existing.optimizationPayload = draft.optimizationPayload ?? null;
+      existing.optimizationStatus = 'completed';
+      existing.optimizationVersion = (existing.optimizationVersion ?? 0) + 1;
+      existing.optimizedAt = new Date();
+      existing.optimizationErrors = [];
+      existing.optimizationWarnings = stringArray(enrichment.warnings).map(
+        (message) => ({ message }),
+      );
+      existing.seoScore =
+        draft.seoScore === undefined ? null : draft.seoScore / 100;
+      existing.readinessScore =
+        draft.readinessScore === undefined ? null : draft.readinessScore / 100;
+      existing.fitmentStatus = 'not_applicable';
+      existing.ebayValidationStatus = null;
+      existing.manualReview = false;
+      existing.verticalValidationStatus =
+        existing.verticalValidationStatus === 'approved'
+          ? 'approved'
+          : 'needs_review';
+      await this.catalogProductRepo.save(existing);
+      await this.syncInventoryProjectionFromCatalogProduct(existing);
+      await this.ensureInventoryProjection(group.jobId, group, existing);
+      group.catalogProductId = existing.id;
+      group.detectionStatus = 'draft_created';
+      group.errorMessage = null;
+      await this.groupRepo.save(group);
+      return {
+        catalogProductId: existing.id,
+        created: false,
+        overwritten: true,
+      };
+    }    const listing = await this.businessIndustrial.createListing(
       user,
       draft,
       org.organizationId,
@@ -675,7 +923,7 @@ export class BusinessIndustrialImageIntakeService {
 
   async processDriveJob(
     jobId: string,
-    maxItems: number,
+    maxItems: number | undefined,
     autoCreateDrafts: boolean,
     skipFolderNames: string[] = [],
   ): Promise<void> {
@@ -687,71 +935,104 @@ export class BusinessIndustrialImageIntakeService {
       const directFolders = directChildren
         .filter((file) => file.mimeType === DRIVE_FOLDER_MIME)
         .sort((a, b) => this.naturalCompare(a.name, b.name));
-      const exactBniFolders = directFolders.filter((file) =>
-        /^BNI[-_ ]\d+$/i.test(file.name.trim()),
-      );
-      const selectedItemLimit = Math.min(
-        Math.max(maxItems, 1),
-        MAX_DRIVE_ITEMS,
-      );
+
       const excludedFolderNames = new Set(
         skipFolderNames.map(normalizeDriveFolderName),
       );
-      const candidates = (
-        exactBniFolders.length >= selectedItemLimit
-          ? exactBniFolders
-          : directFolders
-      ).filter(
+      // Every direct folder is a separate listing source. A decimal suffix is
+      // part of the source identity, not a grouping or quantity marker.
+      const candidates = directFolders.filter(
         (folder) =>
           !excludedFolderNames.has(normalizeDriveFolderName(folder.name)),
       );
+      const selectedItemLimit = maxItems
+        ? Math.max(maxItems, 1)
+        : candidates.length;
       let selectedFolders = 0;
-      let imported = 0;
-      for (const folder of candidates) {
-        if (selectedFolders >= selectedItemLimit) break;
-        const images = await this.collectDriveImages(
-          folder.id,
-          folder.name,
-          job.sourceRootName,
-        );
-        if (!images.length) continue;
-        selectedFolders++;
-        for (const image of images.slice(0, MAX_VISION_IMAGES)) {
-          if (imported >= MAX_DRIVE_IMAGES) break;
-          try {
-            const buffer = await this.downloadDriveImage(image);
-            await this.ingestImageBuffer(
-              job,
-              image.relativePath,
-              image.name,
-              image.mimeType,
-              buffer,
-            );
-            imported++;
-          } catch (error: unknown) {
-            this.logger.warn(
-              `Drive image ${image.name} skipped: ${error instanceof Error ? error.message : error}`,
-            );
+      let processWrite = Promise.resolve();
+      await mapWithConcurrency(
+        candidates,
+        DRIVE_FOLDER_CONCURRENCY,
+        async (folder) => {
+          const images = await this.collectDriveImages(
+            folder.id,
+            folder.name,
+            job.sourceRootName,
+          );
+          if (!images.length || selectedFolders >= selectedItemLimit) return;
+          selectedFolders += 1;
+          let ingestWrite = Promise.resolve();
+          const retained = await mapWithConcurrency(
+            images,
+            DRIVE_IMAGE_CONCURRENCY,
+            async (image) => {
+              const existing = await this.assetRepo.findOne({
+                where: { jobId: job.id, relativePath: image.relativePath },
+              });
+              if (existing)
+                return { image, error: null };
+              try {
+                const buffer = await this.downloadDriveImage(image);
+                const write = ingestWrite.then(() =>
+                  this.ingestImageBuffer(
+                    job,
+                    image.relativePath,
+                    image.name,
+                    image.mimeType,
+                    buffer,
+                  ),
+                );
+                ingestWrite = write.catch(() => undefined);
+                await write;
+                return { image, error: null };
+              } catch (error: unknown) {
+                return {
+                  image,
+                  error:
+                    error instanceof Error
+                      ? error.message
+                      : 'download or ingest failed',
+                };
+              }
+            },
+          );
+          await ingestWrite;
+          const failures = retained.filter((result) => result.error);
+          const group = await this.groupRepo.findOne({
+            where: {
+              jobId: job.id,
+              basePartNormalized: normalizeImageIntakePartName(folder.name),
+            },
+          });
+          if (failures.length) {
+            if (group) {
+              group.errorMessage =
+                failures.length +
+                ' image(s) could not be retained; retry this folder';
+              await this.groupRepo.save(group);
+            }
+            for (const failure of failures)
+              this.logger.warn(
+                `Drive image ${failure.image.name} failed: ${failure.error}`,
+              );
+            return;
           }
-        }
-      }
-      if (!selectedFolders || !imported)
+          if (!group)
+            throw new Error('Drive folder did not create an image group');
+          if (group.detectionStatus !== 'draft_created') {
+            processWrite = processWrite.then(() =>
+              this.processJob(job.id, autoCreateDrafts, false, [group.id]),
+            );
+            await processWrite;
+          }
+        },
+      );
+      await processWrite;
+      if (!selectedFolders)
         throw new Error(
           'No supported images were found in the selected public Google Drive folder',
         );
-      const groups = await this.groupRepo.find({
-        where: { jobId: job.id, organizationId: job.organizationId },
-      });
-      job.totalImages = await this.assetRepo.count({
-        where: { jobId: job.id, organizationId: job.organizationId },
-      });
-      job.totalFolders = groups.reduce(
-        (sum, group) => sum + (group.rawFolderNames?.length ?? 0),
-        0,
-      );
-      job.groupedParts = groups.length;
-      await this.jobRepo.save(job);
-      await this.processJob(job.id, autoCreateDrafts);
+      await this.processJob(job.id, autoCreateDrafts, true, []);
     } catch (error: unknown) {
       job.status = 'failed';
       job.errorMessage =
@@ -764,7 +1045,12 @@ export class BusinessIndustrialImageIntakeService {
     }
   }
 
-  async processJob(jobId: string, autoCreateDrafts = false): Promise<void> {
+  async processJob(
+    jobId: string,
+    autoCreateDrafts = false,
+    finalize = true,
+    onlyGroupIds?: readonly string[],
+  ): Promise<void> {
     const job = await this.jobRepo.findOne({ where: { id: jobId } });
     if (!job) return;
     const groups = await this.groupRepo.find({
@@ -778,13 +1064,28 @@ export class BusinessIndustrialImageIntakeService {
       await this.jobRepo.save(job);
       return;
     }
+    await this.resetStaleProcessingGroups(groups, onlyGroupIds);
     const retryable = groups.filter(
       (group) =>
         group.detectionStatus === 'pending' ||
         group.detectionStatus === 'failed',
     );
+    const scopedRetryable = retryable.filter(
+      (group) => !onlyGroupIds || onlyGroupIds.includes(group.id),
+    );
+    // Only groups that were already resolved count as preserved progress.
+    // Pending groups outside a per-folder call must not be reported as done.
     const preserved = groups.filter((group) => !retryable.includes(group));
     job.status = 'processing';
+    job.completedAt = null;
+    job.totalFolders = groups.reduce(
+      (sum, group) => sum + (group.rawFolderNames?.length ?? 0),
+      0,
+    );
+    job.totalImages = await this.assetRepo.count({
+      where: { jobId: job.id, organizationId: job.organizationId },
+    });
+    job.groupedParts = groups.length;
     job.processedFolders = preserved.reduce(
       (sum, group) => sum + (group.rawFolderNames?.length ?? 0),
       0,
@@ -800,13 +1101,14 @@ export class BusinessIndustrialImageIntakeService {
       autoCreateDrafts && job.createdByUserId
         ? await this.userRepo.findOne({ where: { id: job.createdByUserId } })
         : null;
-    for (const group of retryable) {
+    for (const group of scopedRetryable) {
       try {
         await this.detectGroup(job, group);
-        if (autoCreateDrafts && creator && group.detectionStatus !== 'failed') {
+        if (autoCreateDrafts && creator && ['detected', 'needs_review'].includes(group.detectionStatus)) {
           try {
             await this.applyGroup(creator, group.id, {}, job.organizationId);
           } catch (error: unknown) {
+            group.detectionStatus = 'failed';
             group.errorMessage =
               error instanceof Error
                 ? `Enrichment completed; draft creation needs review: ${error.message}`
@@ -830,6 +1132,18 @@ export class BusinessIndustrialImageIntakeService {
       });
       await this.jobRepo.save(job);
     }
+    if (!finalize) {
+      job.failedFolders = await this.groupRepo.count({
+        where: {
+          jobId: job.id,
+          organizationId: job.organizationId,
+          detectionStatus: 'failed',
+        },
+      });
+      job.errorMessage = null;
+      await this.jobRepo.save(job);
+      return;
+    }
     const failed = await this.groupRepo.count({
       where: {
         jobId: job.id,
@@ -837,11 +1151,27 @@ export class BusinessIndustrialImageIntakeService {
         detectionStatus: 'failed',
       },
     });
-    job.status =
-      failed === groups.length ? 'failed' : failed ? 'partial' : 'completed';
-    job.failedFolders = failed;
-    job.completedAt = new Date();
-    if (failed)
+   const unresolved =
+     autoCreateDrafts &&
+     groups.filter((group) => group.detectionStatus !== 'draft_created').length;
+    const pendingGroups = groups.filter((group) =>
+      ['pending', 'processing'].includes(group.detectionStatus),
+    ).length;
+    job.status = !finalize
+      ? 'processing'
+      : failed === groups.length
+        ? 'failed'
+        : failed || unresolved || pendingGroups
+          ? 'partial'
+          : 'completed';
+   job.failedFolders = failed;
+    job.completedAt = finalize ? new Date() : null;
+    job.errorMessage = null;
+    if (finalize && !failed && (unresolved || pendingGroups))
+      job.errorMessage =
+        (unresolved || pendingGroups) +
+        ' part group(s) need retry or manual review';
+    if (finalize && failed)
       job.errorMessage = `${failed} part group(s) need retry or manual review`;
     await this.jobRepo.save(job);
   }
@@ -870,22 +1200,25 @@ export class BusinessIndustrialImageIntakeService {
     const model =
       this.config.get<string>(
         'BUSINESS_INDUSTRIAL_AI_MODEL',
-        'openai/gpt-5.6-luna-20260709',
-      ) || 'openai/gpt-5.6-luna-20260709';
+        LUNA_MODEL,
+      ) || LUNA_MODEL;
     this.modelRouter.assertAllowed(model);
+    const visionUrls = await Promise.all(
+      assets.slice(0, MAX_VISION_IMAGES).map((asset) =>
+        this.storage.generateDownloadUrl(asset.s3Key),
+      ),
+    );
     const response = await this.openai.chat({
       model,
       costLane: route.lane,
-      imageUrls: assets
-        .slice(0, MAX_VISION_IMAGES)
-        .map((asset) => asset.cdnUrl),
+      imageUrls: visionUrls,
       systemPrompt: VISION_SYSTEM_PROMPT,
       userPrompt: JSON.stringify({
         basePartName: group.basePartName,
         sourceFolderNames: group.rawFolderNames,
         imageCount: assets.length,
         instruction:
-          'Identify the same part group. The final numeric dot suffix in a folder name is an instance marker; do not convert it into a decimal quantity.',
+          'Treat this exact source folder as one independent listing. Preserve its exact folder name and do not merge it with similarly named folders or interpret a dot suffix as quantity.',
       }),
       jsonMode: true,
       temperature: 0.1,
@@ -965,17 +1298,11 @@ export class BusinessIndustrialImageIntakeService {
     candidate: JsonRecord,
     basePartName: string,
   ): Promise<JsonRecord> {
-    const query =
-      stringValue(candidate.categorySearchQuery) ||
-      [
-        stringValue(candidate.brand),
-        stringValue(candidate.model),
-        stringValue(candidate.partType),
-        basePartName,
-      ]
-        .filter(Boolean)
-        .join(' ');
-    if (!query)
+    const queries = this.businessIndustrialCategoryQueries(
+      candidate,
+      basePartName,
+    );
+    if (!queries.length)
       return {
         categoryId: null,
         categoryName: null,
@@ -985,41 +1312,43 @@ export class BusinessIndustrialImageIntakeService {
       };
     try {
       const treeId = await this.taxonomy.getDefaultCategoryTreeId('EBAY_US');
-      const suggestions = await this.taxonomy.getCategorySuggestions(
-        query.slice(0, 200),
-        treeId,
-      );
-      for (const suggestion of suggestions.slice(0, 5)) {
-        const categoryId = suggestion.category?.categoryId;
-        if (!categoryId) continue;
-        try {
-          const subtree = await this.taxonomy.getCategorySubtree(
-            categoryId,
-            treeId,
-          );
-          if (!subtree.categorySubtreeNode?.leafCategoryTreeNode) continue;
-          const aspects = await this.taxonomy.getItemAspectsForCategory(
-            categoryId,
-            treeId,
-          );
-          return {
-            categoryId,
-            categoryName: suggestion.category.categoryName,
-            marketplaceId: 'EBAY_US',
-            relevancy: suggestion.relevancy,
-            ancestors: suggestion.categoryTreeNodeAncestors,
-            aspects: aspects.map((aspect) => ({
-              name: aspect.localizedAspectName,
-              required: aspect.aspectConstraint?.aspectRequired ?? false,
-              usage: aspect.aspectConstraint?.aspectUsage ?? 'OPTIONAL',
-              values:
-                aspect.aspectValues
-                  ?.map((value) => value.localizedValue)
-                  .slice(0, 100) ?? [],
-            })),
-          };
-        } catch {
-          /* try the next ranked suggestion */
+      for (const query of queries) {
+        const suggestions = await this.taxonomy.getCategorySuggestions(
+          query.slice(0, 200),
+          treeId,
+        );
+        for (const suggestion of suggestions.slice(0, 5)) {
+          const categoryId = suggestion.category?.categoryId;
+          if (!categoryId) continue;
+          try {
+            const subtree = await this.taxonomy.getCategorySubtree(
+              categoryId,
+              treeId,
+            );
+            if (!subtree.categorySubtreeNode?.leafCategoryTreeNode) continue;
+            const aspects = await this.taxonomy.getItemAspectsForCategory(
+              categoryId,
+              treeId,
+            );
+            return {
+              categoryId,
+              categoryName: suggestion.category.categoryName,
+              marketplaceId: 'EBAY_US',
+              relevancy: suggestion.relevancy,
+              ancestors: suggestion.categoryTreeNodeAncestors,
+              aspects: aspects.map((aspect) => ({
+                name: aspect.localizedAspectName,
+                required: aspect.aspectConstraint?.aspectRequired ?? false,
+                usage: aspect.aspectConstraint?.aspectUsage ?? 'OPTIONAL',
+                values:
+                  aspect.aspectValues
+                    ?.map((value) => value.localizedValue)
+                    .slice(0, 100) ?? [],
+              })),
+            };
+          } catch {
+            /* try the next ranked suggestion */
+          }
         }
       }
       return {
@@ -1040,6 +1369,49 @@ export class BusinessIndustrialImageIntakeService {
         ],
       };
     }
+  }
+
+  /**
+   * B&I taxonomy suggestions are sensitive to overly-specific manufacturer
+   * strings and internal folder SKUs. Try the AI query first, then deliberate
+   * family/type fallbacks so a valid eBay leaf can still be selected when the
+   * primary query is too narrow. The live eBay taxonomy remains authoritative;
+   * this only broadens the search vocabulary and never invents a category ID.
+   */
+  private businessIndustrialCategoryQueries(
+    candidate: JsonRecord,
+    basePartName: string,
+  ): string[] {
+    const family = stringValue(candidate.categoryFamily);
+    const familyLabel = family
+      ? BUSINESS_INDUSTRIAL_CATEGORY_FAMILIES.find(
+          (item) => item.id === family,
+        )?.label
+      : null;
+    const values = [
+      stringValue(candidate.categorySearchQuery),
+      [
+        stringValue(candidate.brand),
+        stringValue(candidate.model),
+        stringValue(candidate.partType),
+        familyLabel,
+      ]
+        .filter(Boolean)
+        .join(' '),
+      [stringValue(candidate.partType), familyLabel].filter(Boolean).join(' '),
+      [stringValue(candidate.model), stringValue(candidate.partType)]
+        .filter(Boolean)
+        .join(' '),
+      [basePartName, familyLabel].filter(Boolean).join(' '),
+    ];
+    return [
+      ...new Set(
+        values.flatMap((value) => {
+          const trimmed = value?.trim();
+          return trimmed ? [trimmed] : [];
+        }),
+      ),
+    ];
   }
 
   private async enrichListing(
@@ -1074,7 +1446,25 @@ export class BusinessIndustrialImageIntakeService {
       maxTokens: 1400,
     });
     const raw = asRecord(response.content);
-    const warnings = stringArray(raw.warnings);
+    const pricing = await this.getOptimalPrice({
+      title:
+        stringValue(raw.optimizedTitle) ??
+        stringValue(candidate.title) ??
+        group.basePartName,
+      partNumber:
+        stringValue(candidate.mpn) ?? stringValue(candidate.oemPartNumber),
+      brand: stringValue(candidate.brand),
+      condition: stringValue(candidate.conditionLabel),
+      fallbackPrice: numberValue(candidate.priceEstimate),
+      model,
+      sku: group.basePartName,
+      partType: stringValue(candidate.partType) ?? 'business_industrial',
+      batchId: job.id,
+    });
+    const warnings = [
+      ...stringArray(raw.warnings),
+      ...(pricing.warning ? [pricing.warning] : []),
+    ];
     const optimizedTitle = (
       stringValue(raw.optimizedTitle) ??
       stringValue(candidate.title) ??
@@ -1091,7 +1481,9 @@ export class BusinessIndustrialImageIntakeService {
       itemSpecifics: asRecord(raw.itemSpecifics),
       seoScore: scoreValue(raw.seoScore),
       readinessScore: scoreValue(raw.readinessScore),
-      warnings,
+      warnings: [...new Set(warnings)],
+      optimalPrice: pricing.price,
+      pricing,
       model: response.model,
       promptVersion: ENRICHMENT_PROMPT_VERSION,
     };
@@ -1123,6 +1515,171 @@ export class BusinessIndustrialImageIntakeService {
     return enrichment;
   }
 
+  private async getOptimalPrice(input: {
+    title: string;
+    partNumber: string | null;
+    brand: string | null;
+    condition: string | null;
+    fallbackPrice: number | null;
+    model: string;
+    sku: string | null;
+    partType: string;
+    batchId?: string;
+  }): Promise<OptimalPriceResult> {
+    const emptyMarket = {
+      items: [],
+      total: 0,
+      avgPrice: null,
+      medianPrice: null,
+      minPrice: null,
+      maxPrice: null,
+    } as Awaited<ReturnType<EbayBrowseApiService['getCompetitorPricing']>>;
+    const title = input.title.trim();
+    const partNumber = input.partNumber?.trim() || '';
+    const identifyingQuery =
+      [input.brand?.trim(), partNumber].filter(Boolean).join(' ') || title;
+    const fallbackQuery =
+      [input.brand?.trim(), title].filter(Boolean).join(' ') || title;
+    const condition = pricingCondition(input.condition);
+    let market = emptyMarket;
+    let marketWarning: string | undefined;
+    try {
+      market = await this.ebayBrowse.getCompetitorPricing(
+        identifyingQuery.slice(0, 200),
+        condition,
+        25,
+      );
+      if (
+        !market.items.some((item) => (numberValue(item.price?.value) ?? 0) > 0) &&
+        fallbackQuery.toLowerCase() !== identifyingQuery.toLowerCase()
+      ) {
+        market = await this.ebayBrowse.getCompetitorPricing(
+          fallbackQuery.slice(0, 200),
+          condition,
+          25,
+        );
+      }
+    } catch (error) {
+      marketWarning =
+        'Live eBay competitor pricing was unavailable: ' +
+        (error instanceof Error ? error.message : 'request failed');
+      this.logger.warn(marketWarning);
+    }
+
+    const competitors = market.items
+      .map((item) => ({
+        seller: item.seller?.username || 'eBay seller',
+        price: numberValue(item.price?.value) ?? 0,
+        condition: item.condition || 'UNKNOWN',
+        title: item.title,
+      }))
+      .filter((item) => item.price > 0);
+    const marketSummary: MarketSummary = {
+      totalListings: market.total || competitors.length,
+      avgPrice: market.avgPrice,
+      medianPrice: market.medianPrice,
+      minPrice: market.minPrice,
+      maxPrice: market.maxPrice,
+    };
+    if (competitors.length) {
+      try {
+        const route = this.modelRouter.selectTextRoute(
+          {
+            sku: input.sku ?? title,
+            partName: title,
+            partType: input.partType,
+            marketplace: 'US',
+          },
+          'bulk',
+        );
+        const suggestion = await this.pricingPipeline.suggestPrice({
+          model: input.model || LUNA_MODEL,
+          productTitle: title,
+          partNumber: partNumber || title,
+          brand: input.brand ?? '',
+          condition: input.condition ?? 'UNKNOWN',
+          costPrice: null,
+          retailPrice: null,
+          mapPrice: null,
+          competitors,
+          marketSummary,
+        });
+        if (input.batchId) {
+          try {
+            await this.aiRunLogs.logRun({
+              sku: input.sku,
+              partNumber: partNumber || null,
+              partType: input.partType,
+              marketplace: 'US',
+              batchId: input.batchId,
+              lane: route.lane,
+              model: suggestion.rawResponse.model,
+              promptVersion: PRICING_PROMPT_VERSION,
+              routingPolicyVersion: route.policyVersion,
+              inputTokens: suggestion.rawResponse.usage.promptTokens,
+              outputTokens: suggestion.rawResponse.usage.completionTokens,
+              costUsd: suggestion.rawResponse.estimatedCostUsd,
+              latencyMs: suggestion.rawResponse.latencyMs,
+              validationScore: Math.round(
+                Math.max(0, Math.min(1, suggestion.confidence)) * 100,
+              ),
+              softFails: marketWarning ? [marketWarning] : [],
+              passedGate: false,
+            });
+          } catch (error) {
+            this.logger.warn(
+              'Unable to write B&I pricing AI audit log: ' +
+                (error instanceof Error ? error.message : error),
+            );
+          }
+        }
+        const suggestedPrice = positivePrice(suggestion.suggestedPrice);
+        if (suggestedPrice !== null) {
+          return {
+            price: suggestedPrice,
+            source: 'market_ai',
+            confidence: numberValue(suggestion.confidence),
+            competitorCount: competitors.length,
+            marketSummary,
+            reasoning: suggestion.reasoning || null,
+            ...(marketWarning ? { warning: marketWarning } : {}),
+          };
+        }
+      } catch (error) {
+        marketWarning =
+          'AI pricing analysis was unavailable: ' +
+          (error instanceof Error ? error.message : 'request failed');
+        this.logger.warn(marketWarning);
+      }
+    }
+
+    const fallbackPrice = positivePrice(input.fallbackPrice);
+    if (fallbackPrice !== null) {
+      return {
+        price: fallbackPrice,
+        source: 'vision_estimate',
+        confidence: null,
+        competitorCount: competitors.length,
+        marketSummary,
+        reasoning: 'Used the evidence-bound vision estimate because no live AI market price was available.',
+        warning:
+          marketWarning ??
+          'No usable live eBay pricing analysis was available; verify the estimate before publishing.',
+      };
+    }
+    return {
+      price: null,
+      source: 'unavailable',
+      confidence: null,
+      competitorCount: competitors.length,
+      marketSummary,
+      reasoning: null,
+      warning:
+        marketWarning ??
+        'No usable eBay competitor price or evidence-bound estimate was available.',
+    };
+  }
+
   private async ensureInventoryProjection(
     jobId: string,
     group: BusinessIndustrialImageIntakeGroup,
@@ -1131,8 +1688,17 @@ export class BusinessIndustrialImageIntakeService {
     const product = asRecord(listing);
     const sku = stringValue(product.sku);
     if (!sku) return;
+    // The catalog product is the authoritative tenant boundary. Intake jobs
+    // can outlive an organization reassignment, so using the job/group org
+    // here can create a correctly-tagged B&I mirror in the wrong tenant.
+    const projectionOrganizationId =
+      stringValue(product.organizationId) ?? group.organizationId;
     const existing = await this.listingRepo.findOne({
-      where: { customLabelSku: sku, vertical: 'business_industrial' },
+      where: {
+        organizationId: projectionOrganizationId,
+        customLabelSku: sku,
+        vertical: 'business_industrial',
+      },
     });
     if (existing) return;
     const attributes = asRecord(product.verticalAttributes);
@@ -1143,7 +1709,7 @@ export class BusinessIndustrialImageIntakeService {
     const price = numberValue(product.price);
     const quantity = numberValue(product.quantity);
     const record = this.listingRepo.create({
-      organizationId: group.organizationId,
+      organizationId: projectionOrganizationId,
       vertical: 'business_industrial',
       verticalAttributes: attributes,
       sourceFileName: 'business-industrial-intake-' + jobId,
@@ -1177,6 +1743,183 @@ export class BusinessIndustrialImageIntakeService {
     await this.listingRepo.save(record);
   }
 
+  private async findExistingCatalogProduct(
+    organizationId: string,
+    basePartNormalized: string,
+    sourceReferenceUrl: string | null,
+    sourceFolderName: string,
+  ): Promise<CatalogProduct | null> {
+    void basePartNormalized;
+    if (!sourceReferenceUrl) return null;
+    return this.catalogProductRepo
+      .createQueryBuilder('product')
+      .where('product.organizationId = :organizationId', { organizationId })
+      .andWhere('product.vertical = :vertical', {
+        vertical: 'business_industrial',
+      })
+      .andWhere(
+        `product.optimizationPayload -> '__businessIndustrialIntake' ->> 'sourceReferenceUrl' = :sourceReferenceUrl`,
+        { sourceReferenceUrl },
+      )
+      .andWhere(
+        `product.optimizationPayload -> '__businessIndustrialIntake' ->> 'sourceFolderName' = :sourceFolderName`,
+        { sourceFolderName },
+      )
+      .orderBy('product.updatedAt', 'DESC')
+      .take(5)
+      .getOne();
+  }
+
+  private async resolveCatalogSku(
+    baseSku: string,
+    organizationId: string,
+    sourceMarker: Record<string, unknown>,
+  ): Promise<string> {
+    const existing = await this.catalogProductRepo.findOne({
+      where: {
+        organizationId,
+        vertical: 'business_industrial',
+        sku: baseSku,
+      },
+    });
+    if (!existing || this.matchesIntakeSource(existing, sourceMarker))
+      return baseSku;
+
+    const sourceReferenceUrl = stringValue(sourceMarker.sourceReferenceUrl);
+    const driveToken = sourceReferenceUrl
+      ? /\/folders\/([^/?#]+)/.exec(sourceReferenceUrl)?.[1]
+      : null;
+    const token = (driveToken || stringValue(sourceMarker.groupId) || 'intake')
+      .replace(/[^a-zA-Z0-9]+/g, '')
+      .slice(0, 12)
+      .toLowerCase() || 'intake';
+    const stem = baseSku.slice(0, Math.max(1, 160 - token.length - 1));
+    let candidate = `${stem}-${token}`;
+    let counter = 2;
+    while (
+      await this.catalogProductRepo.findOne({
+        where: {
+          organizationId,
+          vertical: 'business_industrial',
+          sku: candidate,
+        },
+      })
+    ) {
+      const suffix = `-${token}-${counter++}`;
+      candidate = `${baseSku.slice(0, 160 - suffix.length)}${suffix}`;
+    }
+    return candidate;
+  }
+
+  private matchesIntakeSource(
+    product: CatalogProduct,
+    sourceMarker: Record<string, unknown>,
+  ): boolean {
+    const marker = asRecord(
+      asRecord(product.optimizationPayload).__businessIndustrialIntake,
+    );
+    return (
+      stringValue(marker.sourceReferenceUrl) ===
+        stringValue(sourceMarker.sourceReferenceUrl) &&
+      stringValue(marker.sourceFolderName) ===
+        stringValue(sourceMarker.sourceFolderName)
+    );
+  }
+
+  private isStaleProcessingTimestamp(value: Date | null | undefined): boolean {
+    return Boolean(
+      value && Date.now() - value.getTime() > STALE_GROUP_PROCESSING_MS,
+    );
+  }
+
+  private async resetStaleProcessingGroups(
+    groups: BusinessIndustrialImageIntakeGroup[],
+    onlyGroupIds?: readonly string[],
+  ): Promise<void> {
+    for (const group of groups) {
+      if (
+        group.detectionStatus !== 'processing' ||
+        (onlyGroupIds && !onlyGroupIds.includes(group.id)) ||
+        !this.isStaleProcessingTimestamp(group.updatedAt)
+      )
+        continue;
+      group.detectionStatus = 'pending';
+      group.errorMessage = 'Recovered after an interrupted intake worker';
+      await this.groupRepo.save(group);
+      this.logger.warn(
+        `Recovered stale B&I image group ${group.id} (${group.basePartName})`,
+      );
+    }
+  }
+
+  private async catalogMedianPrice(
+    organizationId: string,
+    categoryId: string | null,
+  ): Promise<number | null> {
+    const load = async (restrictCategory: boolean) => {
+      const query = this.catalogProductRepo
+        .createQueryBuilder('product')
+        .select('product.price', 'price')
+        .where('product.organizationId = :organizationId', { organizationId })
+        .andWhere('product.vertical = :vertical', {
+          vertical: 'business_industrial',
+        })
+        .andWhere('product.price > 0')
+        .orderBy('product.price', 'ASC')
+        .take(500);
+      if (restrictCategory && categoryId)
+        query.andWhere('product.categoryId = :categoryId', { categoryId });
+      const prices = (await query.getRawMany<{ price: string | number }>())
+        .map((row) => Number(row.price))
+        .filter((price) => Number.isFinite(price) && price > 0);
+      if (!prices.length) return null;
+      const middle = Math.floor(prices.length / 2);
+      const median =
+        prices.length % 2
+          ? prices[middle]
+          : (prices[middle - 1] + prices[middle]) / 2;
+      return Math.round(median * 100) / 100;
+    };
+    return (categoryId ? await load(true) : null) ?? load(false);
+  }
+
+  private async syncInventoryProjectionFromCatalogProduct(
+    product: CatalogProduct,
+  ): Promise<void> {
+    if (!product.organizationId || !product.sku) return;
+    const records = await this.listingRepo.find({
+      where: {
+        organizationId: product.organizationId,
+        vertical: 'business_industrial',
+        customLabelSku: product.sku,
+      },
+    });
+    if (!records.length) return;
+    const attributes = asRecord(product.verticalAttributes);
+    for (const record of records) {
+      record.verticalAttributes = attributes;
+      record.title = product.title;
+      record.description = product.description;
+      record.startPrice =
+        product.price === null ? null : String(product.price);
+      record.startPriceNum = product.price;
+      record.quantity =
+        product.quantity === null ? null : String(product.quantity);
+      record.quantityNum = product.quantity;
+      record.categoryId = product.categoryId;
+      record.categoryName = product.categoryName;
+      record.itemPhotoUrl = product.imageUrls?.join('|') || null;
+      record.conditionId = product.conditionId;
+      record.conditionLabel = product.conditionLabel;
+      record.cBrand = product.brand;
+      record.cType = product.partType;
+      record.cFeatures = jsonText(attributes.features);
+      record.cManufacturerPartNumber = product.mpn;
+      record.cOeOemPartNumber = stringValue(attributes.oemPartNumber);
+    }
+    await this.listingRepo.save(records);
+  }
+
   private async ingestImageBuffer(
     job: BusinessIndustrialImageIntakeJob,
     rawPath: string,
@@ -1201,7 +1944,7 @@ export class BusinessIndustrialImageIntakeService {
     );
     const parsedFolder = parseInstanceFolderName(sourceFolderName);
     const basePartNormalized = normalizeImageIntakePartName(
-      parsedFolder.baseFolderName,
+      parsedFolder.rawFolderName,
     );
     if (!basePartNormalized || basePartNormalized === 'unassigned')
       throw new Error('The image is not inside a part folder');
@@ -1213,7 +1956,7 @@ export class BusinessIndustrialImageIntakeService {
         id: randomUUID(),
         organizationId: job.organizationId,
         jobId: job.id,
-        basePartName: parsedFolder.baseFolderName,
+        basePartName: parsedFolder.rawFolderName,
         basePartNormalized,
         rawFolderNames: [],
         instanceSuffixes: [],
@@ -1227,12 +1970,10 @@ export class BusinessIndustrialImageIntakeService {
     if (group.catalogProductId)
       throw new Error('This part group already has a draft');
     const rawFolders = new Set(group.rawFolderNames ?? []);
-    const suffixes = new Set(group.instanceSuffixes ?? []);
     rawFolders.add(parsedFolder.rawFolderName);
-    if (parsedFolder.instanceSuffix) suffixes.add(parsedFolder.instanceSuffix);
     group.rawFolderNames = [...rawFolders];
-    group.instanceSuffixes = [...suffixes];
-    group.instanceCount = rawFolders.size;
+    group.instanceSuffixes = [];
+    group.instanceCount = 1;
     group.errorMessage = null;
     await this.groupRepo.save(group);
     const canonical = await this.imageProcessor.convertBufferToWebp(buffer);
@@ -1335,7 +2076,6 @@ export class BusinessIndustrialImageIntakeService {
     visited.add(folderId);
     const images: DriveImage[] = [];
     for (const file of await this.listDriveChildren(folderId)) {
-      if (images.length >= MAX_VISION_IMAGES) break;
       if (file.mimeType === DRIVE_FOLDER_MIME) {
         images.push(
           ...(await this.collectDriveImages(
@@ -1353,10 +2093,26 @@ export class BusinessIndustrialImageIntakeService {
         });
       }
     }
-    return images.slice(0, MAX_VISION_IMAGES);
+    return images;
   }
 
-  private async downloadDriveImage(file: DriveFile): Promise<Buffer> {
+ private async downloadDriveImage(file: DriveFile): Promise<Buffer> {
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= DRIVE_DOWNLOAD_ATTEMPTS; attempt++) {
+      try {
+        return await this.downloadDriveImageOnce(file);
+      } catch (error: unknown) {
+        lastError = error;
+        if (attempt < DRIVE_DOWNLOAD_ATTEMPTS)
+          await new Promise((resolve) =>
+            setTimeout(resolve, 250 * 2 ** (attempt - 1)),
+          );
+      }
+    }
+    throw lastError instanceof Error ? lastError : new Error('download failed');
+  }
+
+  private async downloadDriveImageOnce(file: DriveFile): Promise<Buffer> {
     if (file.webContentLink) {
       const publicResponse = await fetch(file.webContentLink);
       const publicContentType =
@@ -1411,6 +2167,18 @@ export class BusinessIndustrialImageIntakeService {
       );
     return job;
   }
+
+  /**
+   * Catalog SKUs are deterministic and traceable to the base source folder.
+   * A final numeric dot suffix has already been removed during grouping, so
+   * folders such as Part, Part.1, and Part.2 share one BNI SKU and quantity.
+   */
+  private catalogSkuFromFolderName(folderName: string): string {
+    const normalized = normalizeImageIntakePartName(folderName);
+    const suffix = normalized.startsWith('bni') ? normalized.slice(3) : normalized;
+    return `BNI-${(suffix || 'unassigned').slice(0, 156)}`;
+  }
+
   private jobSummary(job: BusinessIndustrialImageIntakeJob) {
     return {
       id: job.id,
@@ -1428,23 +2196,7 @@ export class BusinessIndustrialImageIntakeService {
       completedAt: job.completedAt,
       createdAt: job.createdAt,
       updatedAt: job.updatedAt,
-      aiModel:
-        this.config.get<string>(
-          'BUSINESS_INDUSTRIAL_AI_MODEL',
-          'openai/gpt-5.6-luna-20260709',
-        ) || 'openai/gpt-5.6-luna-20260709',
       webpStorage: true,
-    };
-  }
-  private async jobSummaryWithCost(job: BusinessIndustrialImageIntakeJob) {
-    const summary = this.jobSummary(job);
-    const totals = await this.aiRunLogs.getBatchTotals(job.id);
-    return {
-      ...summary,
-      aiInputTokens: totals.inputTokens,
-      aiOutputTokens: totals.outputTokens,
-      aiCostUsd: totals.costUsd,
-      aiRuns: totals.runs,
     };
   }
   private groupSummary(group: BusinessIndustrialImageIntakeGroup) {
@@ -1538,6 +2290,37 @@ function numberValue(value: unknown): number | null {
         ? Number(value)
         : NaN;
   return Number.isFinite(number) ? number : null;
+}
+function positivePrice(value: unknown): number | null {
+  const number = numberValue(value);
+  if (number === null || number <= 0) return null;
+  return Math.round(number * 100) / 100;
+}
+function pricingCondition(value: unknown): 'NEW' | 'USED' | undefined {
+  const normalized = stringValue(value)?.toUpperCase();
+  if (normalized === 'NEW') return 'NEW';
+  if (
+    normalized === 'USED' ||
+    normalized === 'REFURBISHED' ||
+    normalized === 'FOR_PARTS'
+  )
+    return 'USED';
+  return undefined;
+}
+function conditionIdForLabel(value: string | null): string | null {
+  switch (value?.trim().toUpperCase()) {
+    case 'NEW':
+      return '1000';
+    case 'REFURBISHED':
+      return '2500';
+    case 'FOR_PARTS':
+      return '7000';
+    case 'USED':
+    case 'UNKNOWN':
+      return '3000';
+    default:
+      return null;
+  }
 }
 function stringArray(value: unknown): string[] {
   return Array.isArray(value)

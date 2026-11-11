@@ -88,6 +88,11 @@ export interface EbayOffer {
   marketplaceId: string;
   /** Present on published offers returned from Inventory API */
   listingId?: string;
+  /** eBay's GetOffer response nests listing metadata under `listing`. */
+  listing?: {
+    listingId?: string;
+    listingStatus?: string;
+  };
   status?: string;
   format: 'FIXED_PRICE' | 'AUCTION';
   listingDescription?: string;
@@ -365,6 +370,7 @@ export interface EbayCatalogLookupResult {
   items: Array<{
     itemId: string;
     title: string;
+    itemWebUrl?: string | null;
     brand: string | null;
     mpn: string | null;
     epid: string | null;

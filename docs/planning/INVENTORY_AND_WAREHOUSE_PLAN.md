@@ -313,9 +313,18 @@ If nothing can be allocated → the order is flagged `backorder` and an alert is
 we import, which may be minutes later, so the outbox push after reserve must not raise quantity
 back up. Channel sync therefore always pushes `computed_available`. It does not add deltas to
 eBay's value. During the gap between the sale and our import, eBay's own decrement protects that
-store. **The other stores and PB360 are what the push protects.** Speed matters here: subscribe to eBay
-`ITEM_SOLD`/order notifications (already wired via `processEbayInventoryWebhook`) to trigger an
-immediate order pull instead of waiting for the polling interval.
+store. **The other stores and PB360 are what the push protects.** New eBay orders are currently
+imported by the 15-minute channel order job, which emits `order.new` and creates the existing
+in-app order notification. The `POST /api/channels/webhooks/ebay` handler does not trigger that
+order import: it only forwards matching `INVENTORY`/`ITEM` webhook payloads with a top-level
+`notification.itemId` to inventory reconciliation, and the controller does not validate the
+eBay signature. For lower-latency sales, subscribe each seller to eBay's `ORDER_CONFIRMATION`
+topic, validate the signed notification, and enqueue an order refresh; keep scheduled order
+import as recovery. This topic needs `sell.fulfillment` and
+`sell.fulfillment.readonly` OAuth scopes. For listing removals, the `LISTING` topic reports
+`ENDED`, which means the listing is no longer active but does not say why; correlate it with
+order confirmation to distinguish a sale from another type of end. `LISTING` requires the
+`sell.listing.read` OAuth scope.
 
 ### 5.3 Channel availability and sync
 

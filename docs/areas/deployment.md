@@ -18,7 +18,7 @@
   proxying (e.g. `51c8f71 fix(nginx): add dedicated location for image proxy
   before static-file regex`) — check this file's location-block order before
   editing it
-- **Production host nginx** (`/etc/nginx/sites-available/mhn.realtrackapp.com`)
+- **Production host nginx** (`/etc/nginx/sites-available/app.omnicoreholding.com`)
   — the actual running config on the EC2 host. Includes a dedicated
   `location /api/storage/serve/` block with `proxy_cache` (30-day, 1 GB,
   `proxy_cache_use_stale`) for S3 image caching, gzip compression, and routes

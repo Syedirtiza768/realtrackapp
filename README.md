@@ -1,4 +1,4 @@
-# RealTrackApp
+# Omni Core
 
 Full-stack, multi-channel **automotive parts listing & operations platform**
 (internal/DB name: `listingpro`). Ingests product data and images, enriches with

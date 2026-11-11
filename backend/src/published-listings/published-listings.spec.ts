@@ -1,5 +1,6 @@
 import { PublishedListingsHealthService } from './services/published-listings-health.service.js';
 import { PublishedListingsActionService } from './services/published-listings-action.service.js';
+import { PublishedListingsService } from './services/published-listings.service.js';
 
 describe('PublishedListingsHealthService', () => {
   const service = new PublishedListingsHealthService();
@@ -80,6 +81,31 @@ describe('PublishedListingsHealthService', () => {
   });
 });
 
+describe('Primemotive snapshot UUID cursor', () => {
+  const nil = '00000000-0000-0000-0000-000000000000';
+  function setupCursor() {
+    const qb = { andWhere: jest.fn().mockReturnThis(), orderBy: jest.fn().mockReturnThis(), skip: jest.fn().mockReturnThis(),
+      take: jest.fn().mockReturnThis(), getManyAndCount: jest.fn().mockResolvedValue([[{id:'00000000-0000-4000-8000-000000000001'}],2]) };
+    const service = new PublishedListingsService({} as never,{} as never,{} as never,{} as never,{} as never,{} as never,
+      {getAccessibleStoreIds:()=>Promise.resolve(new Set<string>())} as never,{} as never,{} as never);
+    jest.spyOn(service as unknown as {buildListQuery:()=>Promise<typeof qb>},'buildListQuery').mockResolvedValue(qb);
+    return {qb,service};
+  }
+  it('uses stable UUID ordering and returns a continuation instead of an offset', async()=>{
+    const {qb,service}=setupCursor();
+    const result=await service.list('org',{} as never,{afterId:nil,limit:1},{requirePublishedActiveRecord:true});
+    expect(qb.andWhere).toHaveBeenCalledWith('l.id > :afterId',{afterId:nil});
+    expect(qb.orderBy).toHaveBeenCalledWith('l.id','ASC');
+    expect(qb.skip).toHaveBeenCalledWith(0);
+    expect(result).toMatchObject({nextId:'00000000-0000-4000-8000-000000000001',hasMore:true});
+  });
+  it('rejects cursor use on unscoped feeds and mixed offset/sort requests',async()=>{
+    const {service}=setupCursor();
+    await expect(service.list('org',{} as never,{afterId:nil})).rejects.toThrow('afterId requires');
+    await expect(service.list('org',{} as never,{afterId:nil,page:2},{requirePublishedActiveRecord:true})).rejects.toThrow('afterId requires');
+  });
+});
+
 describe('PublishedListingsActionService offer resolve', () => {
   it('resolves missing offerId from listing channel before price revise', async () => {
     const listing = {
@@ -88,7 +114,8 @@ describe('PublishedListingsActionService offer resolve', () => {
       sku: 'BLA-18699',
       storeId: 'store-1',
       ebayAccountId: 'acct-1',
-      ebayItemId: '110',
+      // Inventory-API listing: a Trading item ID would deliberately use the Trading revision path.
+      ebayItemId: null,
       offerId: null as string | null,
       ebayListingChannelId: 'ch-1',
       currency: 'USD',
@@ -127,6 +154,7 @@ describe('PublishedListingsActionService offer resolve', () => {
       listingRepo as never,
       channelRepo as never,
       inventoryApi as never,
+      {} as never,
       {} as never,
       {} as never,
       audit as never,

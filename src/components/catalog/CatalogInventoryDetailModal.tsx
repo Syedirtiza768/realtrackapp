@@ -127,6 +127,7 @@ const EBAY_STATUS: Record<CatalogListingStatus, { label: string; dotClass: strin
   published: { label: 'Published', dotClass: 'bg-emerald-500' },
   ready_to_publish: { label: 'Ready to Publish', dotClass: 'bg-emerald-500' },
   need_images: { label: 'Need Images', dotClass: 'bg-amber-500' },
+  needs_review: { label: 'Needs Review', dotClass: 'bg-amber-500' },
 };
 
 function formatCategoryBreadcrumb(name: string | null | undefined): string[] {
@@ -363,10 +364,14 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose, o
   }, [stores, selectedStoreId]);
 
   const catalogImages = useMemo(() => {
-    if (listing?.itemPhotoUrl) return getAllImageUrls(listing.itemPhotoUrl);
-    if (catalogProduct?.imageUrls?.length) return catalogProduct.imageUrls;
-    return [];
-  }, [catalogProduct?.imageUrls, listing?.itemPhotoUrl]);
+    // Automotive catalog image edits are persisted to listing_records. Treat
+    // that row as authoritative even when its saved list is empty; otherwise
+    // stale catalog_products.imageUrls can resurrect photos the user removed.
+    if (listing?.id) {
+      return listing.itemPhotoUrl ? getAllImageUrls(listing.itemPhotoUrl) : [];
+    }
+    return (catalogProduct?.imageUrls ?? []).filter(Boolean);
+  }, [catalogProduct?.imageUrls, listing?.id, listing?.itemPhotoUrl]);
 
   useEffect(() => {
     setLocalImages(catalogImages);
@@ -437,7 +442,7 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose, o
 
   const openFullEditor = useCallback(() => {
     if (!id) return;
-    navigate(`/catalog/products/${id}`);
+    navigate(`/auto-parts/catalog/products/${id}`);
     onClose();
   }, [id, navigate, onClose]);
 
@@ -704,10 +709,16 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose, o
       if (uploaded.length === 0 || !listing) return;
       const newUrls = uploaded.map((img) => img.cdnUrl).filter(Boolean);
       if (newUrls.length === 0) return;
-      const merged = [...localImages, ...newUrls].slice(0, 24);
+      const merged = [...new Set([...localImages, ...newUrls])].slice(0, 24);
       setSavingImages(true);
       setImageError(null);
       try {
+        // The upload endpoint appends newly stored assets. Persist pending
+        // removals/reordering first so the server does not merge new photos
+        // back into the old saved list.
+        if (imagesDirty) {
+          await persistImages(localImages);
+        }
         await persistImages(
           newUrls,
           uploaded.map((img) => img.assetId),
@@ -720,7 +731,7 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose, o
         setSavingImages(false);
       }
     },
-    [localImages, listing, persistImages],
+    [imagesDirty, localImages, listing, persistImages],
   );
 
   useEffect(() => {
@@ -787,7 +798,7 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose, o
             <div className="flex-1 overflow-y-auto px-5 py-5">
               {/* Hero */}
               <div className="flex gap-4 border-b border-slate-100 pb-5 dark:border-slate-800">
-                <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800">
+                <div className="h-24 w-24 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800">
                 {localImages[0] ? (
                   <button
                     type="button"
@@ -795,7 +806,7 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose, o
                     className="block h-full w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800"
                     aria-label="Zoom image"
                   >
-                    <OptimizedImage src={localImages[0]} alt="" variant="medium" aspectRatio="1/1" className="h-full w-full" />
+                    <OptimizedImage src={localImages[0]} alt="Primary part photo" variant="medium" aspectRatio="1/1" objectFit="contain" className="h-full w-full" />
                   </button>
                   ) : (
                     <div className="flex h-full w-full items-center justify-center text-slate-400">
@@ -1388,7 +1399,7 @@ export default function CatalogInventoryDetailModal({ id, searchItem, onClose, o
               {!editMode && (
                 <div className="pt-2">
                   <Link
-                    to={`/catalog/products/${id}`}
+                    to={`/auto-parts/catalog/products/${id}`}
                     onClick={onClose}
                     className="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
                   >

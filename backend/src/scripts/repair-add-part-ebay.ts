@@ -44,7 +44,10 @@ interface Target {
 
 function option(name: string, fallback: string): string {
   const prefix = `--${name}=`;
-  return process.argv.find((arg) => arg.startsWith(prefix))?.slice(prefix.length) ?? fallback;
+  return (
+    process.argv.find((arg) => arg.startsWith(prefix))?.slice(prefix.length) ??
+    fallback
+  );
 }
 
 function hasFlag(name: string): boolean {
@@ -53,14 +56,18 @@ function hasFlag(name: string): boolean {
 
 function errorMessage(error: unknown): string {
   const base = error instanceof Error ? error.message : String(error);
-  if (!error || typeof error !== 'object' || !('response' in error)) return base;
-  const response = (error as {
-    response?: { status?: number; data?: unknown };
-  }).response;
+  if (!error || typeof error !== 'object' || !('response' in error))
+    return base;
+  const response = (
+    error as {
+      response?: { status?: number; data?: unknown };
+    }
+  ).response;
   if (!response) return base;
-  const detail = response.data === undefined
-    ? ''
-    : ` ${typeof response.data === 'string' ? response.data : JSON.stringify(response.data)}`;
+  const detail =
+    response.data === undefined
+      ? ''
+      : ` ${typeof response.data === 'string' ? response.data : JSON.stringify(response.data)}`;
   return `${base} (HTTP ${response.status ?? 'unknown'})${detail}`;
 }
 
@@ -108,24 +115,28 @@ async function cleanupUnpublishedAlternate(
       }
       await inventoryApi.deleteItem(target.storeId, alternateSku);
     }
-    console.log(JSON.stringify({
-      event: 'alternate_cleanup_result',
-      channelId: target.channelId,
-      canonicalSku: target.catalogSku,
-      alternateSku,
-      itemExists: Boolean(item),
-      offerCount: offers.total,
-      deletedOfferCount: deletableOffers.length,
-      deleted: safeToDelete,
-    }));
+    console.log(
+      JSON.stringify({
+        event: 'alternate_cleanup_result',
+        channelId: target.channelId,
+        canonicalSku: target.catalogSku,
+        alternateSku,
+        itemExists: Boolean(item),
+        offerCount: offers.total,
+        deletedOfferCount: deletableOffers.length,
+        deleted: safeToDelete,
+      }),
+    );
   } catch (error: unknown) {
-    console.log(JSON.stringify({
-      event: 'alternate_cleanup_skipped',
-      channelId: target.channelId,
-      canonicalSku: target.catalogSku,
-      alternateSku,
-      error: errorMessage(error),
-    }));
+    console.log(
+      JSON.stringify({
+        event: 'alternate_cleanup_skipped',
+        channelId: target.channelId,
+        canonicalSku: target.catalogSku,
+        alternateSku,
+        error: errorMessage(error),
+      }),
+    );
   }
 }
 
@@ -223,9 +234,13 @@ async function main(): Promise<void> {
   const cleanupOnly = hasFlag('cleanup-only');
   const cleanupOfferId = option('cleanup-offer-id', '').trim();
   const recreateStale = hasFlag('recreate-stale');
-  const reportPath = option('report', '/tmp/add-part-ebay-audit-20260823-v4.jsonl');
+  const reportPath = option(
+    'report',
+    '/tmp/add-part-ebay-audit-20260823-v4.jsonl',
+  );
   const auditedIds = auditedAnomalyIds(reportPath);
-  if (auditedIds.length === 0) throw new Error(`No audited anomaly rows found in ${reportPath}`);
+  if (auditedIds.length === 0)
+    throw new Error(`No audited anomaly rows found in ${reportPath}`);
 
   const app = await NestFactory.createApplicationContext(AppModule, {
     logger: ['error', 'warn'],
@@ -234,11 +249,13 @@ async function main(): Promise<void> {
     const dataSource = app.get(DataSource);
     const publishService = app.get(EbayPublishService);
     const inventoryApi = app.get(EbayInventoryApiService);
-    const compatibilityReconciler = app.get(EbayCompatibilityReconciliationService);
+    const compatibilityReconciler = app.get(
+      EbayCompatibilityReconciliationService,
+    );
     const catalogRepo = app.get<Repository<CatalogProduct>>(
       getRepositoryToken(CatalogProduct),
     );
-    const rows = (await dataSource.query(
+    const rows = await dataSource.query(
       `
         SELECT
           elc.id AS "channelId",
@@ -281,56 +298,69 @@ async function main(): Promise<void> {
         ORDER BY ca.id, elc.listing_id
       `,
       [auditedIds],
-    )) as Target[];
+    );
     const scopedRows = channelFilter
       ? rows.filter((row) => row.channelId === channelFilter)
       : rows;
     if (channelFilter && scopedRows.length === 0) {
-      throw new Error(`Repair channel ${channelFilter} was not found in the audited target set`);
+      throw new Error(
+        `Repair channel ${channelFilter} was not found in the audited target set`,
+      );
     }
-    const selected = limit > 0
-      ? scopedRows.slice(offset, offset + limit)
-      : scopedRows.slice(offset);
+    const selected =
+      limit > 0
+        ? scopedRows.slice(offset, offset + limit)
+        : scopedRows.slice(offset);
     const normal = selected.filter(
-      (target) => target.ebaySku === target.catalogSku && !target.ebaySku.includes('-FF-'),
+      (target) =>
+        target.ebaySku === target.catalogSku &&
+        !target.ebaySku.includes('-FF-'),
     );
     const collision = selected.filter((target) => !normal.includes(target));
-    console.log(JSON.stringify({
-      event: 'repair_started',
-      apply,
-      auditedAnomalyCount: auditedIds.length,
-      targetCount: selected.length,
-      offset,
-      normalSkuRepairCount: normal.length,
-      collisionOrFreshSkuCount: collision.length,
-      readOnly: !apply,
-      startedAt: new Date().toISOString(),
-    }));
+    console.log(
+      JSON.stringify({
+        event: 'repair_started',
+        apply,
+        auditedAnomalyCount: auditedIds.length,
+        targetCount: selected.length,
+        offset,
+        normalSkuRepairCount: normal.length,
+        collisionOrFreshSkuCount: collision.length,
+        readOnly: !apply,
+        startedAt: new Date().toISOString(),
+      }),
+    );
 
     for (const target of selected) {
       if (!normal.includes(target)) {
-        console.log(JSON.stringify({
-          event: 'repair_skipped',
-          channelId: target.channelId,
-          sku: target.sku,
-          ebaySku: target.ebaySku,
-          reason: 'fresh_or_noncanonical_sku_requires_canonical_recovery',
-        }));
+        console.log(
+          JSON.stringify({
+            event: 'repair_skipped',
+            channelId: target.channelId,
+            sku: target.sku,
+            ebaySku: target.ebaySku,
+            reason: 'fresh_or_noncanonical_sku_requires_canonical_recovery',
+          }),
+        );
         continue;
       }
       if (!apply) {
-        console.log(JSON.stringify({
-          event: 'repair_would_apply',
-          channelId: target.channelId,
-          sku: target.sku,
-          sourceListingId: target.sourceListingId,
-        }));
+        console.log(
+          JSON.stringify({
+            event: 'repair_would_apply',
+            channelId: target.channelId,
+            sku: target.sku,
+            sourceListingId: target.sourceListingId,
+          }),
+        );
         continue;
       }
       if (cleanupOnly) {
         const cleanupSku = conflictSafeSkuFor(target.catalogSku);
         if (!cleanupSku) {
-          throw new Error(`Cannot derive a deterministic cleanup SKU for ${target.catalogSku}`);
+          throw new Error(
+            `Cannot derive a deterministic cleanup SKU for ${target.catalogSku}`,
+          );
         }
         if (cleanupOfferId) {
           if (target.offerId === cleanupOfferId) {
@@ -338,11 +368,15 @@ async function main(): Promise<void> {
               `Cleanup refused for ${cleanupOfferId}: it is still the local channel offer`,
             );
           }
-          const canonical = await publishService.buildCanonicalRecoveryProjection(
-            target.sourceListingId,
+          const canonical =
+            await publishService.buildCanonicalRecoveryProjection(
+              target.sourceListingId,
+              target.storeId,
+            );
+          const item = await inventoryApi.getItem(
             target.storeId,
+            target.catalogSku,
           );
-          const item = await inventoryApi.getItem(target.storeId, target.catalogSku);
           const offers = await inventoryApi.getOffersBySku(
             target.storeId,
             target.catalogSku,
@@ -352,10 +386,12 @@ async function main(): Promise<void> {
           const ownedOffer = offers.offers.find(
             (offer) => offer.offerId === cleanupOfferId,
           );
-          const safeFailedRecreate = Boolean(ownedOffer) &&
+          const safeFailedRecreate =
+            Boolean(ownedOffer) &&
             ownedOffer?.status === 'PUBLISHED' &&
             !ownedOffer.listingId &&
-            item.product?.title?.trim() === canonical.item.product.title?.trim();
+            item.product?.title?.trim() ===
+              canonical.item.product.title?.trim();
           if (!safeFailedRecreate) {
             throw new Error(
               `Cleanup refused for ${cleanupOfferId}: failed-recreate ownership was not proven`,
@@ -372,20 +408,23 @@ async function main(): Promise<void> {
           if (remaining.total === 0) {
             await inventoryApi.deleteItem(target.storeId, target.catalogSku);
           }
-          console.log(JSON.stringify({
-            event: 'failed_recreate_cleanup_result',
-            channelId: target.channelId,
-            sku: target.catalogSku,
-            offerId: cleanupOfferId,
-            deleted: true,
-          }));
+          console.log(
+            JSON.stringify({
+              event: 'failed_recreate_cleanup_result',
+              channelId: target.channelId,
+              sku: target.catalogSku,
+              offerId: cleanupOfferId,
+              deleted: true,
+            }),
+          );
           continue;
         }
         const canonical = await publishService.buildCanonicalRecoveryProjection(
           target.sourceListingId,
           target.storeId,
         );
-        const item = await inventoryApi.getItem(target.storeId, cleanupSku)
+        const item = await inventoryApi
+          .getItem(target.storeId, cleanupSku)
           .catch((error: unknown) => {
             if (isNotFound(error)) return null;
             throw error;
@@ -407,31 +446,37 @@ async function main(): Promise<void> {
             offer.status !== 'PUBLISHED' &&
             !offer.listingId,
         );
-        const safeOrphan = Boolean(item) &&
+        const safeOrphan =
+          Boolean(item) &&
           blockingOffers.length === 0 &&
           actualProduct?.title?.trim() === expectedProduct.title?.trim() &&
-          (actualProduct.imageUrls?.length ?? 0) === (expectedProduct.imageUrls?.length ?? 0) &&
-          (!actualProduct.mpn || !expectedProduct.mpn || actualProduct.mpn === expectedProduct.mpn);
-        console.log(JSON.stringify({
-          event: 'alternate_cleanup_check',
-          channelId: target.channelId,
-          canonicalSku: target.catalogSku,
-          alternateSku: cleanupSku,
-          itemExists: Boolean(item),
-          offerCount: offers.total,
-          actualTitle: actualProduct?.title ?? null,
-          expectedTitle: expectedProduct.title ?? null,
-          actualImageCount: actualProduct?.imageUrls?.length ?? null,
-          expectedImageCount: expectedProduct.imageUrls?.length ?? null,
-          actualMpn: actualProduct?.mpn ?? null,
-          expectedMpn: expectedProduct.mpn ?? null,
-          offers: offers.offers.map((offer) => ({
-            offerId: offer.offerId ?? null,
-            status: offer.status ?? null,
-            listingId: offer.listingId ?? null,
-          })),
-          safeOrphan,
-        }));
+          (actualProduct.imageUrls?.length ?? 0) ===
+            (expectedProduct.imageUrls?.length ?? 0) &&
+          (!actualProduct.mpn ||
+            !expectedProduct.mpn ||
+            actualProduct.mpn === expectedProduct.mpn);
+        console.log(
+          JSON.stringify({
+            event: 'alternate_cleanup_check',
+            channelId: target.channelId,
+            canonicalSku: target.catalogSku,
+            alternateSku: cleanupSku,
+            itemExists: Boolean(item),
+            offerCount: offers.total,
+            actualTitle: actualProduct?.title ?? null,
+            expectedTitle: expectedProduct.title ?? null,
+            actualImageCount: actualProduct?.imageUrls?.length ?? null,
+            expectedImageCount: expectedProduct.imageUrls?.length ?? null,
+            actualMpn: actualProduct?.mpn ?? null,
+            expectedMpn: expectedProduct.mpn ?? null,
+            offers: offers.offers.map((offer) => ({
+              offerId: offer.offerId ?? null,
+              status: offer.status ?? null,
+              listingId: offer.listingId ?? null,
+            })),
+            safeOrphan,
+          }),
+        );
         if (!safeOrphan) {
           throw new Error(
             `Cleanup refused for ${cleanupSku}: unpublished canonical partial recovery was not proven`,
@@ -452,44 +497,53 @@ async function main(): Promise<void> {
           );
         }
         await inventoryApi.deleteItem(target.storeId, cleanupSku);
-        console.log(JSON.stringify({
-          event: 'alternate_cleanup_result',
-          channelId: target.channelId,
-          canonicalSku: target.catalogSku,
-          alternateSku: cleanupSku,
-          itemExists: true,
-          offerCount: offers.total,
-          deletedOfferCount: deletableOffers.length,
-          deleted: true,
-        }));
+        console.log(
+          JSON.stringify({
+            event: 'alternate_cleanup_result',
+            channelId: target.channelId,
+            canonicalSku: target.catalogSku,
+            alternateSku: cleanupSku,
+            itemExists: true,
+            offerCount: offers.total,
+            deletedOfferCount: deletableOffers.length,
+            deleted: true,
+          }),
+        );
         continue;
       }
       if (recreateStale) {
         try {
           if (!target.offerId) {
-            throw new Error(`Cannot recreate ${target.catalogSku}: local offer ID is missing`);
+            throw new Error(
+              `Cannot recreate ${target.catalogSku}: local offer ID is missing`,
+            );
           }
           const catalog = await catalogRepo.findOneBy({
             id: target.catalogProductId,
           });
           if (!catalog) {
-            throw new Error(`Catalog product ${target.catalogProductId} not found`);
+            throw new Error(
+              `Catalog product ${target.catalogProductId} not found`,
+            );
           }
-          const expected =
-            (await publishService.resolveCatalogCompatibility(catalog)) ?? {
-              compatibleProducts: [],
-            };
-          const canonical = await publishService.buildCanonicalRecoveryProjection(
-            target.sourceListingId,
-            target.storeId,
-          );
-          const listingId = await compatibilityReconciler.recreatePublishedOffer(
-            target.storeId,
-            target.offerId,
-            target.catalogSku,
-            expected,
-            { item: canonical.item, offer: canonical.offer },
-          );
+          const expected = (await publishService.resolveCatalogCompatibility(
+            catalog,
+          )) ?? {
+            compatibleProducts: [],
+          };
+          const canonical =
+            await publishService.buildCanonicalRecoveryProjection(
+              target.sourceListingId,
+              target.storeId,
+            );
+          const listingId =
+            await compatibilityReconciler.recreatePublishedOffer(
+              target.storeId,
+              target.offerId,
+              target.catalogSku,
+              expected,
+              { item: canonical.item, offer: canonical.offer },
+            );
           const offers = await inventoryApi.getOffersBySku(
             target.storeId,
             target.catalogSku,
@@ -509,26 +563,31 @@ async function main(): Promise<void> {
             offerId: replacementOffer.offerId,
             listingId,
           });
-          console.log(JSON.stringify({
-            event: 'stale_recreate_result',
-            channelId: target.channelId,
-            sku: target.catalogSku,
-            offerId: replacementOffer.offerId,
-            listingId,
-          }));
+          console.log(
+            JSON.stringify({
+              event: 'stale_recreate_result',
+              channelId: target.channelId,
+              sku: target.catalogSku,
+              offerId: replacementOffer.offerId,
+              listingId,
+            }),
+          );
         } catch (error: unknown) {
-          console.log(JSON.stringify({
-            event: 'stale_recreate_error',
-            channelId: target.channelId,
-            sku: target.catalogSku,
-            error: errorMessage(error),
-          }));
+          console.log(
+            JSON.stringify({
+              event: 'stale_recreate_error',
+              channelId: target.channelId,
+              sku: target.catalogSku,
+              error: errorMessage(error),
+            }),
+          );
         }
         continue;
       }
-      const alternateSku = target.ebaySku === target.catalogSku
-        ? conflictSafeSkuFor(target.catalogSku)
-        : null;
+      const alternateSku =
+        target.ebaySku === target.catalogSku
+          ? conflictSafeSkuFor(target.catalogSku)
+          : null;
       let alternateWasAbsent = false;
       if (alternateSku) {
         try {
@@ -542,18 +601,24 @@ async function main(): Promise<void> {
           [target.sourceListingId],
           [target.storeId],
         );
-        const failedStores = result?.results?.filter((item) => !item.success) ?? [];
+        const failedStores =
+          result?.results?.filter((item) => !item.success) ?? [];
         if (!result || failedStores.length > 0) {
           const details = failedStores
-            .map((item) => `${item.storeId}: ${item.error ?? 'publish returned success=false'}`)
+            .map(
+              (item) =>
+                `${item.storeId}: ${item.error ?? 'publish returned success=false'}`,
+            )
             .join('; ');
-          console.log(JSON.stringify({
-            event: 'repair_error',
-            channelId: target.channelId,
-            sku: target.sku,
-            error: details || 'publishByListingIds returned no result',
-            result: result ?? null,
-          }));
+          console.log(
+            JSON.stringify({
+              event: 'repair_error',
+              channelId: target.channelId,
+              sku: target.sku,
+              error: details || 'publishByListingIds returned no result',
+              result: result ?? null,
+            }),
+          );
           continue;
         }
         const successfulStore = result.results.find((item) => item.success);
@@ -563,34 +628,40 @@ async function main(): Promise<void> {
           );
         }
         await persistChannelProjection(dataSource, target, successfulStore);
-        console.log(JSON.stringify({
-          event: 'repair_result',
-          channelId: target.channelId,
-          sku: target.sku,
-          effectiveSku: successfulStore.effectiveSku ?? target.catalogSku,
-          result,
-        }));
+        console.log(
+          JSON.stringify({
+            event: 'repair_result',
+            channelId: target.channelId,
+            sku: target.sku,
+            effectiveSku: successfulStore.effectiveSku ?? target.catalogSku,
+            result,
+          }),
+        );
       } catch (error: unknown) {
         if (alternateWasAbsent && alternateSku) {
           await cleanupUnpublishedAlternate(inventoryApi, target, alternateSku);
         }
-        console.log(JSON.stringify({
-          event: 'repair_error',
-          channelId: target.channelId,
-          sku: target.sku,
-          error: errorMessage(error),
-        }));
+        console.log(
+          JSON.stringify({
+            event: 'repair_error',
+            channelId: target.channelId,
+            sku: target.sku,
+            error: errorMessage(error),
+          }),
+        );
       }
     }
-    console.log(JSON.stringify({
-      event: 'repair_completed',
-      apply,
-      targetCount: selected.length,
-      offset,
-      normalSkuRepairCount: normal.length,
-      collisionOrFreshSkuCount: collision.length,
-      completedAt: new Date().toISOString(),
-    }));
+    console.log(
+      JSON.stringify({
+        event: 'repair_completed',
+        apply,
+        targetCount: selected.length,
+        offset,
+        normalSkuRepairCount: normal.length,
+        collisionOrFreshSkuCount: collision.length,
+        completedAt: new Date().toISOString(),
+      }),
+    );
   } finally {
     await app.close();
   }
@@ -599,6 +670,8 @@ async function main(): Promise<void> {
 main()
   .then(() => process.exit(0))
   .catch((error: unknown) => {
-    console.error(JSON.stringify({ event: 'repair_failed', error: errorMessage(error) }));
+    console.error(
+      JSON.stringify({ event: 'repair_failed', error: errorMessage(error) }),
+    );
     process.exit(1);
   });

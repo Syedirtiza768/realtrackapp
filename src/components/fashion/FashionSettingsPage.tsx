@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import FashionWarehousesPanel from './FashionWarehousesPanel';
 
 export default function FashionSettingsPage() {
   const { permissions, user } = useAuth();
@@ -14,6 +15,7 @@ export default function FashionSettingsPage() {
   return <div><h1 className="text-3xl font-semibold">Fashion settings</h1><p className="mt-2 text-slate-500">Workspace administration and the rules that govern Fashion listings.</p>
     <section className="my-6 rounded-xl bg-white p-5 dark:bg-slate-900"><h2 className="font-semibold">Your access</h2><p className="mt-2 text-sm">{user?.name || user?.email} · {user?.roleName || 'Fashion administrator'}</p><p className="mt-1 text-sm text-slate-500">Available actions follow your current session permissions and server-authorized store access.</p></section>
     <div className="grid gap-4 sm:grid-cols-2">{destinations.filter((item) => permissions.includes(item.permission) && (item.to !== '/fashion/review' || permissions.includes('fashion.listings.view'))).map((item) => <Link key={item.to} to={item.to} className="rounded-xl border border-slate-200 bg-white p-5 transition hover:border-pink-400 dark:border-slate-800 dark:bg-slate-900"><h2 className="font-semibold">{item.title}</h2><p className="mt-2 text-sm text-slate-500">{item.description}</p><span className="mt-3 inline-block text-sm font-medium text-pink-700 dark:text-pink-400">Open settings →</span></Link>)}</div>
+    <FashionWarehousesPanel />
     <section className="mt-6 rounded-xl bg-white p-5 dark:bg-slate-900"><h2 className="font-semibold">Enforced workspace rules</h2><dl className="mt-4 space-y-4 text-sm">
       <div><dt className="font-medium">Dedicated Fashion stores</dt><dd className="mt-1 text-slate-500">Seller connections belong to this vertical. Conversion to another vertical and shared seller ownership are not available.</dd></div>
       <div><dt className="font-medium">Explicit authenticity approval</dt><dd className="mt-1 text-slate-500">The reviewer must inspect the listing and evidence, then confirm authenticity. Material listing changes require another review. Automated checks do not authenticate a physical item.</dd></div>

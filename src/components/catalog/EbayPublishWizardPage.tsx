@@ -190,7 +190,7 @@ export default function EbayPublishWizardPage() {
 
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6 text-slate-900 dark:text-slate-100">
-      <Link to="/catalog" className="text-sm text-sky-400 hover:underline">
+      <Link to="/auto-parts/catalog" className="text-sm text-sky-400 hover:underline">
         ← Catalog
       </Link>
       <h1 className="text-2xl font-semibold">Publish to eBay</h1>
@@ -203,7 +203,7 @@ export default function EbayPublishWizardPage() {
             Sign in
           </Link>{' '}
           and connect sellers under{' '}
-          <Link to="/settings/integrations/ebay" className="underline">
+          <Link to="/auto-parts/settings/integrations/ebay" className="underline">
             eBay stores
           </Link>
           .
@@ -215,7 +215,7 @@ export default function EbayPublishWizardPage() {
         {accounts.length === 0 && signedIn && (
           <p className="text-slate-500 dark:text-slate-400 text-sm">
             No connected sellers.{' '}
-            <Link to="/settings/integrations/ebay" className="text-sky-400 underline">
+            <Link to="/auto-parts/settings/integrations/ebay" className="text-sky-400 underline">
               Sign in with eBay
             </Link>{' '}
             first.

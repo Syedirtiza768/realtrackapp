@@ -30,6 +30,10 @@ Fashion fields follow `backend/src/verticals/fashion.config.ts`. Clothing is alw
 
 Category metadata adds editable item-specific suggestions and marks required values; multi-valued specifics use `|` separators. Backend validation remains authoritative. New drafts can be saved with incomplete publishing fields. AI success is not required to save.
 
+### Catalogue export imports
+
+Fashion source-export rows preserve recognized item specifics as normal Fashion fields and render other specifics in the editable **Additional item specifics** name/value list. Those additional values are included in eBay aspects unless an equivalent curated specific is already present. The original measurement notes remain editable. When the source export has no measurement unit, the editor requires the operator to confirm cm or inches before publishing or filling a chart; confirmed units appear with the notes in generated listing text. Source-export photos show their WebP mirror status; publishing remains blocked until every source photo is stored in application storage. Re-importing the same catalogue retries failed copies after image mirroring is enabled.
+
 Preview uses current form values, `sanitizeHtml` for description markup and `toProxyUrl` for images. Generate listing text uses confirmed Fashion details and keeps reported defects visible. Unknown details are omitted rather than stated as facts.
 
 Saving an edit resets backend approval to `needs_review`. Quarantined/manualReview listings are read-only.
@@ -39,3 +43,11 @@ Saving an edit resets backend approval to `needs_review`. Quarantined/manualRevi
 Listing view/create/update use `fashion.listings.view`, `fashion.listings.create`, `fashion.listings.update`. Photo upload and analysis use create. Validate/publish UI requires `fashion.publish`. No generic automotive catalog/store APIs are called from this editor.
 
 Validate and publish operate on saved approved listings only. Publishing returns queue status and never claims marketplace success.
+
+## Photo slots, measurement chart and background identification (2026-09-28)
+
+- Photos are edited in slots: Front (required), Back (required), Tag & labels (1–2, required), Additional (≤13), Size chart (≤1). Slot order becomes `imageUrls` order; roles persist as `_photoRoles` `role:url` entries. Missing required slots show a non-blocking "Recommended before publishing" note in the editor; Quick capture blocks saving without them.
+- Each photo can get a text banner (new stored copy; the original stays in storage).
+- The Measurements group renders `FashionMeasurementChart`: choose a template for the current family, enter values, toggle cm/in (no conversion) and optionally create the branded size-chart image into the Size chart slot. Changing family keeps only measurements valid for the new family.
+- Identify from photos (synchronous) excludes the size-chart image. Saved items also offer **Identify in background** (disabled while there are unsaved changes); while `_analysisStatus` is `queued`/`processing` the editor polls every 4 s and reloads when it finishes, or asks you to save/discard first if the form is dirty.
+- A title starting `Pending identification — ` is never saved as confirmed. See docs/architecture/FASHION_QUICK_CAPTURE.md.

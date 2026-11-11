@@ -1,10 +1,10 @@
 # Initial Brief
 
-> **Note**: RealTrackApp predates the Self-Sustaining AI Project Context framework. This file is a lightweight stub documenting the project's original intent. For the full picture, see [CONTEXT.md](../../CONTEXT.md) and [/docs/context/PROJECT_OVERVIEW.md](../context/PROJECT_OVERVIEW.md).
+> **Note**: Omni Core predates the Self-Sustaining AI Project Context framework. This file is a lightweight stub documenting the project's original intent. For the full picture, see [CONTEXT.md](../../CONTEXT.md) and [/docs/context/PROJECT_OVERVIEW.md](../context/PROJECT_OVERVIEW.md).
 
 ## Original Intent
 
-RealTrackApp (originally "ListingPro") was conceived as a **multi-channel automotive parts listing & operations platform** to help automotive aftermarket sellers manage their catalog-to-marketplace workflow:
+Omni Core (originally "ListingPro") was conceived as a **multi-channel automotive parts listing & operations platform** to help automotive aftermarket sellers manage their catalog-to-marketplace workflow:
 
 1. **Ingest product data** from CSV files and images
 2. **Enrich with AI** (OpenAI vision for image classification, text generation for listing descriptions)

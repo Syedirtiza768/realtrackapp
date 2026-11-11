@@ -35,14 +35,14 @@ async function main(): Promise<void> {
   try {
     const dataSource = app.get(DataSource);
     const queue = app.get<Queue>(getQueueToken('listing-optimization'));
-    const rows = (await dataSource.query(
+    const rows = await dataSource.query(
       `
         SELECT id, sku
           FROM catalog_products
          WHERE fitment_status = 'pending'
          ORDER BY id
       `,
-    )) as Array<{ id: string; sku: string | null }>;
+    );
     const targets = limit > 0 ? rows.slice(0, limit) : rows;
 
     console.log(

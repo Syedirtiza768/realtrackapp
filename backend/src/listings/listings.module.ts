@@ -24,6 +24,7 @@ import { ChannelsModule } from '../channels/channels.module';
 import { TemplateModule } from '../templates/template.module';
 import { TeamsModule } from '../teams/teams.module.js';
 import { RbacModule } from '../rbac/rbac.module.js';
+import { AuthModule } from '../auth/auth.module.js';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { RbacModule } from '../rbac/rbac.module.js';
     TemplateModule,
     TeamsModule,
     RbacModule,
+    AuthModule,
   ],
   controllers: [
     ListingsController,

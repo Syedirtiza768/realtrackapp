@@ -197,6 +197,8 @@ export default function OptimizedImage({
 
   // Image style
   const imgStyle: React.CSSProperties = {
+    width: '100%',
+    height: '100%',
     objectFit,
     transition: 'opacity 0.2s ease',
     opacity: status === 'loaded' ? 1 : 0,

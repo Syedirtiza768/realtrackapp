@@ -32,6 +32,7 @@ import { useListingDetailQuery } from '../../lib/listingsQueryHooks';
 import type { SearchItem } from '../../types/search';
 import { authHeaders } from '../../lib/authApi';
 import { usePermissions } from '../../hooks/usePermissions';
+import { useAuth } from '../auth/AuthContext';
 import type { SearchQuery, SortMode, ActiveFilters, DateAddedPreset } from '../../types/search';
 import { EMPTY_FILTERS, filtersToQuery, countActiveFilters } from '../../types/search';
 import { useUrlFilters } from '../../hooks/useUrlFilters';
@@ -74,6 +75,7 @@ function saveRecent(terms: string[]) {
 
 export default function CatalogManager() {
   const navigate = useNavigate();
+  const { activeOrganizationId } = useAuth();
   const { has } = usePermissions();
   const canDeleteListings = has('listings.delete');
   /* ── State (synced to URL) ─────────────────────────────── */
@@ -196,6 +198,8 @@ export default function CatalogManager() {
   }, [filters]);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectedPublishBlockedIds, setSelectedPublishBlockedIds] = useState<Set<string>>(new Set());
+  const [publishBlockedMessage, setPublishBlockedMessage] = useState<string | null>(null);
   const [bulkPublishOpen, setBulkPublishOpen] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [policyModalOpen, setPolicyModalOpen] = useState(false);
@@ -281,16 +285,29 @@ export default function CatalogManager() {
   }, []);
 
   const handleToggleSelect = useCallback((id: string) => {
+    const publishBlocked = dedupedItems.find((item) => item.id === id)?.publishBlocked === true;
     setSelectedIds(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
-  }, []);
+    setSelectedPublishBlockedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else if (publishBlocked) next.add(id);
+      return next;
+    });
+    setPublishBlockedMessage(null);
+  }, [dedupedItems]);
 
   const handleSelectAll = useCallback((ids: string[]) => {
     setSelectedIds(ids.length === 0 ? new Set() : new Set(ids));
-  }, []);
+    const itemsById = new Map(dedupedItems.map((item) => [item.id, item]));
+    setSelectedPublishBlockedIds(
+      new Set(ids.filter((id) => itemsById.get(id)?.publishBlocked === true)),
+    );
+    setPublishBlockedMessage(null);
+  }, [dedupedItems]);
 
   const handleFilterChange = useCallback((f: ActiveFilters | ((prev: ActiveFilters) => ActiveFilters)) => {
     setFilters(f);
@@ -305,14 +322,26 @@ export default function CatalogManager() {
   }, []);
 
   const handlePublish = useCallback((id: string) => {
+    if (dedupedItems.find((item) => item.id === id)?.publishBlocked) {
+      setPublishBlockedMessage('This listing is on manual review or a catalog hold and cannot be published until it is cleared.');
+      return;
+    }
+    setPublishBlockedMessage(null);
     setPublishTargetId(id);
     setPublishModalOpen(true);
-  }, []);
+  }, [dedupedItems]);
 
   const handleBulkPublish = useCallback(() => {
     if (selectedIds.size === 0) return;
+    if (selectedPublishBlockedIds.size > 0) {
+      setPublishBlockedMessage(
+        `${selectedPublishBlockedIds.size} selected listing${selectedPublishBlockedIds.size === 1 ? ' is' : 's are'} on manual review or a catalog hold. Remove them from the selection before publishing.`,
+      );
+      return;
+    }
+    setPublishBlockedMessage(null);
     setBulkPublishOpen(true);
-  }, [selectedIds]);
+  }, [selectedIds, selectedPublishBlockedIds]);
 
   const [exporting, setExporting] = useState(false);
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
@@ -380,6 +409,8 @@ export default function CatalogManager() {
       if (!res.ok) throw new Error('Bulk delete failed');
       setBulkDeleteConfirm(false);
       setSelectedIds(new Set());
+      setSelectedPublishBlockedIds(new Set());
+      setPublishBlockedMessage(null);
       refetch();
     } catch (err) {
       console.error('Bulk delete failed:', err);
@@ -394,6 +425,8 @@ export default function CatalogManager() {
     setBulkPublishOpen(false);
     setExportModalOpen(false);
     setSelectedIds(new Set());
+    setSelectedPublishBlockedIds(new Set());
+    setPublishBlockedMessage(null);
     refetch();
   }, [refetch]);
 
@@ -415,6 +448,7 @@ export default function CatalogManager() {
     setPublishJob({
       id: `pub-${Date.now()}`,
       mode: params.mode,
+      organizationId: params.organizationId,
       listing: params.listing,
       listingIds: params.listingIds,
       listingNames,
@@ -530,7 +564,7 @@ export default function CatalogManager() {
 
           <button
             type="button"
-            onClick={() => navigate('/listings/new')}
+            onClick={() => navigate('/auto-parts/listings/new')}
             className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-medium text-white hover:bg-blue-700"
           >
             <PlusCircle size={14} /> Add Part
@@ -606,8 +640,18 @@ export default function CatalogManager() {
           onEditPolicies={handleBulkPolicyEdit}
           onExport={handleExportTemplates}
           onMore={() => setMoreMenuOpen((v) => !v)}
-          onClear={() => setSelectedIds(new Set())}
+          onClear={() => {
+            setSelectedIds(new Set());
+            setSelectedPublishBlockedIds(new Set());
+            setPublishBlockedMessage(null);
+          }}
         />
+
+        {publishBlockedMessage && (
+          <p role="alert" className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+            {publishBlockedMessage}
+          </p>
+        )}
 
         {moreMenuOpen && selectedIds.size > 0 && (
           <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -734,6 +778,7 @@ export default function CatalogManager() {
       {publishTargetId && publishModalOpen && (publishListing || publishListingLoading) && (
         <PublishModal
           mode="single"
+          organizationId={activeOrganizationId}
           listing={
             publishListing ??
             ({ id: publishTargetId, title: null, customLabelSku: null } as SearchItem)
@@ -747,6 +792,7 @@ export default function CatalogManager() {
       {/* Bulk publish modal */}
       <PublishModal
         mode="bulk"
+        organizationId={activeOrganizationId}
         listingIds={Array.from(selectedIds)}
         open={bulkPublishOpen}
         onClose={() => setBulkPublishOpen(false)}

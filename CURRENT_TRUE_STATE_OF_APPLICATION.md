@@ -698,7 +698,7 @@ Walmart: ChannelConnection.channel supports 'walmart', no processing code
 ### Nginx Configuration
 
 **Two versions**:
-- Root `nginx.conf` — Bare-metal/VPS (mhn.realtrackapp.com), basic proxy
+- Root `nginx.conf` — Bare-metal/VPS (app.omnicoreholding.com), basic proxy
 - `docker/nginx.conf` — Docker Compose, 7 location blocks with per-endpoint timeout tuning and WebSocket support
 
 ---

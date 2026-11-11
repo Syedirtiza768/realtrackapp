@@ -43,6 +43,7 @@ const INLINE_RUNNING_STAGES = new Set<string>([
 const REENRICHABLE_STAGES = new Set<string>([
   INLINE_ENRICH_STAGES.FAILED,
   INLINE_ENRICH_STAGES.NEEDS_REVIEW,
+  INLINE_ENRICH_STAGES.COMPLETED,
   ...INLINE_RUNNING_STAGES,
 ]);
 
@@ -88,6 +89,7 @@ export class InventoryAutoTriggerService {
       | 'cManufacturerPartNumber'
       | 'cBrand'
       | 'pipelineJobId'
+      | 'enrichmentLastFailureReason'
     > & { enrichmentStage?: string | null },
     pipelineJob?: PipelineJob | null,
   ): EnrichmentStatus {
@@ -97,7 +99,14 @@ export class InventoryAutoTriggerService {
       if (INLINE_RUNNING_STAGES.has(stage)) return 'enriching';
       if (stage === INLINE_ENRICH_STAGES.COMPLETED) return 'completed';
       if (stage === INLINE_ENRICH_STAGES.NEEDS_REVIEW) return 'needs_review';
-      if (stage === INLINE_ENRICH_STAGES.FAILED) return 'failed';
+      if (stage === INLINE_ENRICH_STAGES.FAILED) {
+        return this.retryService.getFailureUiClass(
+          listing.enrichmentLastFailureReason,
+          this.parseImageUrls(listing.itemPhotoUrl).length,
+        ) === 'needs_review'
+          ? 'needs_review'
+          : 'failed';
+      }
     }
 
     if (pipelineJob) {
@@ -167,7 +176,8 @@ export class InventoryAutoTriggerService {
   /**
    * Enqueue a background auto-enrich job for a listing.
    * Called when the listing meets the trigger criteria (2+ images).
-   * Use `force: true` to re-run stuck or needs_review enrichments.
+   * Use `force: true` to re-run stuck/review jobs or completed jobs after new
+   * image evidence has been added.
    *
    * Respects permanent failure flags — listings marked as permanently failed
    * are skipped unless `force: true` is passed (which also resets retry state).
@@ -183,15 +193,17 @@ export class InventoryAutoTriggerService {
       return { queued: false, reason: 'listing_not_found' };
     }
 
-    // Photos are still required at intake creation for publish readiness,
-    // but part identification is now eBay-Browse-first and no longer needs
-    // images. Do not block auto-enrich enqueue on image count — vision is
-    // only a fallback inside lookupPart when Browse finds nothing.
+    // Part identity must be checked against a label and overall photo.
     const imageCount = this.parseImageUrls(listing.itemPhotoUrl).length;
     if (imageCount < 2) {
       this.logger.debug(
-        `Auto-enrich for listing ${listingId}: images=${imageCount} (Browse-first; proceeding without vision photos)`,
+        'Auto-enrich skipped for listing ' +
+          listingId +
+          ': only ' +
+          imageCount +
+          ' photo(s); two are required for part identification',
       );
+      return { queued: false, reason: 'insufficient_photos' };
     }
 
     const stage = listing.enrichmentStage;

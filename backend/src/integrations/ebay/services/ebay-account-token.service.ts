@@ -55,6 +55,11 @@ export class EbayAccountTokenService {
       : 'https://auth.sandbox.ebay.com';
   }
 
+  private getRedirectUri(): string {
+    // eBay expects the OAuth-enabled RuName here, not the callback URL itself.
+    return this.config.get<string>('EBAY_REDIRECT_URI', '').trim();
+  }
+
   private basicAuthHeader(): string {
     const id = this.config.get<string>('EBAY_CLIENT_ID', '');
     const secret = this.config.get<string>('EBAY_CLIENT_SECRET', '');
@@ -220,7 +225,7 @@ export class EbayAccountTokenService {
     environment: 'sandbox' | 'production';
   }): string {
     const clientId = this.config.get<string>('EBAY_CLIENT_ID', '');
-    const redirectUri = this.config.get<string>('EBAY_REDIRECT_URI', '');
+    const redirectUri = this.getRedirectUri();
     const scopes = this.getDefaultScopes()
       .map((s) => encodeURIComponent(s))
       .join('%20');
@@ -245,7 +250,7 @@ export class EbayAccountTokenService {
       new URLSearchParams({
         grant_type: 'authorization_code',
         code: params.code,
-        redirect_uri: this.config.get<string>('EBAY_REDIRECT_URI', ''),
+        redirect_uri: this.getRedirectUri(),
       }).toString(),
       {
         headers: {

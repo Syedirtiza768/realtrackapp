@@ -1,5 +1,12 @@
 # System Map
 
+**2026-11-03 deployed module:** `backend/src/integrations/motoark/` is the dedicated
+consumer lifecycle adapter. It connects a PostgreSQL inbox and scoped order
+balances to `stock` reservations/ledger, then the existing channel outbox and
+Primemotive change feed. Registered by `MotoarkModule` in `app.module.ts`;
+production has both migrations. See the
+[contract and release record](../architecture/MOTOARK_ORDER_LIFECYCLE.md).
+
 > Fashion completion candidate (2026-09-09): see docs/architecture/FASHION_WORKSPACE_COMPLETION.md for route/API changes, scoped services, password_change_required migration and seed variable names, test evidence, deployment procedure, and explicitly unimplemented requirements. This candidate is not yet deployed.
 
 > **Source**: Moved from `docs/CODEMAP.md` (2026-05-29).
@@ -228,6 +235,8 @@ module-name/
 ## Fashion vertical boundary (2026-09-09)
 
 The Fashion path is a distinct frontend route tree backed by /api/fashion controllers. Auth/RBAC is shared, while Fashion roles, review records, store configuration, and OAuth state are explicitly vertical-aware. Photos-first Add Item uploads through existing storage, optionally identifies a garment with the shared vision provider, and persists category-aware attributes on `catalog_products.vertical_attributes`. Automotive remains the default for legacy rows and routes.
+
+Quick capture (2026-10-09): `/fashion/capture` uploads source photos as WebP, saves an intake item, and enqueues `fashion-intake-analysis`; the worker identifies the garment in the background. Processed, non-quarantined items move into the visible Fashion Catalog only through the explicit intake handoff, which records the actor and time. Store and policy selection happens from Catalog when selected items are published. `/fashion/reports` provides filterable activity details and CSV export. Size-chart and banner images are rendered server-side with sharp and stored beside intake photos. See docs/architecture/FASHION_QUICK_CAPTURE.md.
 
 ## Business & Industrial boundary (2026-09-09)
 

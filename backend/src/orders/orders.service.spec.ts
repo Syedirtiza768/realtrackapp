@@ -276,4 +276,13 @@ describe('OrdersService (regression)', () => {
       expect.objectContaining({ storeId: null }),
     );
   });
+
+  it('requires the signed lifecycle contract for MotoArk status, shipment and refund changes', async () => {
+    orderRepo.findOneBy.mockResolvedValue(mockOrder({ channel: 'motoark', status: 'processing' }));
+    await expect(service.transitionStatus('order-1', 'cancelled')).rejects.toThrow('MotoArk order-events');
+    await expect(service.updateShipping('order-1', { trackingNumber: 'TRACK' })).rejects.toThrow('MotoArk order-events');
+    await expect(service.processRefund('order-1', { amount: '1.00' })).rejects.toThrow('MotoArk order-events');
+    expect(orderRepo.save).not.toHaveBeenCalled();
+    expect(events.emit).not.toHaveBeenCalled();
+  });
 });

@@ -16,6 +16,7 @@ import {
   Store as StoreIcon,
 } from 'lucide-react';
 import { getStoresByChannel, getStoreProfiles } from '../../lib/multiStoreApi';
+import { listEbayAccounts } from '../../lib/ebayIntegrationsApi';
 import type { SearchItem } from '../../types/search';
 import type { Store } from '../../types/multiStore';
 import { getAllImageUrls } from '../../lib/listingsApi';
@@ -31,6 +32,7 @@ import type { StoreOverrides } from '../catalog/PublishProgressPanel';
 
 export interface PublishStartParams {
   mode: 'single' | 'bulk';
+  organizationId: string;
   listing?: SearchItem;
   listingIds?: string[];
   stores: Store[];
@@ -52,6 +54,7 @@ interface BulkProps {
 
 type Props = (SingleProps | BulkProps) & {
   open: boolean;
+  organizationId: string | null;
   onClose: () => void;
   onPublishStart: (params: PublishStartParams) => void;
 };
@@ -71,22 +74,44 @@ function validateListing(listing: SearchItem): { valid: boolean; missing: string
 /* ── Component ────────────────────────────────────────────── */
 
 export default function PublishModal(props: Props) {
-  const { open, onClose, onPublishStart, mode } = props;
+  const { open, organizationId, onClose, onPublishStart, mode } = props;
   const listing = mode === 'single' ? props.listing : undefined;
   const listingIds = mode === 'bulk' ? props.listingIds : undefined;
 
   /* ── eBay stores ─────────────────────────────────────────── */
   const { data: stores = [], isLoading: storesLoading } = useQuery({
-    queryKey: ['ebay-stores'],
+    queryKey: ['ebay-stores', organizationId],
     queryFn: () => getStoresByChannel('ebay'),
     enabled: open,
     staleTime: 60_000,
   });
 
-  const activeStores = useMemo(
-    () => stores.filter((s) => s.status === 'active'),
-    [stores],
+  const {
+    data: ebayAccounts = [],
+    isLoading: accountsLoading,
+    isError: accountsError,
+  } = useQuery({
+    queryKey: ['ebay-accounts', organizationId],
+    queryFn: () => listEbayAccounts(organizationId ?? undefined),
+    enabled: open && !!organizationId,
+    staleTime: 60_000,
+  });
+
+  const accountStoreIds = useMemo(
+    () => new Set(
+      ebayAccounts
+        .filter((account) => account.connectionStatus === 'active')
+        .map((account) => account.primaryStoreId),
+    ),
+    [ebayAccounts],
   );
+  const activeStores = useMemo(
+    () => stores.filter(
+      (store) => store.status === 'active' && accountStoreIds.has(store.id),
+    ),
+    [stores, accountStoreIds],
+  );
+  const storeScopeLoading = storesLoading || (!!organizationId && accountsLoading);
 
   /* ── Local state ─────────────────────────────────────────── */
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -104,7 +129,7 @@ export default function PublishModal(props: Props) {
       setProfiles(EMPTY_PROFILE_SELECTION);
       setProfileStoreId('');
     }
-  }, [open]);
+  }, [open, organizationId]);
 
   const profileSourceStoreId = useMemo(() => {
     if (profileStoreId) return profileStoreId;
@@ -193,17 +218,18 @@ export default function PublishModal(props: Props) {
 
   /* ── Handler: hand off to parent ────────────────────────── */
   const handlePublish = useCallback(() => {
-    if (selected.size === 0) return;
+    if (!organizationId || selected.size === 0) return;
     const selectedStores = activeStores.filter((s) => selected.has(s.id));
     onPublishStart({
       mode,
+      organizationId,
       listing,
       listingIds,
       stores: selectedStores,
       overrides,
       profiles,
     });
-  }, [selected, activeStores, mode, listing, listingIds, overrides, profiles, onPublishStart]);
+  }, [selected, activeStores, mode, listing, listingIds, overrides, profiles, organizationId, onPublishStart]);
 
   if (!open) return null;
 
@@ -269,15 +295,27 @@ export default function PublishModal(props: Props) {
           )}
 
           {/* Loading */}
-          {storesLoading && (
+          {storeScopeLoading && (
             <div className="flex items-center justify-center py-8 gap-2 text-slate-500 dark:text-slate-400">
               <Loader2 size={16} className="animate-spin" />
               <span className="text-sm">Loading eBay stores…</span>
             </div>
           )}
 
+          {!organizationId && (
+            <div role="alert" className="rounded-lg border border-amber-800/60 bg-amber-950/30 p-3 text-sm text-amber-300">
+              The active workspace is still loading. Reopen this dialog before publishing.
+            </div>
+          )}
+
+          {accountsError && (
+            <div role="alert" className="rounded-lg border border-red-800/60 bg-red-950/30 p-3 text-sm text-red-300">
+              Unable to load eBay accounts for this workspace. Refresh and try again.
+            </div>
+          )}
+
           {/* Store checkboxes */}
-          {!storesLoading && (
+          {!storeScopeLoading && organizationId && !accountsError && (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <p className="text-xs text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wider">
@@ -429,10 +467,10 @@ export default function PublishModal(props: Props) {
               })}
 
               {/* No stores */}
-              {!storesLoading && activeStores.length === 0 && (
+              {!storeScopeLoading && organizationId && !accountsError && activeStores.length === 0 && (
                 <div className="text-center py-6 text-sm text-slate-500 dark:text-slate-400">
                   <StoreIcon size={24} className="mx-auto mb-2 text-slate-500 dark:text-slate-600" />
-                  <p>No active eBay stores found.</p>
+                  <p>No active eBay stores found in this workspace.</p>
                   <p className="text-xs mt-1">
                     Go to Settings → Channels to connect your eBay account.
                   </p>
@@ -510,7 +548,7 @@ export default function PublishModal(props: Props) {
           </button>
           <button
             onClick={handlePublish}
-            disabled={selected.size === 0 || storesLoading || (mode === 'single' && hasNoPolicies)}
+            disabled={selected.size === 0 || storeScopeLoading || !organizationId || accountsError || (mode === 'single' && hasNoPolicies)}
             className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
           >
             <Send size={13} />

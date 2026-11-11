@@ -33,6 +33,9 @@ export interface FitmentRow {
   confidence: number;
   source: string;
   validationStatus: 'valid' | 'rejected' | 'needs_review';
+  mvlStatus?: 'valid' | 'rejected' | 'needs_review';
+  /** Explicit review-only evidence must not be promoted by an MVL existence check. */
+  reviewOnly?: boolean;
   rejectedReason?: string;
 }
 

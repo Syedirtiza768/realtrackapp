@@ -2,10 +2,12 @@
  *  Reusable full-screen image lightbox. Shows one image at a
  *  time from a list, supports arrow/Esc navigation, click-outside
  *  to close, and click-and-drag panning when zoomed in.
+ *  Full-size photos use the app proxy because first-party S3 is private.
  * ────────────────────────────────────────────────────────── */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { X, ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from 'lucide-react';
+import { toProxyUrl } from '../../lib/imageUrl';
 
 interface Props {
   images: string[];
@@ -176,7 +178,7 @@ export default function ImageZoom({ images, index, onClose }: Props) {
       )}
 
       <img
-        src={images[current]}
+        src={toProxyUrl(images[current])}
         alt=""
         draggable={false}
         onClick={(e) => e.stopPropagation()}

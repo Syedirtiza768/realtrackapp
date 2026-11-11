@@ -171,21 +171,32 @@ function scoreLocation(loc) {
   const key = loc.merchantLocationKey ?? '';
   const country = (loc.address?.country ?? '').toUpperCase();
   const city = (loc.address?.city ?? '').toLowerCase();
-  const postal = loc.address?.postalCode ?? '';
   let s = 0;
   if (key === DEFAULT_KEY || key === 'AE_Dubai') s += 100;
   if (key.startsWith('AE_')) s += 50;
   if (country === 'AE') s += 40;
   if (city === 'dubai') s += 20;
-  if (key === 'default') s += 5;
-  if (key === 'US_77001' || postal === '77001' || city === 'houston') s -= 100;
-  if (country === 'US' && postal === '77001') s -= 50;
+  if (country === 'AE' && city === 'dubai') s += 20;
   return s;
 }
 
 function pickPreferredLocation(locations) {
-  if (!locations.length) return undefined;
-  return [...locations].sort((a, b) => scoreLocation(b) - scoreLocation(a))[0];
+  const uaeLocations = locations.filter((loc) => {
+    const country = String(loc.address?.country ?? '').trim().toUpperCase();
+    const key = String(loc.merchantLocationKey ?? '').trim().toUpperCase();
+    if (country) {
+      return (
+        country === 'AE' ||
+        country === 'ARE' ||
+        country === 'UNITED ARAB EMIRATES'
+      );
+    }
+    return key === DEFAULT_KEY || key.startsWith('AE_');
+  });
+  if (!uaeLocations.length) return undefined;
+  return [...uaeLocations].sort(
+    (a, b) => scoreLocation(b) - scoreLocation(a),
+  )[0];
 }
 
 // ── Pick default policy (first marked default, or first) ──────
@@ -297,6 +308,7 @@ async function main() {
 
         // 4. Fetch policies from eBay
         let fulfill, payment, ret, locations;
+        let locationsFetchOk = true;
         try {
           [fulfill, payment, ret] = await Promise.all([
             listFulfillmentPolicies(http, accessToken, mp.marketplace_id),
@@ -321,6 +333,7 @@ async function main() {
         } catch (err) {
           console.log(`  ⚠ Location fetch failed: ${err.message}`);
           locations = [];
+          locationsFetchOk = false;
         }
 
         // 5. Print what we found
@@ -356,7 +369,11 @@ async function main() {
         const newFulfillId = defFulfill?.ebayPolicyId ?? null;
         const newPaymentId = defPayment?.ebayPolicyId ?? null;
         const newReturnId = defReturn?.ebayPolicyId ?? null;
-        const newLocationKey = preferredLoc?.merchantLocationKey ?? null;
+        const newLocationKey =
+          preferredLoc?.merchantLocationKey ??
+          (locationsFetchOk
+            ? DEFAULT_KEY
+            : mp.default_inventory_location_key ?? DEFAULT_KEY);
 
         mpReport.after = {
           fulfillmentPolicyId: newFulfillId,

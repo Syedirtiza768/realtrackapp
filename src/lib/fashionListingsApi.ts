@@ -107,11 +107,189 @@ export interface FashionAnalysisResult {
   visibleText: string[];
 }
 
-export async function uploadFashionPhotos(files: File[], organizationId?: string | null) {
+/** With a SKU, stored files are named `<SKU>-<timestamp>-<id>.webp` for traceability. */
+export async function uploadFashionPhotos(files: File[], organizationId?: string | null, sku?: string) {
   const body = new FormData();
   for (const file of files) body.append('files', file, file.name);
-  return fetchWithAuth<{ uploaded: FashionPhotoUpload[]; errors: string[] }>(withOrg(`${base}/listings/photos`, organizationId), { method: 'POST', body });
+  const path = sku?.trim() ? `${base}/listings/photos?${new URLSearchParams({ sku: sku.trim() })}` : `${base}/listings/photos`;
+  return fetchWithAuth<{ uploaded: FashionPhotoUpload[]; errors: string[] }>(withOrg(path, organizationId), { method: 'POST', body });
 }
+
+/* ── Quick capture: measurement charts, warehouses, batches, intake ── */
+
+export type FashionMeasurementUnit = 'cm' | 'in';
+export interface FashionMeasurementTemplate {
+  id: string;
+  label: string;
+  chartTitle: string;
+  family: 'clothing' | 'footwear' | 'accessories';
+  keywords: string[];
+  points: { letter: string; key: string; label: string }[];
+  /** Constant server-generated schematic; render only as an <img> data URL. */
+  diagramSvg: string;
+}
+export interface FashionWarehouse {
+  id: string;
+  code: string;
+  name: string;
+  countryCode: string | null;
+  active: boolean;
+}
+export interface FashionBatch {
+  batch: string;
+  lastNumber: number;
+  itemCount: number;
+  lastUsedAt: string | null;
+}
+export type FashionAnalysisStatus = 'queued' | 'processing' | 'suggested' | 'failed' | 'skipped';
+export interface FashionIntakePayload {
+  sku: string;
+  batch?: string;
+  warehouseCode?: string;
+  conditionId?: string;
+  department?: string;
+  categoryFamily?: 'clothing' | 'footwear' | 'accessories';
+  labelSize?: string;
+  frontImageUrl: string;
+  backImageUrl: string;
+  tagImageUrls: string[];
+  additionalImageUrls?: string[];
+  sizeChartImageUrl?: string;
+  sizeChartTemplate?: string;
+  measurementsUnit?: FashionMeasurementUnit;
+  measurementValues?: Record<string, string>;
+  price?: number;
+  quantity?: number;
+  identify?: boolean;
+}
+export interface FashionIntakeItem {
+  id: string;
+  sku: string | null;
+  title: string;
+  batch: string | null;
+  warehouseCode: string | null;
+  warehouseName: string | null;
+  imageCount: number;
+  primaryImageUrl: string | null;
+  analysisStatus: FashionAnalysisStatus | null;
+  validationStatus: string;
+  manualReview: boolean;
+  reviewStatus: string;
+  addedToCatalog: boolean;
+  catalogAddedAt: string | null;
+  hasSizeChart: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface FashionIntakePage {
+  items: FashionIntakeItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export const getFashionMeasurementTemplates = (signal?: AbortSignal, organizationId?: string | null) => fetchWithAuth<FashionMeasurementTemplate[]>(withOrg(`${base}/measurement-templates`, organizationId), { signal });
+export const listFashionWarehouses = (signal?: AbortSignal, organizationId?: string | null, includeInactive = false) => fetchWithAuth<FashionWarehouse[]>(withOrg(`${base}/warehouses${includeInactive ? '?includeInactive=true' : ''}`, organizationId), { signal });
+export const createFashionWarehouse = (warehouse: { code: string; name: string; countryCode?: string }, organizationId?: string | null) => post<FashionWarehouse>(withOrg(`${base}/warehouses`, organizationId), warehouse);
+export const updateFashionWarehouse = (id: string, patch: { name?: string; countryCode?: string; active?: boolean }, organizationId?: string | null) => fetchWithAuth<FashionWarehouse>(withOrg(`${base}/warehouses/${encoded(id)}`, organizationId), { method: 'PATCH', body: JSON.stringify(patch) });
+export const listFashionBatches = (signal?: AbortSignal, organizationId?: string | null) => fetchWithAuth<FashionBatch[]>(withOrg(`${base}/intake/batches`, organizationId), { signal });
+export const nextFashionSku = (batch: string, sizeSuffix?: string, organizationId?: string | null) => post<{ batch: string; number: number; sku: string }>(withOrg(`${base}/intake/sku`, organizationId), { batch, ...(sizeSuffix ? { sizeSuffix } : {}) });
+export const createFashionIntake = (payload: FashionIntakePayload, organizationId?: string | null) => post<FashionListing>(withOrg(`${base}/intake`, organizationId), payload);
+export const addFashionIntakeToCatalog = (id: string, organizationId?: string | null) => post<{ id: string; addedToCatalog: boolean; alreadyAdded?: boolean; addedAt?: string; addedByUserId?: string }>(withOrg(`${base}/intake/${encoded(id)}/add-to-catalog`, organizationId), {});
+export const listFashionIntake = (params: { batch?: string; status?: string; q?: string; source?: 'capture' | 'all'; page?: number; pageSize?: number }, signal?: AbortSignal, organizationId?: string | null) => {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) if (value !== undefined && value !== '') query.set(key, String(value));
+  return fetchWithAuth<FashionIntakePage>(withOrg(`${base}/intake?${query}`, organizationId), { signal });
+};
+
+export type FashionActivityFilters = {
+  from?: string;
+  to?: string;
+  uploadedBy?: string;
+  addedBy?: string;
+  analysisStatus?: string;
+  catalogStatus?: 'pending' | 'added' | '';
+  reviewStatus?: string;
+  publicationStatus?: string;
+  storeId?: string;
+  batch?: string;
+  q?: string;
+  attributeKey?: string;
+  attributeValue?: string;
+  page?: number;
+  pageSize?: number;
+};
+export interface FashionActivityActor { id: string; name: string; email: string }
+export interface FashionActivityItem {
+  id: string;
+  sku: string | null;
+  title: string;
+  description: string | null;
+  brand: string | null;
+  conditionId: string | null;
+  conditionLabel: string | null;
+  price: number | string | null;
+  quantity: number | null;
+  imageUrls: string[];
+  categoryId: string | null;
+  categoryName: string | null;
+  attributes: Record<string, unknown>;
+  uploadedByUserId: string | null;
+  uploadedBy: FashionActivityActor | null;
+  createdAt: string;
+  analysisStatus: string;
+  addedToCatalog: boolean;
+  addedByUserId: string | null;
+  addedBy: FashionActivityActor | null;
+  catalogAddedAt: string | null;
+  validationStatus: string;
+  reviewStatus: string | null;
+  batch: string | null;
+  publicationTargets: Array<{
+    storeId: string | null;
+    storeName: string;
+    marketplaceId: string;
+    status: string;
+    policies: Record<string, unknown>;
+    requestedByUserId: string | null;
+    requestedBy: FashionActivityActor | null;
+    createdAt: string;
+  }>;
+}
+export interface FashionActivityReport {
+  page: number;
+  pageSize: number;
+  total: number;
+  summary: { total: number; processed: number; catalogAdded: number; waitingInIntake: number; failed: number };
+  uploadedBy: Array<{ user: FashionActivityActor; itemCount: number }>;
+  addedBy: Array<{ user: FashionActivityActor; itemCount: number }>;
+  users: FashionActivityActor[];
+  items: FashionActivityItem[];
+}
+function activityParams(params: FashionActivityFilters, organizationId?: string | null) {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) if (value !== undefined && value !== '') query.set(key, String(value));
+  if (organizationId) query.set('organizationId', organizationId);
+  return query;
+}
+export const getFashionActivityReport = (params: FashionActivityFilters, signal?: AbortSignal, organizationId?: string | null) =>
+  fetchWithAuth<FashionActivityReport>(`${base}/reports/activity?${activityParams(params, organizationId)}`, { signal });
+export async function downloadFashionActivityReport(params: Omit<FashionActivityFilters, 'page' | 'pageSize'>, organizationId?: string | null) {
+  const token = localStorage.getItem('mk_auth_token');
+  const response = await fetch(`${base}/reports/activity/export?${activityParams(params, organizationId)}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!response.ok) {
+    let message = 'Unable to export the Fashion activity report.';
+    try { const body = await response.json() as { message?: string }; if (body.message) message = body.message; } catch { /* keep the fallback */ }
+    throw new Error(message);
+  }
+  return response.blob();
+}
+export const requestFashionIdentification = (id: string, organizationId?: string | null) => post<{ id: string; analysisStatus: FashionAnalysisStatus }>(withOrg(`${base}/listings/${encoded(id)}/identify`, organizationId), {});
+export const createFashionSizeChart = (payload: { template: string; unit: FashionMeasurementUnit; values: Record<string, string>; brandName?: string; sku?: string }, organizationId?: string | null) => post<{ url: string; s3Key: string }>(withOrg(`${base}/listings/size-chart`, organizationId), payload);
+export const addFashionImageBanner = (payload: { imageUrl: string; text: string; position: 'top' | 'bottom'; theme: 'dark' | 'brand' | 'light' }, organizationId?: string | null) => post<{ url: string; s3Key: string }>(withOrg(`${base}/listings/photos/banner`, organizationId), payload);
+export const fashionDiagramDataUrl = (svg: string) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 
 export const analyzeFashionImages = (payload: {
   imageUrls: string[];

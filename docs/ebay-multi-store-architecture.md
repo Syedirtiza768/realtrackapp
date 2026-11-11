@@ -4,7 +4,7 @@
 
 ## Overview
 
-RealTrackApp treats the **internal catalog** as the source of truth for SKU, quantity, price, images, fitment, and descriptions. Each connected eBay seller account is a **sales channel**. Published rows are tracked in `ebay_listing_channels` (per organization, catalog product, eBay account, and marketplace).
+Omni Core treats the **internal catalog** as the source of truth for SKU, quantity, price, images, fitment, and descriptions. Each connected eBay seller account is a **sales channel**. Published rows are tracked in `ebay_listing_channels` (per organization, catalog product, eBay account, and marketplace).
 
 OAuth connects accounts via the official authorization code flow. Access and refresh tokens are stored **encrypted** in `ebay_oauth_tokens` and mirrored into legacy `channel_connections.encrypted_tokens` so existing `EbayAuthService` / `EbayPublishService` paths keep working during migration.
 

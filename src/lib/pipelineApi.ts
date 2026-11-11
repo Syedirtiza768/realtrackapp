@@ -19,8 +19,11 @@ import type {
   PipelineStats,
   ProductOptimizationSummary,
 } from '../types/pipeline';
+import type { ProductVertical } from './verticalsApi';
 
 const API = '/api';
+const PART_LOOKUP_TIMEOUT_MS = 45_000;
+const ADD_INTAKE_SAVE_TIMEOUT_MS = 45_000;
 
 type PipelineJobApi = Omit<
   PipelineJob,
@@ -100,10 +103,15 @@ async function fetchJson<T>(path: string, signal?: AbortSignal): Promise<T> {
   return fetchWithAuth<T>(`${API}${path}`, { signal });
 }
 
-async function postJson<T>(path: string, body?: unknown): Promise<T> {
+async function postJson<T>(
+  path: string,
+  body?: unknown,
+  signal?: AbortSignal,
+): Promise<T> {
   return fetchWithAuth<T>(`${API}${path}`, {
     method: 'POST',
     body: body !== undefined ? JSON.stringify(body) : undefined,
+    signal,
   });
 }
 
@@ -124,6 +132,7 @@ export function useUploadPipelineFile() {
       teamId: string,
       conditionLabel: string,
       profiles?: PipelineUploadProfileInput,
+      vertical: ProductVertical = 'automotive',
     ) => {
       if (!profiles) {
         setError('Select an eBay store and business profiles before uploading.');
@@ -139,6 +148,8 @@ export function useUploadPipelineFile() {
         formData.append('file', file);
         formData.append('teamId', teamId);
         formData.append('conditionLabel', conditionLabel);
+        formData.append('vertical', vertical);
+        formData.append('importMode', profiles.importMode ?? 'legacy_gridx');
         formData.append('marketplace', profiles.marketplace);
         formData.append('storeId', profiles.storeId);
         formData.append('shippingProfileName', profiles.shippingProfileName);
@@ -289,19 +300,37 @@ export function usePartLookupPricing() {
 
 export function usePartLookup() {
   return useMutation({
-    mutationFn: (input: {
+    mutationFn: async (input: {
       partNumber: string;
       brand?: string;
+      vehicleMake?: string;
+      partType?: string;
       vin?: string;
       imageUrls?: string[];
-    }) => postJson<PartLookupResult>('/pipeline/single-listing/part-lookup', input),
+    }) => {
+      const controller = new AbortController();
+      const timeout = window.setTimeout(
+        () => controller.abort(),
+        PART_LOOKUP_TIMEOUT_MS,
+      );
+
+      try {
+        return await postJson<PartLookupResult>(
+          '/pipeline/single-listing/part-lookup',
+          input,
+          controller.signal,
+        );
+      } finally {
+        window.clearTimeout(timeout);
+      }
+    },
   });
 }
 
 export function useAddIntakePart() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: {
+    mutationFn: async (input: {
       sku?: string;
       partNumber: string;
       brand: string;
@@ -318,11 +347,32 @@ export function useAddIntakePart() {
       teamId?: string;
       location?: string;
       weight?: number;
-    }) =>
-      postJson<{ listing: { id: string; customLabelSku: string | null } }>(
-        '/pipeline/single-listing/add-part',
-        input,
-      ),
+    }) => {
+      const controller = new AbortController();
+      const timeout = window.setTimeout(
+        () => controller.abort(),
+        ADD_INTAKE_SAVE_TIMEOUT_MS,
+      );
+
+      try {
+        return await postJson<{
+          listing: { id: string; customLabelSku: string | null };
+        }>(
+          '/pipeline/single-listing/add-part',
+          input,
+          controller.signal,
+        );
+      } catch (err) {
+        if (controller.signal.aborted) {
+          throw new Error(
+            'Saving took longer than expected. Check Inventory for this part before retrying to avoid a duplicate.',
+          );
+        }
+        throw err;
+      } finally {
+        window.clearTimeout(timeout);
+      }
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['inventory-listings'] });
     },
@@ -370,6 +420,7 @@ export interface PipelineJobListItem {
 export interface PipelineUploadProfileInput {
   marketplace: string;
   storeId: string;
+  importMode?: 'legacy_gridx' | 'pre_enriched_febest_v1';
   shippingProfileName: string;
   returnProfileName: string;
   paymentProfileName: string;

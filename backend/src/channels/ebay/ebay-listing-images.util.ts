@@ -6,6 +6,9 @@ const SINGLE_IMAGE_BRAND_PATTERN =
 const PLACEHOLDER_IMAGE_PATTERN =
   /placeholder|no-image|default-image|logo-only/i;
 
+const PARTSFINDER_ROTATING_IMAGE_TEMPLATE =
+  /(\/pf-allaround-)zoomed(\/[^/]+\/[^/]+\/)([^/]+)-\{col\}(\.[a-z0-9]+)([?#].*)?$/i;
+
 /**
  * Parse a raw image URL field from the database into an array of valid URLs.
  * Handles pipe, comma, newline, and space delimiters — the field may contain
@@ -45,6 +48,18 @@ export function normalizePublishImageUrl(url: string): string | null {
   if (trimmed.startsWith('//')) trimmed = `https:${trimmed}`;
   if (!/^https?:\/\//i.test(trimmed)) return null;
   if (trimmed.length > 2048) return null;
+
+  // PartsFinder stores rotating-gallery URLs as a client-side `{col}`
+  // template. eBay Picture Services cannot download that literal URL. The
+  // details/01 image is the stable primary frame exposed by the same page.
+  trimmed = trimmed.replace(
+    PARTSFINDER_ROTATING_IMAGE_TEMPLATE,
+    '$1details$2$3-01$4$5',
+  );
+
+  // Do not send unresolved image templates to eBay. They look like valid
+  // HTTP URLs to the rest of the application but are not downloadable files.
+  if (/[{}]/.test(trimmed)) return null;
   return trimmed;
 }
 

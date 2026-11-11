@@ -2,14 +2,14 @@
 
 # System Overview
 
-> High-level summary of RealTrackApp's purpose, architecture, and data flows.
+> High-level summary of Omni Core's purpose, architecture, and data flows.
 > For deeper technical details, see `/docs/architecture/overview.md`.
 
 ---
 
-## What is RealTrackApp?
+## What is Omni Core?
 
-RealTrackApp (internal name: `listingpro`) is a **multi-channel automotive parts listing & operations platform**. It helps automotive parts sellers manage their entire catalog-to-marketplace workflow.
+Omni Core (internal name: `listingpro`) is a **multi-channel automotive parts listing & operations platform**. It helps automotive parts sellers manage their entire catalog-to-marketplace workflow.
 
 ### Core Capabilities
 
