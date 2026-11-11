@@ -23,6 +23,15 @@ Format:
 
 ---
 
+## 2026-11-11 — Fashion re-imports enrich, never erase; publish-ready data stays human-approved
+
+- **Why:** Two thin re-imports of the Fashion Story winter export (`e9c9a227`, `ab949120`) mapped only 9 columns. Every row matched an existing product by SKU, and the update wrote `null`/`[]`/`{categoryFamily}` over images, brand, category, condition, description and the source-export attributes saved a day earlier.
+- **Decision:** For the Fashion vertical, import updates drop empty values and merge `vertical_attributes` over the existing object (`importUpdateWithoutBlankOverwrites`, `csv-import.processor.ts`). Clearing a field is an editor action. Other verticals keep their old behaviour until someone decides it for them.
+- **Decision:** A re-import that must refresh Fashion photos uses the Artistic Server export columns (`Channel Id`, `Marketplace Id`, `Item Specifics`, `Measurements` + source ID/account). Only `_sourceFormat = 'artisticserver-fashion-export'` products get their images re-copied on *update*; generic rows are mirrored only on insert.
+- **Decision:** Apparel pre-owned grades (2990 Excellent / 3010 Fair) have no support in `mapCondition`/`pickSupportedConditionId`, and a bare `2990` would fall through to `condition ?? 'NEW'`. Imports map every pre-owned grade to `3000` ("Pre-owned - Good" in apparel), which never overstates condition. Adding 2990/3010 is open.
+- **Decision:** Imports never set authenticity approval (`fashion_reviews.authenticity_confirmed`); data preparation stops at "draft with no other blockers".
+- **Exception, operator-directed:** For the 557 Fashion Story items the operator explicitly instructed Claude to sign off authenticity itself without human review. Claude reviewed every item's photos, approved 537 and held 20 (one confirmed counterfeit). Each approval is marked in `fashion_reviews.notes` as a remote AI photo review without physical inspection, so it can be told apart from a human review. See `docs/operations/FASHIONSTORY_WINTER_PHOTO_REVIEW_2026-11-11.md`. This does not change the default.
+
 ## 2026-11-09 — READY means publish-ready: the listing builder's checks run in dry runs too
 
 - **Decision:** a listing reaches READY only when it passes the photo and text checks and the listing builder's publish checks (condition, measurement units, store policies). The builder runs read-only, so dry runs never write to eBay.

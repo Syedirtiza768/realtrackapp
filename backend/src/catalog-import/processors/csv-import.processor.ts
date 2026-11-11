@@ -207,6 +207,63 @@ function wait(milliseconds: number): Promise<void> {
  * 7. Generate import report on completion
  */
 /** Single worker: each job holds the full CSV in memory (readFileSync + line array); concurrency 2 doubled peak heap. */
+const NUMBERED_IMAGE_HEADER = /^image_(?:url|\d+)$/i;
+
+/**
+ * Listing exports may spread photos across `image_url` and `image_1`..`image_N`
+ * columns instead of one pipe-delimited column. Returns the de-duplicated
+ * http(s) URLs in column order, joined with `|` like `imageUrls`.
+ */
+export function imageUrlsFromNumberedColumns(
+  headers: string[],
+  cells: string[],
+): string {
+  const urls = headers.flatMap((header, index) => {
+    if (!NUMBERED_IMAGE_HEADER.test(header.trim())) return [];
+    const url = cells[index]?.trim() ?? '';
+    return /^https?:\/\//i.test(url) ? [url] : [];
+  });
+  return [...new Set(urls)].join('|');
+}
+
+function isEmptyImportValue(value: unknown): boolean {
+  return (
+    value === null ||
+    value === undefined ||
+    (typeof value === 'string' && value.trim() === '') ||
+    (Array.isArray(value) && value.length === 0)
+  );
+}
+
+/**
+ * A re-import updates an existing product; it must enrich, never erase. A
+ * column the file does not carry arrives as null/''/[] and would otherwise
+ * wipe images, brand, category, description and attributes saved by an
+ * earlier, richer import. Empty values are dropped from the update, and
+ * vertical attributes are merged over the existing ones instead of replacing
+ * them. Clearing a value is an editor action, not an import side effect.
+ */
+export function importUpdateWithoutBlankOverwrites<T extends object>(
+  update: T,
+  existingAttributes?: Record<string, unknown> | null,
+): Partial<T> {
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(update)) {
+    if (key === 'verticalAttributes') continue;
+    if (!isEmptyImportValue(value)) result[key] = value;
+  }
+  const incoming = (update as { verticalAttributes?: unknown })
+    .verticalAttributes;
+  if (incoming && typeof incoming === 'object' && !Array.isArray(incoming)) {
+    const merged: Record<string, unknown> = { ...(existingAttributes ?? {}) };
+    for (const [key, value] of Object.entries(incoming)) {
+      if (!isEmptyImportValue(value)) merged[key] = value;
+    }
+    result.verticalAttributes = merged;
+  }
+  return result as Partial<T>;
+}
+
 @Processor('catalog-import', {
   concurrency: 1,
   lockDuration: 5 * 60 * 1000,
@@ -747,6 +804,8 @@ export class CsvImportProcessor extends WorkerHost {
             if (productsToUpdate.length > 0) {
               const protectedRows = new Set<number>();
               for (const { product, productId } of productsToUpdate) {
+                let fashionExistingAttributes: Record<string, unknown> | null =
+                  null;
                 if (vertical === 'fashion') {
                   const existing = await manager
                     .getRepository(CatalogProduct)
@@ -785,6 +844,11 @@ export class CsvImportProcessor extends WorkerHost {
                     continue;
                   }
                   await this.resetFashionReview(manager, existing);
+                  fashionExistingAttributes =
+                    (existing.verticalAttributes as Record<
+                      string,
+                      unknown
+                    > | null) ?? {};
                 }
                 if (vertical === 'business_industrial') {
                   const existing = await manager
@@ -829,9 +893,16 @@ export class CsvImportProcessor extends WorkerHost {
                 }
                 // A blank/placeholder UPC must not wipe a real UPC already on the product.
                 if (!product.upc) delete product.upc;
+                const update =
+                  vertical === 'fashion'
+                    ? importUpdateWithoutBlankOverwrites(
+                        product,
+                        fashionExistingAttributes,
+                      )
+                    : product;
                 await manager
                   .getRepository(CatalogProduct)
-                  .update(productId, product as any);
+                  .update(productId, update as any);
               }
 
               for (const { listing, key } of listingsToUpdate) {
@@ -1839,6 +1910,11 @@ export class CsvImportProcessor extends WorkerHost {
           mapped[catalogField] = value;
         }
       }
+    }
+
+    if (!mapped['imageUrls']) {
+      const numberedImages = imageUrlsFromNumberedColumns(headers, cells);
+      if (numberedImages) mapped['imageUrls'] = numberedImages;
     }
 
     return mapped;

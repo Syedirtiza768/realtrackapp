@@ -2770,11 +2770,16 @@ export class EbayPublishService {
       account.id,
     );
 
-    const paReturnRequired = listingRequiresPartsAccessoriesReturnPolicy(
-      marketplaceId,
-      req.categoryId,
-      req.condition,
-    );
+    // eBay's June 2025 rule covers Parts & Accessories. The category-range check
+    // also matches apparel IDs, so Fashion listings must never trigger it (it
+    // would block New items or switch the seller to a free-returns policy).
+    const paReturnRequired =
+      req.vertical !== 'fashion' &&
+      listingRequiresPartsAccessoriesReturnPolicy(
+        marketplaceId,
+        req.categoryId,
+        req.condition,
+      );
 
     const synced = await this.resolvePoliciesFromSyncedTable(
       account.id,
@@ -3815,11 +3820,13 @@ export class EbayPublishService {
       });
 
       let returnPolicyId: string | undefined;
-      const paReturnRequired = listingRequiresPartsAccessoriesReturnPolicy(
-        marketplaceId,
-        req.categoryId,
-        req.condition,
-      );
+      const paReturnRequired =
+        req.vertical !== 'fashion' &&
+        listingRequiresPartsAccessoriesReturnPolicy(
+          marketplaceId,
+          req.categoryId,
+          req.condition,
+        );
 
       if (paReturnIssue && !paReturnRequired) {
         throw new BadRequestException(

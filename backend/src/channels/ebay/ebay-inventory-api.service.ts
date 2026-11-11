@@ -1,8 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios';
+import { isDedicatedFashionStore } from '../../verticals/vertical.config.js';
 import {
   buildDefaultInventoryLocationPayload,
   isLegacyDefaultMerchantLocationKey,
@@ -507,11 +508,15 @@ export class EbayInventoryApiService {
     preferredKey?: string | null,
   ): Promise<string | null> {
     const store = await this.storeRepo.findOneBy({ id: storeId });
-    const keyHint = resolvePreferredMerchantLocationKey(
-      this.configService,
-      store,
-      preferredKey,
-    );
+    const isFashion = isDedicatedFashionStore(store?.verticalConfig);
+    const keyHint = isFashion
+      ? preferredKey?.trim() || store?.locationKey?.trim()
+      : resolvePreferredMerchantLocationKey(
+          this.configService,
+          store,
+          preferredKey,
+        );
+    if (!keyHint) return null;
     const cacheKey = `${storeId}:${keyHint}`;
     const cached = this.verifiedLocationCache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) {
@@ -520,6 +525,18 @@ export class EbayInventoryApiService {
 
     try {
       const preferred = await this.getLocation(storeId, keyHint);
+      if (isFashion) {
+        if (
+          preferred?.merchantLocationKey !== keyHint ||
+          preferred.merchantLocationStatus !== 'ENABLED'
+        ) {
+          throw new BadRequestException(
+            `Fashion inventory location "${keyHint}" is missing or disabled on eBay.`,
+          );
+        }
+        this.rememberVerifiedLocation(cacheKey, keyHint);
+        return keyHint;
+      }
       if (
         preferred?.merchantLocationKey &&
         preferred.merchantLocationStatus !== 'DISABLED' &&
@@ -574,6 +591,7 @@ export class EbayInventoryApiService {
       );
       return keyHint;
     } catch (err: unknown) {
+      if (isFashion) throw err;
       const message = err instanceof Error ? err.message : String(err);
       this.logger.warn(
         `Could not ensure inventory location for store ${storeId}: ${message}`,

@@ -127,6 +127,11 @@ const DEFAULT_COLUMN_MAP: Record<string, string> = {
   imageurls: 'imageUrls',
   images: 'imageUrls',
   'image urls': 'imageUrls',
+  // Listing exports carry every photo pipe-delimited in all_image_urls. The
+  // numbered image_url / image_1..image_N columns are a fallback handled in
+  // CsvImportProcessor.parseRow when this column is absent or empty.
+  all_image_urls: 'imageUrls',
+  image_urls: 'imageUrls',
   'item specifics': 'itemSpecifics',
   itemspecifics: 'itemSpecifics',
   specifics: 'itemSpecifics',

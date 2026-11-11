@@ -521,6 +521,8 @@ export class ListingBuilderService {
       if (compliantReturnId) {
         returnPolicyId = compliantReturnId;
       } else if (
+        // Fashion categories fall inside the P&A ID range check but are not P&A.
+        vertical !== 'fashion' &&
         listingRequiresPartsAccessoriesReturnPolicy(
           params.marketplaceId,
           categoryId,

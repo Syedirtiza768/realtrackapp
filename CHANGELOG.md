@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-11-11 — Parts & Accessories return rule no longer applies to Fashion
+
+- `marketplaceRequiresPartsAccessoriesReturnPolicy` classifies every EBAY_US category ID ≥ 33000 as Parts & Accessories, which includes apparel. New / New-with-tags Fashion listings were blocked at build ("require a return policy with at least 30 days and seller-paid return shipping"), and the publish service could have switched the seller to a free-returns policy. The builder and both publish-service checks now skip the rule for `vertical === 'fashion'`. Deployed to production on 2026-11-11 as overlay `realtrackapp-backend:fashion-pa-return-20261111` (healthy); 78 New-with-tags Fashion items then published to Primewardrobeusa with the store's existing return policy unchanged.
+
+## 2026-11-11 — Fashion listings keep an explicitly chosen eBay location
+
+- A Primewardrobeusa pilot publish asked for the store's enabled Dallas location (`US_Dallas_75234`), but production's UAE-only rule in `EbayInventoryApiService.ensureMerchantLocation` reconciled every listing to `AE_Dubai`. The workspace's Fashion branch (dedicated Fashion stores use the requested enabled location and fail closed when it is missing or disabled) was compiled and staged as overlay image `realtrackapp-backend:fashion-location-20261111` with rollback tag `rollback-fashion-location-20261111`. Non-Fashion stores keep the UAE rule. Deployed to production on 2026-11-11 (healthy); see [the operations record](docs/operations/FASHIONSTORY_WINTER_REIMPORT_2026-11-11.md).
+
+## 2026-11-11 — Fashion re-imports no longer wipe images and attributes
+
+- Production imports of `fashionstory_winter_listings_part1_detailed.csv` / `part2_remaining.csv` (`e9c9a227`, `ab949120`) auto-mapped only 9 columns; `all_image_urls`, `image_1..12`, `specific: *`, `description_html` and `category_*` were unmapped. Those 906 rows were updates, and the update path wrote the blank values over the earlier `winter_fashionstory_artisticserver_import.csv` data, so the products lost their images, brand, category, condition, description and Fashion attributes.
+- `all_image_urls` / `image_urls` now auto-map to `imageUrls`; when no column maps to images, `image_url` and `image_1..image_N` are collected in column order (`imageUrlsFromNumberedColumns`).
+- Fashion import updates now skip empty values and merge `vertical_attributes` over the existing ones (`importUpdateWithoutBlankOverwrites`); clearing a value is an editor action. Other verticals are unchanged.
+- Workspace change pending deployment. Covered by `csv-import.processor.spec.ts` and `catalog-import.service.spec.ts`. The production data repair is recorded in [the operations record](docs/operations/FASHIONSTORY_WINTER_REIMPORT_2026-11-11.md).
+
 ## 2026-11-09 — Batch publish: flat master attributes and publish-readiness checks
 
 - Fixed: the first live batch wrote `_ebayMasterImageSet` as an object onto each listing. The Fashion attribute validator rejects objects, so every save of those listings failed, and the builder failed the listings. The masters are now the `_ebayMasterUrls` and `_ebayMasterSourceUrls` string arrays. The 8 listings from that attempt were cleaned up: the old attribute was removed, with audit action `fashion.batch.repair`.
