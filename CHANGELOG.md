@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-12 — Reconnecting an eBay store refreshes it in place
+
+- Every OAuth callback created a new channel connection, store and `connected_ebay_accounts` row, including the `POST /integrations/ebay/accounts/:id/reconnect` path, so a reconnect left the old account `reconnect_required` with its listing mirrors (Artistic Haul: 43,388) and made a duplicate store. A reconnect now carries `reconnectAccountId` in the OAuth state and the callback updates that account's tokens, channel connection and status in place (`EbayIntegrationsOAuthService.reconnectExistingAccount`).
+- The callback fails closed unless the eBay login is the same seller: matching seller user ID, or, for accounts with a placeholder ID, the new token seeing at least one cached business-policy ID. A real seller ID then replaces the placeholder on the account, store and connection, unless another connection in the workspace already holds it.
+- The Identity API is now called on `apiz.ebay.com` (was `api.ebay.com`), which is why native connections stored `unknown_<ms>` seller IDs.
+- New `POST /api/fashion/ebay/accounts/:id/reconnect` and a "Reconnect to eBay" button per account on `/fashion/stores`. Callback failures now return to the page the flow started from with `?error=…&message=…`, and the Fashion stores page shows the result.
+- Covered by `ebay-integrations-oauth.service.spec.ts` (8 tests).
+
 ## 2026-11-11 — Workspace reconciled into main
 
 - Two months of uncommitted work from the development checkout was merged into main: 165 tracked and 82 untracked files taken as-is, 99 files merged three ways, and 109 conflicting hunks reviewed. Where both sides rewrote the same code, main's production version was kept; docs were combined. 410 one-off scripts (many holding live credentials) and generated output were left out. Backend and frontend build cleanly; no test fails that does not already fail on main, and 10 previously failing tests now pass. Details and the list of local variants preserved on `archive/workspace-snapshot-20261111`: [the reconciliation record](docs/operations/WORKSPACE_RECONCILIATION_2026-11-11.md).

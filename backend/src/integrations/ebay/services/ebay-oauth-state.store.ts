@@ -16,6 +16,12 @@ export interface EbayOAuthPendingPayload {
   scopes: string[];
   accountDisplayName: string;
   vertical?: ProductVertical;
+  /**
+   * Set when the user is re-authorizing an existing connection. The callback
+   * then refreshes that account's tokens in place instead of creating a new
+   * connection, store and account.
+   */
+  reconnectAccountId?: string | null;
 }
 
 @Injectable()

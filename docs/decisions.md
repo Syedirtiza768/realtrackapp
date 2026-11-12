@@ -13,6 +13,13 @@ and the narrative log in [docs/context/DECISION_LOG.md](context/DECISION_LOG.md)
 this file for quick day-to-day entries; promote something to a full ADR only if it
 needs that level of ceremony.
 
+## 2026-11-12 — eBay reconnect updates the existing connection; seller identity is proven, not assumed
+
+- **Why:** Reconnecting Artistic Haul would have created a second "Artistic Haul" store, orphaning the old account's 43,388 listing mirrors, warehouse link and policies. Every native connection also had an `unknown_<ms>` seller ID because the Identity API was called on the wrong host, so nothing could tell whether the eBay login was the right seller.
+- **Decision:** Reconnect re-authorizes the same `connected_ebay_accounts` row (and its store/connection) in place. "Connect a seller" still creates a new store.
+- **Decision:** The callback refuses to attach tokens unless the login is provably the same seller: equal real seller IDs, or (placeholder ID) at least one cached business-policy ID visible to the new token. With neither available it fails closed; the operator can connect a new store instead. Policy IDs are seller-unique, which is why they are an acceptable proof.
+- **Revisit when:** all connections carry real seller IDs, at which point the policy fallback can go.
+
 ## 2026-11-11 — Fashion re-imports enrich, never erase; publish-ready data stays human-approved
 
 - **Why:** Two thin re-imports of the Fashion Story winter export (`e9c9a227`, `ab949120`) mapped only 9 columns. Every row matched an existing product by SKU, and the update wrote `null`/`[]`/`{categoryFamily}` over images, brand, category, condition, description and the source-export attributes saved a day earlier.
