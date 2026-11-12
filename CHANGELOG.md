@@ -7,6 +7,7 @@
 - The Identity API is now called on `apiz.ebay.com` (was `api.ebay.com`), which is why native connections stored `unknown_<ms>` seller IDs.
 - New `POST /api/fashion/ebay/accounts/:id/reconnect` and a "Reconnect to eBay" button per account on `/fashion/stores`. Callback failures now return to the page the flow started from with `?error=…&message=…`, and the Fashion stores page shows the result.
 - Covered by `ebay-integrations-oauth.service.spec.ts` (8 tests).
+- Deployed to production on 2026-11-12 (~18:14 UTC) from `main` `a754ec02` (PR #11) as overlays: `realtrackapp-backend:ebay-reconnect-20261112-a754ec02` (live `fashion-pa-return-20261111` + the 4 changed compiled files) and `realtrackapp-frontend:ebay-reconnect-20261112-a754ec02` (live frontend commit `c7803e6d` + the new stores page; the unpatched LF build was byte-identical to the live bundle). Rollback tags `rollback-ebay-reconnect-20261112` for both. Release dir `/home/ubuntu/realtrackapp-ebay-reconnect-20261112-a754ec02/` holds the Dockerfiles, overrides and the exact `-f` lists (`compose-args-backend.txt`, `compose-args-frontend.txt`); rollback is the same command without the reconnect override. Health 200; the reconnect route is mapped. Artistic Haul itself has not been reconnected yet.
 
 ## 2026-11-11 — Workspace reconciled into main
 
