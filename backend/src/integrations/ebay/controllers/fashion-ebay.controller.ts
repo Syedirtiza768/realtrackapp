@@ -133,6 +133,41 @@ export class FashionEbayController {
       }));
   }
 
+  /**
+   * Re-authorize an existing Fashion seller connection. The OAuth callback
+   * refreshes this account's tokens in place (same account, store, mirrors and
+   * policies) and rejects an eBay login that is not the same seller.
+   */
+  @Post('accounts/:id/reconnect')
+  @RequirePermissions('fashion.access', 'fashion.stores.manage')
+  async reconnect(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('organizationId') organizationId?: string,
+  ) {
+    const { org, account } = await this.authorizedAccount(
+      user,
+      id,
+      organizationId,
+      'admin',
+    );
+    await this.verticals.assertFeatureEnabled();
+    if (account.connectionSource === 'sellerpundit')
+      throw new BadRequestException(
+        'SellerPundit connections are re-authorized through SellerPundit',
+      );
+    return this.oauth.startOAuth({
+      userId: user.id,
+      organizationId: org.organizationId,
+      internalStoreId: null,
+      marketplaceId: account.primaryStore.ebayMarketplaceId || 'EBAY_US',
+      environment: account.environment,
+      accountDisplayName: account.accountDisplayName,
+      vertical: 'fashion',
+      reconnectAccountId: account.id,
+    });
+  }
+
   @Get('accounts/:id/policies')
   @RequirePermissions('fashion.access', 'fashion.stores.view')
   async policies(

@@ -23,7 +23,10 @@ import {
   EbayReconnectBodyDto,
   EbayDefaultPoliciesPatchDto,
 } from '../dto/ebay-integrations.dto.js';
-import { EbayIntegrationsOAuthService } from '../services/ebay-integrations-oauth.service.js';
+import {
+  EbayIntegrationsOAuthService,
+  EbayOAuthCallbackFailure,
+} from '../services/ebay-integrations-oauth.service.js';
 import { EbayIntegrationPermissionsService } from '../services/ebay-integration-permissions.service.js';
 import { EbayIntegrationAccountService } from '../services/ebay-integration-account.service.js';
 import { EbayPolicySyncService } from '../services/ebay-policy-sync.service.js';
@@ -110,6 +113,12 @@ export class IntegrationsEbayController {
         { err, code: !!code, state: !!state },
         'eBay OAuth callback failed',
       );
+      if (err instanceof EbayOAuthCallbackFailure) {
+        const query = new URLSearchParams({ error: err.reason });
+        if (err.userMessage) query.set('message', err.userMessage);
+        res.redirect(`${base}${err.redirectPath}?${query.toString()}`);
+        return;
+      }
       res.redirect(`${base}/settings/integrations/ebay?error=oauth_failed`);
     }
   }
@@ -223,6 +232,8 @@ export class IntegrationsEbayController {
       await this.permissions.assertAccountAccess(user.id, id, organizationId);
     this.permissions.assertCanConnect(member.role);
     await this.accounts.getOne(id, orgId);
+    // Re-authorizes this account in place; the callback must not create a
+    // second connection/store for the same seller.
     return this.oauth.startOAuth({
       userId: user.id,
       organizationId: orgId,
@@ -230,6 +241,7 @@ export class IntegrationsEbayController {
       marketplaceId: body.marketplaceId,
       environment: body.environment,
       accountDisplayName: body.accountDisplayName,
+      reconnectAccountId: id,
     });
   }
 

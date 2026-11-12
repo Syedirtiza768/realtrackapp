@@ -365,6 +365,7 @@ category fallback behavior. For `vertical=fashion`, this same upload flow recogn
 | DELETE | `/api/integrations/ebay/:id` | Disconnect account | ebay.manage |
 | POST | `/api/integrations/ebay/:id/sync` | Sync account data | ebay.sync |
 | GET | `/api/integrations/ebay/:id/policies` | Get business policies | ebay.view |
+| POST | `/api/integrations/ebay/accounts/:id/reconnect` | Re-authorize this account in place (since 2026-11-12 the callback no longer creates a second connection/store); different-seller logins are rejected | ebay.connect |
 
 ### Multi-Store
 
@@ -809,7 +810,8 @@ All Fashion routes remain under the normal /api prefix and require JWT plus the 
 | GET | /api/fashion/listings/:id/review | fashion.authenticity.review | Read private review metadata |
 | POST | /api/fashion/listings/:id/quarantine | fashion.incidents.manage | Local quarantine; remote takedown is reported unavailable unless an integration supports it |
 | GET/PATCH | /api/fashion/stores and /api/fashion/stores/:storeId/config | fashion.stores.view/settings.manage | View and configure Fashion store enablement |
-| POST | /api/fashion/ebay/oauth/start | fashion.stores.manage | Start a vertical-tagged eBay OAuth flow |
+| POST | /api/fashion/ebay/oauth/start | fashion.stores.manage | Start a vertical-tagged eBay OAuth flow (connects a **new** dedicated seller store) |
+| POST | /api/fashion/ebay/accounts/:id/reconnect | fashion.stores.manage (store admin access) | Re-authorize an existing Fashion connection in place: same account, store, listing mirrors and policies. The callback rejects an eBay login that is not the same seller (checked by seller ID, or by cached business-policy IDs when the stored ID is a placeholder) and returns to `/fashion/stores?error=conflict&message=…`. SellerPundit connections are refused. |
 | POST | /api/fashion/ebay/listings/validate or /publish | fashion.publish | Validate or enqueue an approved Fashion listing against Fashion-enabled seller targets. Validation verifies the exact enabled merchant location for each target marketplace. |
 | POST | /api/fashion/ebay/listings/publish-bulk | fashion.access + fashion.publish | From Catalog, publish selected approved items to chosen Fashion stores. Optional `storePolicies` supplies each store's enabled `marketplaceId` and shipping, payment and return policy names. Omitting `marketplaceId` uses the store default. |
 | GET | /api/fashion/users | fashion.users.manage | List Fashion workspace members |

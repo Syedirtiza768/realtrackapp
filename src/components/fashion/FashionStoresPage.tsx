@@ -10,6 +10,22 @@ const field = 'mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2
 const button = 'rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700';
 const messageOf = (error: unknown) => error instanceof Error ? error.message : 'Unable to complete request.';
 
+/** Only follow authorization URLs that point at eBay over HTTPS. */
+function assertEbayAuthUrl(raw: string) {
+  const authUrl = new URL(raw);
+  if (authUrl.protocol !== 'https:' || !(authUrl.hostname === 'ebay.com' || authUrl.hostname.endsWith('.ebay.com'))) throw new Error('The server returned an invalid eBay authorization address.');
+  return authUrl.href;
+}
+
+/** Result of the eBay OAuth round trip, passed back by the callback as query parameters. */
+function readOAuthResult(): { ok: boolean; text: string } | null {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('success') === '1') return { ok: true, text: 'eBay authorization completed. The connection is active again and its business policies are syncing.' };
+  const error = params.get('error');
+  if (!error) return null;
+  return { ok: false, text: params.get('message') || (error === 'conflict' ? 'eBay authorization was rejected for this connection.' : 'eBay authorization did not complete. Try again.') };
+}
+
 function AccountPolicies({ account, canManage }: { account: Account; canManage: boolean }) {
   const [marketplace, setMarketplace] = useState(account.marketplaces?.[0]?.marketplaceId ?? '');
   const [policies, setPolicies] = useState<Policy[]>([]);
@@ -69,6 +85,17 @@ export default function FashionStoresPage() {
   const [environment, setEnvironment] = useState('sandbox');
   const [connecting, setConnecting] = useState(false);
   const [connectError, setConnectError] = useState('');
+  const [reconnectingId, setReconnectingId] = useState('');
+  const [reconnectError, setReconnectError] = useState<{ id: string; text: string } | null>(null);
+  const [oauthResult] = useState(readOAuthResult);
+  async function reconnect(account: Account) {
+    if (!canManage || reconnectingId) return;
+    setReconnectingId(account.id); setReconnectError(null);
+    try {
+      const result = await fetchWithAuth<{ authUrl: string }>(`/api/fashion/ebay/accounts/${encodeURIComponent(account.id)}/reconnect`, { method: 'POST' });
+      window.location.assign(assertEbayAuthUrl(result.authUrl));
+    } catch (err) { setReconnectError({ id: account.id, text: messageOf(err) }); setReconnectingId(''); }
+  }
   useEffect(() => {
     if (!canView) return;
     const controller = new AbortController();
@@ -90,13 +117,12 @@ export default function FashionStoresPage() {
     setConnecting(true); setConnectError('');
     try {
       const result = await fetchWithAuth<{ authUrl: string }>('/api/fashion/ebay/oauth/start', { method: 'POST', body: JSON.stringify({ marketplaceId: marketplace, environment, accountDisplayName: name.trim() }) });
-      const authUrl = new URL(result.authUrl);
-      if (authUrl.protocol !== 'https:' || !(authUrl.hostname === 'ebay.com' || authUrl.hostname.endsWith('.ebay.com'))) throw new Error('The server returned an invalid eBay authorization address.');
-      window.location.assign(authUrl.href);
+      window.location.assign(assertEbayAuthUrl(result.authUrl));
     } catch (err) { setConnectError(messageOf(err)); setConnecting(false); }
   }
   if (!canView) return <p role="alert">You do not have permission to view Fashion stores.</p>;
   return <div><h1 className="text-3xl font-semibold">Fashion stores</h1><p className="mt-2 text-slate-500">Manage dedicated eBay seller connections and inspect marketplace business policies.</p>
+    {oauthResult && <p role={oauthResult.ok ? 'status' : 'alert'} className={`mt-4 rounded-lg p-3 text-sm ${oauthResult.ok ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-red-50 text-red-800 dark:bg-red-950 dark:text-red-300'}`}>{oauthResult.text}</p>}
     {canManage && <form onSubmit={(e) => void connect(e)} className="my-6 rounded-xl bg-white p-5 dark:bg-slate-900"><h2 className="font-semibold">Connect a Fashion seller</h2><fieldset disabled={connecting} className="mt-4 grid gap-4 sm:grid-cols-3">
       <label className="text-sm">Connection name<input className={field} value={name} required maxLength={160} placeholder="Fashion store name" onChange={(e) => setName(e.target.value)} /></label>
       <label className="text-sm">eBay marketplace<select className={field} value={marketplace} onChange={(e) => setMarketplace(e.target.value)}>{[['EBAY_US', 'United States'], ['EBAY_GB', 'United Kingdom'], ['EBAY_AU', 'Australia'], ['EBAY_DE', 'Germany'], ['EBAY_CA', 'Canada'], ['EBAY_FR', 'France'], ['EBAY_IT', 'Italy'], ['EBAY_ES', 'Spain']].map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
@@ -110,6 +136,7 @@ export default function FashionStoresPage() {
     {error && <p role="alert" className="my-3 text-sm text-red-700 dark:text-red-400">{error}</p>}
     {accountError && <p role="alert" className="my-3 text-sm text-red-700 dark:text-red-400">eBay account details unavailable: {accountError}</p>}
     {!loading && !error && <div className="space-y-3">{stores.map((store) => <div className="rounded-xl bg-white p-4 dark:bg-slate-900" key={store.id}><p className="font-medium">{store.storeName}</p><p className="text-sm text-slate-500">{store.status} · {store.marketplaceId || 'Marketplace pending'} · Fashion only</p></div>)}{!stores.length && <p className="rounded-xl bg-white p-5 text-sm text-slate-500 dark:bg-slate-900">No Fashion store connections are available to you.{canManage ? ' Connect a seller account above.' : ' Ask a Fashion administrator to assign a store.'}</p>}</div>}
-    {!loading && !accountError && accounts.map((account) => <section className="mt-4 rounded-xl bg-white p-5 dark:bg-slate-900" key={account.id}><h2 className="font-semibold">{account.accountDisplayName || account.ebayUsername || 'eBay seller'}</h2><p className="mt-1 text-sm text-slate-500">{account.environment} · {account.connectionStatus}</p>{account.lastErrorMessage && <p className="mt-2 text-sm text-red-700 dark:text-red-400">{account.lastErrorMessage}</p>}<AccountPolicies account={account} canManage={canManage} /></section>)}
+    {!loading && !accountError && accounts.map((account) => <section className="mt-4 rounded-xl bg-white p-5 dark:bg-slate-900" key={account.id}><h2 className="font-semibold">{account.accountDisplayName || account.ebayUsername || 'eBay seller'}</h2><p className="mt-1 text-sm text-slate-500">{account.environment} · {account.connectionStatus}</p>{account.lastErrorMessage && <p className="mt-2 text-sm text-red-700 dark:text-red-400">{account.lastErrorMessage}</p>}
+      {canManage && <div className="mt-3"><button className={`${button} ${account.connectionStatus === 'reconnect_required' ? 'bg-pink-600 text-white' : ''}`} disabled={!!reconnectingId || connecting} onClick={() => void reconnect(account)}>{reconnectingId === account.id ? 'Opening eBay authorization…' : 'Reconnect to eBay'}</button><p className="mt-1 text-xs text-slate-500">Re-authorizes this same store; sign in with its own eBay seller account. A different seller is rejected.</p>{reconnectError?.id === account.id && <p role="alert" className="mt-2 text-sm text-red-700 dark:text-red-400">{reconnectError.text}</p>}</div>}<AccountPolicies account={account} canManage={canManage} /></section>)}
   </div>;
 }

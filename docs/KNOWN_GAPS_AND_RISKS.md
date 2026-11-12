@@ -128,6 +128,16 @@
 
 **Risk**: Integration disruption, failed publishes.
 
+**Update 2026-11-12**: Reconnecting used to create a second connection, store and
+account for the same seller (the old one stayed `reconnect_required` with its
+listing mirrors). The callback now refreshes the existing account in place when
+started from a Reconnect action. It also called eBay's Identity API on
+`api.ebay.com` instead of `apiz.ebay.com`, so every native connection stored an
+`unknown_<ms>` seller ID and the duplicate-seller guard never fired. Connections
+made before the fix keep their placeholder IDs until they are reconnected.
+**Still open:** the Business & Industrial stores page has no Reconnect button,
+and nothing alerts when a token refresh fails.
+
 **Mitigation**:
 - [ ] Monitor `EbayApiError` logs
 - [ ] Implement exponential backoff retry
