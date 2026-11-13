@@ -13,6 +13,13 @@ and the narrative log in [docs/context/DECISION_LOG.md](context/DECISION_LOG.md)
 this file for quick day-to-day entries; promote something to a full ADR only if it
 needs that level of ceremony.
 
+## 2026-11-13 — The catalog Publish dialog offers PartsBazar360 sellers next to eBay stores
+
+- **Why:** The catalog row's Publish button opened an eBay-only dialog ("Publish to eBay Stores"), so operators publishing a Blackline part to partsbazar360.com saw only eBay stores and an "eBay Category" warning, with no way to pick a PartsBazar360 seller there. Production had three linked sellers (Salvage, AKAA, Blackline) the dialog never showed.
+- **Decision:** `PublishModal.tsx` lists active linked PartsBazar360 sellers (from `GET /channels/partsbazar360/status`) as their own section. PartsBazar360 is queued from the dialog through `POST /channels/bulk-publish` with the seller's `storeId`; eBay stores still go to `PublishProgressPanel`. PartsBazar360 runs first because it only enqueues; a queue failure stops the eBay hand-off so the error stays visible.
+- **Decision:** The eBay-category warning is eBay-only. PartsBazar360 is blocked in the dialog only for what its mapper rejects (title, price > 0, an image).
+- **Revisit when:** PartsBazar360 needs per-seller overrides (price/title) in the dialog — `bulk-publish` sends none today.
+
 ## 2026-11-13 — Catalog "Newest" means date added; Fashion shows "Date updated"
 
 - **Why:** `applySort` in `catalog-workspace.service.ts` had no `newest` branch, so the default catalog order, the "Newest" Sort option and "Date added" all fell through to `updatedAt DESC`. After the 2026-11-13 Fashion export merge touched ~5,400 rows, "Newest" showed old items that had just been updated, and there was no way to see when a row last changed.

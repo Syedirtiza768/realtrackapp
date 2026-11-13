@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-13 — Catalog Publish dialog can publish to PartsBazar360
+
+- Fixed: the catalog row's **Publish** button opened an eBay-only "Publish to eBay Stores" dialog, so a part could not be sent to partsbazar360.com from there (it showed only eBay stores and an "eBay Category" warning). The dialog (`src/components/channels/PublishModal.tsx`, single and bulk) now lists linked PartsBazar360 sellers under **PartsBazar360.com**; choosing one queues the listing on that seller via `POST /api/channels/bulk-publish` and shows the result in the dialog. eBay and PartsBazar360 can be picked together; if PartsBazar360 fails to queue, eBay is not started.
+- The "Missing recommended fields" warning is now labelled "for eBay" and hidden when only PartsBazar360 is picked (PartsBazar360 needs no eBay category). The dialog blocks PartsBazar360 when the listing has no title, no price above zero or no image — the same rules the backend mapper rejects.
+- Frontend only; no API change. Verified against mocked API responses in a local harness (PartsBazar360 only, failure, and PartsBazar360 + eBay).
+- Deployed to production on 2026-11-13 as `realtrackapp-frontend:pb360-publish-dialog-20261113` = `FROM fashion-updated-col-20261113` + new `dist/` (bundle `index-B38fzm6O.js`). Built in LF worktree `F:\apps\realtrackapp-pb360-publish` from the live frontend's source (`c7803e6d` + `FashionStoresPage.tsx`@`daa563fa` + `CatalogResultsTable.tsx`@`61ead14e`, which rebuilt the live `index-DZXoqHBH.js` exactly) plus this `PublishModal.tsx`. Only the frontend container was recreated. Rollback tag `realtrackapp-frontend:rollback-pb360-publish-dialog-20261113`; release files and compose args in `/home/ubuntu/realtrackapp-pb360-publish-dialog-20261113/`.
+
 ## 2026-11-13 — Fashion catalog "Date updated" column; "Newest" sorts by date added
 
 - The Fashion catalog table (`/fashion/catalog`) has a "Date updated" column after "Date added", showing each product's `updatedAt` (date in the cell, date and time on hover). On phones the card shows "Updated <date>". Other verticals are unchanged (`showUpdatedColumn = config.vertical === 'fashion'` in `CatalogResultsTable.tsx`). The catalog API already returned `updatedAt`; sort by it with Sort → "Updated".

@@ -1,7 +1,9 @@
 /* ─── PublishModal ──────────────────────────────────────────
- *  eBay multi-store publishing modal — store selection only.
- *  After the user clicks "Publish", the modal closes and
- *  CatalogManager takes over with an inline progress panel.
+ *  Multi-store publishing modal — destination selection only.
+ *  Destinations: eBay stores (handed to CatalogManager, which
+ *  shows an inline progress panel) and linked PartsBazar360
+ *  sellers (queued directly from here via /channels/bulk-publish;
+ *  partsbazar360.com is a push channel, not an eBay store).
  * ────────────────────────────────────────────────────────── */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -14,9 +16,11 @@ import {
   ChevronDown,
   ChevronUp,
   Store as StoreIcon,
+  CheckCircle2,
 } from 'lucide-react';
 import { getStoresByChannel, getStoreProfiles } from '../../lib/multiStoreApi';
 import { listEbayAccounts } from '../../lib/ebayIntegrationsApi';
+import { bulkPublish, getPartsBazarStatus } from '../../lib/channelsApi';
 import type { SearchItem } from '../../types/search';
 import type { Store } from '../../types/multiStore';
 import { getAllImageUrls } from '../../lib/listingsApi';
@@ -71,6 +75,21 @@ function validateListing(listing: SearchItem): { valid: boolean; missing: string
   return { valid: missing.length === 0, missing };
 }
 
+/** Mirrors the hard requirements in backend partsbazar360-listing.mapper.ts
+ *  (title, price > 0, at least one image). PartsBazar360 needs no eBay category. */
+function validateForPartsBazar(listing: SearchItem): string[] {
+  const missing: string[] = [];
+  if (!listing.title) missing.push('Title');
+  if (!(parseFloat(listing.startPrice ?? '') > 0)) missing.push('Price');
+  if (!getAllImageUrls(listing.itemPhotoUrl).length) missing.push('Images');
+  return missing;
+}
+
+/** bulk-publish errors are "<listingId>@<channel>: <message>"; keep the message. */
+function cleanBulkError(error: string): string {
+  return error.replace(/^[^@\s]+@partsbazar360:\s*/, '');
+}
+
 /* ── Component ────────────────────────────────────────────── */
 
 export default function PublishModal(props: Props) {
@@ -113,8 +132,24 @@ export default function PublishModal(props: Props) {
   );
   const storeScopeLoading = storesLoading || (!!organizationId && accountsLoading);
 
+  /* ── PartsBazar360 sellers (push channel) ────────────────── */
+  const { data: partsBazar } = useQuery({
+    queryKey: ['partsbazar360-status'],
+    queryFn: getPartsBazarStatus,
+    enabled: open,
+    staleTime: 60_000,
+    retry: false,
+  });
+  const partsBazarStores = useMemo(
+    () => (partsBazar?.configured ? partsBazar.stores.filter((s) => s.status === 'active') : []),
+    [partsBazar],
+  );
+
   /* ── Local state ─────────────────────────────────────────── */
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [pbSelected, setPbSelected] = useState<Set<string>>(new Set());
+  const [pbBusy, setPbBusy] = useState(false);
+  const [pbResult, setPbResult] = useState<{ ok: boolean; lines: string[] } | null>(null);
   const [overrides, setOverrides] = useState<Record<string, StoreOverrides>>({});
   const [expandedOverride, setExpandedOverride] = useState<string | null>(null);
   const [profiles, setProfiles] = useState<ProfileSelection>(EMPTY_PROFILE_SELECTION);
@@ -124,6 +159,9 @@ export default function PublishModal(props: Props) {
   useEffect(() => {
     if (open) {
       setSelected(new Set());
+      setPbSelected(new Set());
+      setPbBusy(false);
+      setPbResult(null);
       setOverrides({});
       setExpandedOverride(null);
       setProfiles(EMPTY_PROFILE_SELECTION);
@@ -176,6 +214,24 @@ export default function PublishModal(props: Props) {
     if (!listing) return { valid: true, missing: [] as string[] };
     return validateListing(listing);
   }, [listing]);
+  const pbMissing = useMemo(
+    () => (listing ? validateForPartsBazar(listing) : []),
+    [listing],
+  );
+  // eBay-only gaps (e.g. category) are irrelevant when only PartsBazar360 is picked.
+  const showEbayWarning =
+    !validation.valid && (selected.size > 0 || (pbSelected.size === 0 && !pbResult?.ok));
+  const totalSelected = selected.size + pbSelected.size;
+
+  const togglePartsBazar = useCallback((storeId: string) => {
+    setPbResult(null);
+    setPbSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(storeId)) next.delete(storeId);
+      else next.add(storeId);
+      return next;
+    });
+  }, []);
 
   /* ── Toggle store selection ─────────────────────────────── */
   const toggleStore = useCallback((storeId: string) => {
@@ -217,8 +273,49 @@ export default function PublishModal(props: Props) {
   );
 
   /* ── Handler: hand off to parent ────────────────────────── */
-  const handlePublish = useCallback(() => {
-    if (!organizationId || selected.size === 0) return;
+  const handlePublish = useCallback(async () => {
+    if (!organizationId || totalSelected === 0 || pbBusy) return;
+
+    // PartsBazar360 first: it only queues jobs, so it returns quickly and its
+    // outcome can be shown here before the eBay progress panel takes over.
+    if (pbSelected.size > 0) {
+      const ids = mode === 'single' ? (listing ? [listing.id] : []) : listingIds ?? [];
+      const queued: string[] = [];
+      const failures: string[] = [];
+      setPbBusy(true);
+      setPbResult(null);
+      for (const store of partsBazarStores.filter((s) => pbSelected.has(s.storeId))) {
+        try {
+          const res = await bulkPublish(ids, ['partsbazar360'], store.storeId);
+          if (res.enqueued > 0) {
+            queued.push(
+              mode === 'single'
+                ? `Queued on ${store.storeName}.`
+                : `Queued ${res.enqueued} of ${ids.length} on ${store.storeName}.`,
+            );
+          }
+          for (const e of res.errors.slice(0, 5)) failures.push(`${store.storeName}: ${cleanBulkError(e)}`);
+          if (res.errors.length > 5) failures.push(`${store.storeName}: …and ${res.errors.length - 5} more`);
+        } catch (err) {
+          failures.push(`${store.storeName}: ${err instanceof Error ? err.message : 'Could not queue the publish'}`);
+        }
+      }
+      setPbBusy(false);
+      const ok = failures.length === 0;
+      setPbResult({
+        ok,
+        lines: [
+          ...queued,
+          ...(queued.length ? ['The import finishes in the background — check the listing’s Channels panel for the result.'] : []),
+          ...failures,
+        ],
+      });
+      if (ok) setPbSelected(new Set());
+      // Stop before eBay if PartsBazar360 had problems so the user sees them.
+      if (!ok || selected.size === 0) return;
+    }
+
+    if (selected.size === 0) return;
     const selectedStores = activeStores.filter((s) => selected.has(s.id));
     onPublishStart({
       mode,
@@ -229,7 +326,7 @@ export default function PublishModal(props: Props) {
       overrides,
       profiles,
     });
-  }, [selected, activeStores, mode, listing, listingIds, overrides, profiles, organizationId, onPublishStart]);
+  }, [selected, pbSelected, pbBusy, totalSelected, partsBazarStores, activeStores, mode, listing, listingIds, overrides, profiles, organizationId, onPublishStart]);
 
   if (!open) return null;
 
@@ -248,8 +345,8 @@ export default function PublishModal(props: Props) {
             <Send size={16} className="text-blue-400" />
             <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-sm">
               {mode === 'bulk'
-                ? `Publish ${listingIds?.length ?? 0} Listings to eBay`
-                : 'Publish to eBay Stores'}
+                ? `Publish ${listingIds?.length ?? 0} Listings${partsBazarStores.length ? '' : ' to eBay'}`
+                : partsBazarStores.length ? 'Publish to Stores' : 'Publish to eBay Stores'}
             </h3>
           </div>
           <button
@@ -282,14 +379,93 @@ export default function PublishModal(props: Props) {
           )}
 
           {/* Validation warnings */}
-          {!validation.valid && (
+          {showEbayWarning && (
             <div className="border border-amber-800/60 bg-amber-950/30 rounded-lg p-3 flex items-start gap-2">
               <AlertTriangle size={16} className="text-amber-400 shrink-0 mt-0.5" />
               <div>
-                <p className="text-xs text-amber-300 font-medium">Missing recommended fields</p>
+                <p className="text-xs text-amber-300 font-medium">
+                  Missing recommended fields{partsBazarStores.length ? ' for eBay' : ''}
+                </p>
                 <p className="text-xs text-amber-400/70 mt-0.5">
                   {validation.missing.join(', ')}
                 </p>
+              </div>
+            </div>
+          )}
+          {pbSelected.size > 0 && pbMissing.length > 0 && (
+            <div role="alert" className="border border-red-800/60 bg-red-950/30 rounded-lg p-3 flex items-start gap-2">
+              <AlertTriangle size={16} className="text-red-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-xs text-red-300 font-medium">PartsBazar360 will reject this listing</p>
+                <p className="text-xs text-red-400/70 mt-0.5">Missing: {pbMissing.join(', ')}</p>
+              </div>
+            </div>
+          )}
+
+          {/* PartsBazar360 sellers */}
+          {partsBazarStores.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wider">
+                PartsBazar360.com
+              </p>
+              {partsBazarStores.map((store) => {
+                const isChecked = pbSelected.has(store.storeId);
+                return (
+                  <button
+                    key={store.storeId}
+                    type="button"
+                    role="checkbox"
+                    aria-checked={isChecked}
+                    onClick={() => togglePartsBazar(store.storeId)}
+                    disabled={pbBusy}
+                    className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-colors ${
+                      isChecked
+                        ? 'border-teal-600/60 bg-teal-50 dark:bg-teal-950/30'
+                        : 'border-slate-200 dark:border-slate-800 bg-white/40 dark:bg-slate-900/40 hover:border-slate-300 dark:hover:border-slate-700'
+                    }`}
+                  >
+                    <div
+                      className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                        isChecked ? 'bg-teal-600 border-teal-600' : 'border-slate-300 dark:border-slate-600'
+                      }`}
+                    >
+                      {isChecked && (
+                        <svg viewBox="0 0 12 12" className="w-3 h-3 text-white">
+                          <path d="M3.5 6.5L5 8l3.5-4" stroke="currentColor" strokeWidth="1.5" fill="none" />
+                        </svg>
+                      )}
+                    </div>
+                    <StoreIcon size={14} className="text-teal-500 shrink-0" />
+                    <span className="flex-1 text-left text-sm text-slate-600 dark:text-slate-200 font-medium truncate">
+                      {store.storeName}
+                    </span>
+                    <span className="text-xs text-emerald-500 shrink-0">Linked</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {pbBusy && (
+            <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+              <Loader2 size={14} className="animate-spin" /> Queuing on PartsBazar360…
+            </div>
+          )}
+          {pbResult && (
+            <div
+              role={pbResult.ok ? 'status' : 'alert'}
+              className={`rounded-lg border p-3 text-xs flex items-start gap-2 ${
+                pbResult.ok
+                  ? 'border-emerald-700/50 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300'
+                  : 'border-red-800/60 bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300'
+              }`}
+            >
+              {pbResult.ok ? <CheckCircle2 size={14} className="shrink-0 mt-0.5" /> : <AlertTriangle size={14} className="shrink-0 mt-0.5" />}
+              <div className="space-y-0.5">
+                {pbResult.lines.map((line, i) => <p key={i}>{line}</p>)}
+                {!pbResult.ok && selected.size > 0 && (
+                  <p className="font-medium">eBay publishing was not started. Fix or deselect PartsBazar360, then publish again.</p>
+                )}
               </div>
             </div>
           )}
@@ -467,7 +643,7 @@ export default function PublishModal(props: Props) {
               })}
 
               {/* No stores */}
-              {!storeScopeLoading && organizationId && !accountsError && activeStores.length === 0 && (
+              {!storeScopeLoading && organizationId && !accountsError && activeStores.length === 0 && partsBazarStores.length === 0 && (
                 <div className="text-center py-6 text-sm text-slate-500 dark:text-slate-400">
                   <StoreIcon size={24} className="mx-auto mb-2 text-slate-500 dark:text-slate-600" />
                   <p>No active eBay stores found in this workspace.</p>
@@ -544,15 +720,21 @@ export default function PublishModal(props: Props) {
             onClick={onClose}
             className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-sm text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:bg-slate-800 transition-colors"
           >
-            Cancel
+            {pbResult?.ok && totalSelected === 0 ? 'Close' : 'Cancel'}
           </button>
           <button
-            onClick={handlePublish}
-            disabled={selected.size === 0 || storeScopeLoading || !organizationId || accountsError || (mode === 'single' && hasNoPolicies)}
+            onClick={() => { void handlePublish(); }}
+            disabled={
+              totalSelected === 0 ||
+              pbBusy ||
+              !organizationId ||
+              (pbSelected.size > 0 && pbMissing.length > 0) ||
+              (selected.size > 0 && (storeScopeLoading || accountsError || (mode === 'single' && hasNoPolicies)))
+            }
             className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
           >
-            <Send size={13} />
-            Publish to {selected.size || '…'} Store{selected.size !== 1 ? 's' : ''}
+            {pbBusy ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+            Publish to {totalSelected || '…'} Store{totalSelected !== 1 ? 's' : ''}
           </button>
         </div>
       </div>

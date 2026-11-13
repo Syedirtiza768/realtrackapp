@@ -41,8 +41,15 @@ part URL once its SEO slug exists) or `error` (with a readable `lastError`).
    PartsBazar360** (`Seller.storeId` there — for onboarded eBay sellers that is the RealTrack
    store id, e.g. Blackline `d16199c4-55b5-429e-ad27-892bed94e00d`). "Link seller" calls
    `/health?storeId=` first, so a wrong key or unmapped seller fails here, not at first publish.
-4. Publish from a listing's detail panel (Channels → PartsBazar360 → Publish) or, for a
-   selection, catalog bulk bar → **More → Publish to PartsBazar360**.
+4. Publish from the catalog row's **Publish** button (the "Publish to Stores" dialog,
+   `src/components/channels/PublishModal.tsx`, lists linked sellers under
+   **PartsBazar360.com** above the eBay stores; also in the bulk "Publish N Listings"
+   dialog), from a listing's detail panel (Channels → PartsBazar360 → Publish) or, for a
+   selection, catalog bulk bar → **More → Publish to PartsBazar360**. The dialog queues
+   PartsBazar360 through `bulk-publish` (one call per chosen seller) before handing any
+   eBay stores to the progress panel; if a seller fails to queue, eBay is not started.
+   It warns about eBay-only gaps (e.g. eBay category) only when an eBay store is picked,
+   and blocks PartsBazar360 when the listing lacks a title, a price > 0 or an image.
 
 One RealTrack `stores` row (channel `partsbazar360`, `externalStoreId` = the seller's
 store id) exists per PartsBazar seller. With several linked, pass `storeId` to
