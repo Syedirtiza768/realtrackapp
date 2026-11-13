@@ -13,6 +13,13 @@ and the narrative log in [docs/context/DECISION_LOG.md](context/DECISION_LOG.md)
 this file for quick day-to-day entries; promote something to a full ADR only if it
 needs that level of ceremony.
 
+## 2026-11-13 — Catalog "Newest" means date added; Fashion shows "Date updated"
+
+- **Why:** `applySort` in `catalog-workspace.service.ts` had no `newest` branch, so the default catalog order, the "Newest" Sort option and "Date added" all fell through to `updatedAt DESC`. After the 2026-11-13 Fashion export merge touched ~5,400 rows, "Newest" showed old items that had just been updated, and there was no way to see when a row last changed.
+- **Decision:** `newest` orders by `createdAt DESC`; `updated` keeps `updatedAt DESC`. This changes the default order of every vertical's catalog, which now matches its "Newest" label.
+- **Decision:** Only the Fashion catalog gets a "Date updated" column (`showUpdatedColumn` in `CatalogResultsTable.tsx`); other verticals were not asked for it. The API already returned `updatedAt`, so no backend change was needed for the column.
+- **Note:** neither `created_at` nor `updated_at` is indexed on `catalog_products`; the new sort costs the same as the old one.
+
 ## 2026-11-12 — eBay reconnect updates the existing connection; seller identity is proven, not assumed
 
 - **Why:** Reconnecting Artistic Haul would have created a second "Artistic Haul" store, orphaning the old account's 43,388 listing mirrors, warehouse link and policies. Every native connection also had an `unknown_<ms>` seller ID because the Identity API was called on the wrong host, so nothing could tell whether the eBay login was the right seller.

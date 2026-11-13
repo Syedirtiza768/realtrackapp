@@ -46,6 +46,11 @@ function formatDate(value: string) {
   return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+function formatDateTime(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
 function identityLine(item: CatalogItem) {
   const manufacturer = textAttribute(item, 'manufacturer') || item.brand || 'No manufacturer';
   const model = textAttribute(item, 'model');
@@ -77,6 +82,8 @@ export default function CatalogResultsTable({
   const headerCheckboxRef = useRef<HTMLInputElement>(null);
   const allSelected = items.length > 0 && items.every((item) => selected.has(item.id));
   const someSelected = items.some((item) => selected.has(item.id));
+  // Fashion buyers re-edit listings often, so the fashion catalog shows when each row last changed.
+  const showUpdatedColumn = config.vertical === 'fashion';
 
   useEffect(() => {
     if (headerCheckboxRef.current) headerCheckboxRef.current.indeterminate = someSelected && !allSelected;
@@ -170,6 +177,7 @@ export default function CatalogResultsTable({
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
                   <span className="font-medium text-slate-900 dark:text-white">{price(item.price)}</span>
                   <span>{item.quantity ?? 0} in stock</span>
+                  {showUpdatedColumn ? <span title={formatDateTime(item.updatedAt)}>Updated {formatDate(item.updatedAt)}</span> : null}
                   <span className={'rounded-full px-2 py-0.5 font-medium ' + statusClass(item.publicationStatus === 'blocked' ? 'blocked' : item.verticalValidationStatus)}>
                     {statusLabel(item)}
                   </span>
@@ -198,6 +206,7 @@ export default function CatalogResultsTable({
               <th className="px-3 py-3">Price / stock</th>
               <th className="px-3 py-3">Images</th>
               <th className="px-3 py-3">Date added</th>
+              {showUpdatedColumn ? <th className="px-3 py-3">Date updated</th> : null}
               <th className="px-3 py-3">Status</th>
               <th className="px-3 py-3">Publications</th>
               <th className="px-3 py-3 text-right">Actions</th>
@@ -245,6 +254,7 @@ export default function CatalogResultsTable({
                 </td>
                 <td className="px-3 py-3 align-top text-xs text-slate-500">{item.imageUrls.length || 0}</td>
                 <td className="whitespace-nowrap px-3 py-3 align-top text-xs text-slate-500 dark:text-slate-400">{formatDate(item.createdAt)}</td>
+                {showUpdatedColumn ? <td className="whitespace-nowrap px-3 py-3 align-top text-xs text-slate-500 dark:text-slate-400" title={formatDateTime(item.updatedAt)}>{formatDate(item.updatedAt)}</td> : null}
                 <td className="px-3 py-3 align-top">
                   <span className={'inline-flex rounded-full px-2 py-1 text-xs font-medium ' + statusClass(item.publicationStatus === 'blocked' ? 'blocked' : item.verticalValidationStatus)}>
                     {statusLabel(item)}

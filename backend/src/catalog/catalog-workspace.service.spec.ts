@@ -94,6 +94,31 @@ describe('CatalogWorkspaceService', () => {
     expect(queryBuilder.getRawMany).toBeUndefined();
   });
 
+  it('sorts newest by creation date and updated by last update', () => {
+    const { service } = makeService();
+    const applySort = (
+      service as unknown as {
+        applySort: (qb: unknown, sort: string | undefined, hasQuery: boolean) => void;
+      }
+    ).applySort.bind(service);
+    const makeQb = () => ({
+      orderBy: jest.fn().mockReturnThis(),
+      addOrderBy: jest.fn().mockReturnThis(),
+    });
+
+    const newest = makeQb();
+    applySort(newest, 'newest', false);
+    expect(newest.orderBy).toHaveBeenCalledWith('p.createdAt', 'DESC');
+
+    const defaultSort = makeQb();
+    applySort(defaultSort, undefined, false);
+    expect(defaultSort.orderBy).toHaveBeenCalledWith('p.createdAt', 'DESC');
+
+    const updated = makeQb();
+    applySort(updated, 'updated', false);
+    expect(updated.orderBy).toHaveBeenCalledWith('p.updatedAt', 'DESC');
+  });
+
   it('matches condition filters against either condition id or label', async () => {
     const { service, queryBuilder } = makeService({ manageAllTeams: true });
     const applySearchAndFilters = (

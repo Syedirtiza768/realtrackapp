@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-13 — Fashion catalog "Date updated" column; "Newest" sorts by date added
+
+- The Fashion catalog table (`/fashion/catalog`) has a "Date updated" column after "Date added", showing each product's `updatedAt` (date in the cell, date and time on hover). On phones the card shows "Updated <date>". Other verticals are unchanged (`showUpdatedColumn = config.vertical === 'fashion'` in `CatalogResultsTable.tsx`). The catalog API already returned `updatedAt`; sort by it with Sort → "Updated".
+- Fixed: the backend's `newest` sort (the default catalog order, the "Newest" Sort option and "Date added") fell through to `updatedAt DESC`, so it ordered by last update. `applySort` in `catalog-workspace.service.ts` now orders `newest` by `createdAt DESC`; `updated` keeps `updatedAt DESC`. This changes the default order of every vertical's catalog. Covered by a new `catalog-workspace.service.spec.ts` test.
+- Deployed to production on 2026-11-13 before this commit as overlays `realtrackapp-frontend:fashion-updated-col-20261113` (rebuilt from the live frontend source, `c7803e6d` + `FashionStoresPage.tsx` from `daa563fa`, plus this change) and `realtrackapp-backend:newest-sort-20261113` (live compiled `catalog-workspace.service.js` with only the `newest` branch added). Rollback tags `rollback-fashion-updated-col-20261113` / `rollback-newest-sort-20261113`; release files in `/home/ubuntu/realtrackapp-fashion-updated-col-20261113/` and `/home/ubuntu/realtrackapp-newest-sort-20261113/`.
+
 ## 2026-11-12 — Reconnecting an eBay store refreshes it in place
 
 - Every OAuth callback created a new channel connection, store and `connected_ebay_accounts` row, including the `POST /integrations/ebay/accounts/:id/reconnect` path, so a reconnect left the old account `reconnect_required` with its listing mirrors (Artistic Haul: 43,388) and made a duplicate store. A reconnect now carries `reconnectAccountId` in the OAuth state and the callback updates that account's tokens, channel connection and status in place (`EbayIntegrationsOAuthService.reconnectExistingAccount`).

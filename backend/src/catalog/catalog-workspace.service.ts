@@ -1054,6 +1054,8 @@ export class CatalogWorkspaceService {
       qb.orderBy('p.price', 'ASC', 'NULLS LAST');
     else if (resolved === 'price_desc')
       qb.orderBy('p.price', 'DESC', 'NULLS LAST');
+    // "Newest" / "Date added" means creation order; it used to fall through to updatedAt.
+    else if (resolved === 'newest') qb.orderBy('p.createdAt', 'DESC');
     else qb.orderBy('p.updatedAt', 'DESC');
     qb.addOrderBy('p.id', 'ASC');
   }
