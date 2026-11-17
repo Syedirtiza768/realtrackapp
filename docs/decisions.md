@@ -13,6 +13,14 @@ and the narrative log in [docs/context/DECISION_LOG.md](context/DECISION_LOG.md)
 this file for quick day-to-day entries; promote something to a full ADR only if it
 needs that level of ceremony.
 
+## 2026-11-18 — "Sign in with eBay" re-authorizes a seller the workspace already has
+
+- **Why:** The 2026-11-12 fix only reused the store when the OAuth flow carried `reconnectAccountId` (the Fashion Reconnect button). The Auto Parts stores page had no Reconnect button, so operators fixed `reconnect_required` and disconnected sellers with Sign in with eBay, which always created a new connection, store and account. Because eBay's Identity API had been called on the wrong host, every one of those was saved as `unknown_<ms>`, so the duplicate-seller guard (a store with the same `ebay_user_id`) never matched. Production ended up with duplicate stores for Superior Auto Parts, K. Salvage Auto Parts, Business & Industrial and Primemotive.
+- **Decision:** Every OAuth callback first looks for the seller in the workspace (same environment, native OAuth): by Identity user ID or username, then by the token seeing a cached business-policy ID of an account that only has a placeholder ID. A match is re-authorized in place; nothing new is created. The previous behaviour for a matched seller ID was a 409 "cannot be reused across verticals"; re-authorizing in place keeps the same one-seller-one-store rule without blocking the reconnect, and the store keeps its existing vertical.
+- **Decision:** Never save a new store with a placeholder seller ID. If the Identity API returns nothing and no account matches, the callback refuses the connection and asks the user to try again.
+- **Decision:** When a seller already has duplicates, re-authorize the active one (then the most recently refreshed, then the oldest) and log the others. Merging duplicates is a data clean-up, not part of the callback.
+- **Revisit when:** the duplicate stores are merged, or a seller legitimately needs two Omni stores (e.g. one per vertical) — the callback would then need an explicit target.
+
 ## 2026-11-13 — The catalog Publish dialog offers PartsBazar360 sellers next to eBay stores
 
 - **Why:** The catalog row's Publish button opened an eBay-only dialog ("Publish to eBay Stores"), so operators publishing a Blackline part to partsbazar360.com saw only eBay stores and an "eBay Category" warning, with no way to pick a PartsBazar360 seller there. Production had three linked sellers (Salvage, AKAA, Blackline) the dialog never showed.

@@ -6,6 +6,7 @@ import { EbayOAuthToken } from '../entities/ebay-oauth-token.entity.js';
 import {
   EbayIntegrationsOAuthService,
   EbayOAuthCallbackFailure,
+  identityMatchesAccount,
   isPlaceholderEbayUserId,
 } from './ebay-integrations-oauth.service.js';
 import type { EbayOAuthPendingPayload } from './ebay-oauth-state.store.js';
@@ -249,11 +250,17 @@ describe('EbayIntegrationsOAuthService reconnect', () => {
       .mockResolvedValueOnce(null); // no other account holds the real ID
     t.policyRepo.find.mockResolvedValueOnce([
       {
+        ebayAccountId: ACCOUNT_ID,
         marketplaceId: 'EBAY_US',
         policyType: 'fulfillment',
         ebayPolicyId: 'F-1',
       },
-      { marketplaceId: 'EBAY_US', policyType: 'return', ebayPolicyId: 'R-1' },
+      {
+        ebayAccountId: ACCOUNT_ID,
+        marketplaceId: 'EBAY_US',
+        policyType: 'return',
+        ebayPolicyId: 'R-1',
+      },
     ]);
     const store = { id: 'store-1', config: { marketplace: 'EBAY_US' } };
     t.txRepos.get(Store)!.findOne.mockResolvedValueOnce(store);
@@ -289,6 +296,7 @@ describe('EbayIntegrationsOAuthService reconnect', () => {
     t.accountRepo.findOne.mockResolvedValueOnce(existingAccount());
     t.policyRepo.find.mockResolvedValueOnce([
       {
+        ebayAccountId: ACCOUNT_ID,
         marketplaceId: 'EBAY_US',
         policyType: 'fulfillment',
         ebayPolicyId: 'F-1',
@@ -330,7 +338,12 @@ describe('EbayIntegrationsOAuthService reconnect', () => {
         accountDisplayName: 'Primewardrobeusa',
       });
     t.policyRepo.find.mockResolvedValueOnce([
-      { marketplaceId: 'EBAY_US', policyType: 'payment', ebayPolicyId: 'P-1' },
+      {
+        ebayAccountId: ACCOUNT_ID,
+        marketplaceId: 'EBAY_US',
+        policyType: 'payment',
+        ebayPolicyId: 'P-1',
+      },
     ]);
     ebayAnswers({
       identity: { userId: 'seller-123' },
@@ -352,5 +365,239 @@ describe('EbayIntegrationsOAuthService reconnect', () => {
     expect(isPlaceholderEbayUserId('unknown')).toBe(true);
     expect(isPlaceholderEbayUserId('')).toBe(true);
     expect(isPlaceholderEbayUserId('seller-123')).toBe(false);
+  });
+});
+
+describe('identityMatchesAccount', () => {
+  it('matches the Identity user ID, or the username against the stored ID or username', () => {
+    const acct = (ebayUserId: string, ebayUsername: string | null = null) => ({
+      ebayUserId,
+      ebayUsername,
+    });
+    const id = { userId: 'opaque-1', username: 'BlacklineAutoParts' };
+    expect(identityMatchesAccount(acct('opaque-1'), id)).toBe(true);
+    expect(identityMatchesAccount(acct('blacklineautoparts'), id)).toBe(true);
+    expect(
+      identityMatchesAccount(acct('unknown_1', 'blacklineautoparts'), id),
+    ).toBe(true);
+    expect(identityMatchesAccount(acct('unknown_1'), id)).toBe(false);
+    expect(identityMatchesAccount(acct('someone-else'), id)).toBe(false);
+    expect(
+      identityMatchesAccount(acct('unknown_1'), {
+        userId: null,
+        username: null,
+      }),
+    ).toBe(false);
+  });
+});
+
+/**
+ * "Sign in with eBay" (no reconnectAccountId): a seller the workspace already
+ * has, including a disconnected one, must be re-authorized in place, never
+ * given a second store.
+ */
+describe('EbayIntegrationsOAuthService connect for an existing seller', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    mockedGet.mockReset();
+  });
+  afterEach(() => jest.useRealTimers());
+
+  const connectSetup = () =>
+    setup({
+      reconnectAccountId: null,
+      vertical: 'automotive',
+      marketplaceId: 'EBAY_MOTORS_US',
+      accountDisplayName: 'eBay store',
+    });
+
+  it('re-authorizes a disconnected account with the same seller ID and creates no store', async () => {
+    const t = connectSetup();
+    t.accountRepo.find.mockResolvedValueOnce([
+      existingAccount({
+        ebayUserId: 'seller-123',
+        connectionStatus: 'disabled',
+      }),
+    ]);
+    ebayAnswers({ identity: { userId: 'seller-123', username: 'kslv' } });
+
+    const result = await t.service.handleCallback({ code: 'c', state: 's' });
+
+    expect(result).toEqual({
+      connectedEbayAccountId: ACCOUNT_ID,
+      redirectUrl: '/settings/integrations/ebay',
+    });
+    expect(t.dataSource.createQueryRunner).not.toHaveBeenCalled();
+    expect(t.storeRepo.create).not.toHaveBeenCalled();
+    expect(t.accountRepo.create).not.toHaveBeenCalled();
+    expect(t.txRepos.get(ConnectedEbayAccount)!.update).toHaveBeenCalledWith(
+      ACCOUNT_ID,
+      expect.objectContaining({ connectionStatus: 'active' }),
+    );
+    expect(t.logWriter.write).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'ebay_account_reconnected',
+        afterSnapshot: expect.objectContaining({
+          via: 'connect',
+          verifiedBy: 'ebay_user_id',
+        }),
+      }),
+    );
+  });
+
+  it('matches an account that stored the username as its seller ID and adopts the real ID', async () => {
+    const t = connectSetup();
+    t.accountRepo.find.mockResolvedValueOnce([
+      existingAccount({ ebayUserId: 'blacklineautoparts' }),
+    ]);
+    t.txRepos.get(Store)!.findOne.mockResolvedValueOnce({
+      id: 'store-1',
+      config: {},
+    });
+    ebayAnswers({
+      identity: { userId: 'opaque-9', username: 'BlacklineAutoParts' },
+    });
+
+    await t.service.handleCallback({ code: 'c', state: 's' });
+
+    expect(t.dataSource.createQueryRunner).not.toHaveBeenCalled();
+    expect(t.txRepos.get(ConnectedEbayAccount)!.update).toHaveBeenCalledWith(
+      ACCOUNT_ID,
+      expect.objectContaining({ ebayUserId: 'opaque-9' }),
+    );
+    expect(t.txRepos.get(Store)!.save).toHaveBeenCalledWith(
+      expect.objectContaining({ ebayUserId: 'opaque-9' }),
+    );
+  });
+
+  it('finds a placeholder-ID account by its cached policy IDs', async () => {
+    const t = connectSetup();
+    t.accountRepo.find.mockResolvedValueOnce([
+      existingAccount({ id: 'acct-a', ebayUserId: 'unknown_1' }),
+      existingAccount({ id: 'acct-b', ebayUserId: 'unknown_2' }),
+    ]);
+    t.policyRepo.find.mockResolvedValueOnce([
+      {
+        ebayAccountId: 'acct-a',
+        marketplaceId: 'EBAY_US',
+        policyType: 'payment',
+        ebayPolicyId: 'P-A',
+      },
+      {
+        ebayAccountId: 'acct-b',
+        marketplaceId: 'EBAY_US',
+        policyType: 'payment',
+        ebayPolicyId: 'P-B',
+      },
+    ]);
+    ebayAnswers({
+      identity: { userId: 'seller-b' },
+      policies: { payment: ['P-B', 'P-NEW'] },
+    });
+
+    const result = await t.service.handleCallback({ code: 'c', state: 's' });
+
+    expect(result.connectedEbayAccountId).toBe('acct-b');
+    expect(t.dataSource.createQueryRunner).not.toHaveBeenCalled();
+    expect(t.txRepos.get(ConnectedEbayAccount)!.update).toHaveBeenCalledWith(
+      'acct-b',
+      expect.objectContaining({
+        connectionStatus: 'active',
+        ebayUserId: 'seller-b',
+      }),
+    );
+  });
+
+  it('prefers the active account when one seller already has duplicates', async () => {
+    const t = connectSetup();
+    t.accountRepo.find.mockResolvedValueOnce([
+      existingAccount({
+        id: 'old-disabled',
+        ebayUserId: 'unknown_1',
+        connectionStatus: 'disabled',
+      }),
+      existingAccount({
+        id: 'live',
+        ebayUserId: 'unknown_2',
+        connectionStatus: 'active',
+      }),
+    ]);
+    t.policyRepo.find.mockResolvedValueOnce([
+      {
+        ebayAccountId: 'old-disabled',
+        marketplaceId: 'EBAY_MOTORS_US',
+        policyType: 'return',
+        ebayPolicyId: 'R-1',
+      },
+      {
+        ebayAccountId: 'live',
+        marketplaceId: 'EBAY_MOTORS_US',
+        policyType: 'return',
+        ebayPolicyId: 'R-1',
+      },
+    ]);
+    ebayAnswers({ identity: 'fail', policies: { return: ['R-1'] } });
+
+    const result = await t.service.handleCallback({ code: 'c', state: 's' });
+
+    expect(result.connectedEbayAccountId).toBe('live');
+    expect(t.dataSource.createQueryRunner).not.toHaveBeenCalled();
+  });
+
+  it('refuses to save a placeholder store when eBay returns no seller ID and nothing matches', async () => {
+    const t = connectSetup();
+    t.accountRepo.find.mockResolvedValueOnce([
+      existingAccount({ ebayUserId: 'unknown_1' }),
+    ]);
+    t.policyRepo.find.mockResolvedValueOnce([
+      {
+        ebayAccountId: ACCOUNT_ID,
+        marketplaceId: 'EBAY_US',
+        policyType: 'payment',
+        ebayPolicyId: 'P-1',
+      },
+    ]);
+    ebayAnswers({ identity: 'fail', policies: { payment: ['P-OTHER'] } });
+
+    const err = await t.service
+      .handleCallback({ code: 'c', state: 's' })
+      .catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(EbayOAuthCallbackFailure);
+    expect((err as EbayOAuthCallbackFailure).userMessage).toMatch(
+      /did not return the seller account ID/,
+    );
+    expect(t.dataSource.createQueryRunner).not.toHaveBeenCalled();
+    expect(t.dataSource.transaction).not.toHaveBeenCalled();
+  });
+
+  it('still creates a store for a genuinely new seller', async () => {
+    const t = connectSetup();
+    t.accountRepo.find.mockResolvedValueOnce([
+      existingAccount({ ebayUserId: 'seller-123' }),
+    ]);
+    const saved: unknown[] = [];
+    t.dataSource.createQueryRunner.mockReturnValue({
+      connect: jest.fn(),
+      startTransaction: jest.fn(),
+      commitTransaction: jest.fn(),
+      rollbackTransaction: jest.fn(),
+      release: jest.fn(),
+      manager: {
+        save: jest.fn((d: Record<string, unknown>) => {
+          saved.push(d);
+          return Promise.resolve({ id: `new-${saved.length}`, ...d });
+        }),
+      },
+    });
+    ebayAnswers({ identity: { userId: 'brand-new', username: 'newshop' } });
+
+    const result = await t.service.handleCallback({ code: 'c', state: 's' });
+
+    expect(t.dataSource.createQueryRunner).toHaveBeenCalled();
+    expect(t.storeRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({ ebayUserId: 'brand-new' }),
+    );
+    expect(result.connectedEbayAccountId).toBe('new-3');
   });
 });

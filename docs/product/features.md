@@ -35,7 +35,7 @@ Derived from the route table (`src/App.tsx`), backend modules, and the prior
 | VIN listings / lookup | `/fitment/vin` | `fitment` | Partial | `VinCache` |
 | Inventory manager | `/inventory` | `inventory` | Implemented | Ledger, allocations, events, sync |
 | Orders | `/orders` | `orders` | Implemented | eBay order import |
-| eBay store integration | `/settings/integrations/ebay` | `integrations/ebay` | Implemented | Multi-account/multi-store OAuth |
+| eBay store integration | `/settings/integrations/ebay` | `integrations/ebay` | Implemented | Multi-account/multi-store OAuth. Per-seller **Reconnect**; signing in again with an already-connected (or disconnected) seller re-authorizes its existing store instead of creating one (2026-11-18) |
 | eBay store detail / policies | `/settings/integrations/ebay/:id[/policies]` | `integrations/ebay` | Partial | Business-policy mapping/sync |
 | eBay publish wizard | `/catalog/products/:id/publish/ebay` | `channels/ebay` + `integrations/ebay` | Partial | Publish flow; verify against live API |
 | eBay OAuth callback | `/channels/ebay/callback` | `integrations/ebay` | Implemented | Public callback |

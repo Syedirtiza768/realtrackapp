@@ -158,15 +158,19 @@ export class EbayBulkPublishStorePolicyDto {
   requestedReturnPolicyName?: string;
 }
 
+/** All optional: omitted fields default to the account being reconnected. */
 export class EbayReconnectBodyDto {
+  @IsOptional()
   @IsString()
-  marketplaceId!: string;
+  marketplaceId?: string;
 
+  @IsOptional()
   @IsIn(['sandbox', 'production'])
-  environment!: 'sandbox' | 'production';
+  environment?: 'sandbox' | 'production';
 
+  @IsOptional()
   @IsString()
-  accountDisplayName!: string;
+  accountDisplayName?: string;
 
   @IsOptional()
   @IsUUID()

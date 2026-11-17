@@ -85,6 +85,24 @@ export async function startEbayOAuth(body: {
   });
 }
 
+/**
+ * Re-authorize an existing account in place (same store, listings, policies).
+ * The backend rejects an eBay login that is not this account's seller.
+ */
+export async function reconnectEbayAccount(
+  accountId: string,
+  organizationId?: string,
+): Promise<{ authUrl: string; state: string }> {
+  return fetchWithAuth(
+    `${API}/integrations/ebay/accounts/${accountId}/reconnect${orgQuery(organizationId)}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    },
+  );
+}
+
 export async function syncEbayPolicies(
   accountId: string,
   organizationId?: string,

@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import {
   disconnectEbayAccount,
   listEbayAccounts,
+  reconnectEbayAccount,
   startEbayOAuth,
   syncEbayListings,
   syncEbayPolicies,
@@ -36,29 +37,40 @@ export default function EbayStoresSettingsPage() {
   const [spLoading, setSpLoading] = useState(false);
   const [spConfig, setSpConfig] = useState<SellerpunditConfigView | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [reconnectingId, setReconnectingId] = useState<string | null>(null);
 
   const oauthBanner = useMemo(() => {
     const success = searchParams.get('success');
     const err = searchParams.get('error');
     const acct = searchParams.get('accountId');
     if (success && acct) {
+      const name = accounts.find((a) => a.id === acct)?.accountDisplayName;
       return {
         type: 'ok' as const,
-        text: `eBay seller connected. We identified your account from eBay after Sign in — no separate seller ID to paste.`,
+        text: name
+          ? `eBay authorization saved for "${name}". A seller that was already connected keeps its existing store.`
+          : 'eBay seller connected. A seller that was already connected keeps its existing store.',
       };
     }
-    if (err) return { type: 'err' as const, text: `OAuth error: ${err}` };
+    if (err) {
+      const detail = searchParams.get('message');
+      return {
+        type: 'err' as const,
+        text: detail ? `eBay connection failed: ${detail}` : `OAuth error: ${err}`,
+      };
+    }
     return null;
-  }, [searchParams]);
+  }, [searchParams, accounts]);
 
   useEffect(() => {
     if (oauthBanner) {
       const t = setTimeout(() => {
         searchParams.delete('success');
         searchParams.delete('error');
+        searchParams.delete('message');
         searchParams.delete('accountId');
         setSearchParams(searchParams, { replace: true });
-      }, 6000);
+      }, oauthBanner.type === 'err' ? 20000 : 6000);
       return () => clearTimeout(t);
     }
   }, [oauthBanner, searchParams, setSearchParams]);
@@ -130,6 +142,23 @@ export default function EbayStoresSettingsPage() {
     } catch (e: unknown) {
       setMessage(e instanceof Error ? e.message : 'Disconnect failed');
     }
+  };
+
+  const reconnect = async (accountId: string) => {
+    if (!organizationId || reconnectingId) return;
+    setMessage(null);
+    setReconnectingId(accountId);
+    try {
+      const data = await reconnectEbayAccount(accountId, organizationId);
+      if (data.authUrl) {
+        window.location.href = data.authUrl;
+        return;
+      }
+      setMessage('No authUrl returned');
+    } catch (e: unknown) {
+      setMessage(e instanceof Error ? e.message : 'Reconnect failed');
+    }
+    setReconnectingId(null);
   };
 
   const importSellerpundit = async () => {
@@ -288,6 +317,11 @@ export default function EbayStoresSettingsPage() {
         >
           Sign in with eBay
         </button>
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          Signing in with a seller that is already connected (including a disconnected one)
+          re-authorizes its existing store; no new store is created. To fix a store that needs
+          reconnecting, use <strong>Reconnect</strong> on its row below.
+        </p>
         {message && <p className="text-sm text-amber-300">{message}</p>}
       </section>
 
@@ -390,7 +424,7 @@ export default function EbayStoresSettingsPage() {
                   {(a.marketplaces ?? []).map((m) => m.marketplaceId).join(', ') || '—'}
                 </div>
               </div>
-              <div className="flex flex-wrap gap-2 shrink-0">
+              <div className="flex flex-wrap gap-2 sm:justify-end sm:max-w-[60%]">
                 <Link
                   to={`/auto-parts/settings/integrations/ebay/${a.id}`}
                   className="text-xs rounded-md border border-slate-300 dark:border-slate-600 px-2 py-1.5 hover:bg-slate-100 dark:bg-slate-800"
@@ -417,6 +451,21 @@ export default function EbayStoresSettingsPage() {
                 >
                   Map defaults
                 </Link>
+                {a.connectionSource !== 'sellerpundit' && (
+                  <button
+                    type="button"
+                    disabled={!!reconnectingId}
+                    title="Re-authorize this same store. Sign in with its own eBay seller account; a different seller is rejected."
+                    className={`text-xs rounded-md px-2 py-1.5 disabled:opacity-50 ${
+                      a.connectionStatus === 'active'
+                        ? 'border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800'
+                        : 'bg-[#E53238] hover:bg-[#c42a2f] text-white'
+                    }`}
+                    onClick={() => void reconnect(a.id)}
+                  >
+                    {reconnectingId === a.id ? 'Opening eBay…' : 'Reconnect'}
+                  </button>
+                )}
                 {a.connectionStatus !== 'disabled' && (
                   <button
                     type="button"
