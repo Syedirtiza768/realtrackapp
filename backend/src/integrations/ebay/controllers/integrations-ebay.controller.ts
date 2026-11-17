@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -225,22 +226,31 @@ export class IntegrationsEbayController {
   async reconnect(
     @Param('id', ParseUUIDPipe) id: string,
     @Query('organizationId') organizationId: string | undefined,
-    @Body() body: EbayReconnectBodyDto,
+    @Body() body: EbayReconnectBodyDto | undefined,
     @CurrentUser() user: User,
   ) {
     const { organizationId: orgId, member } =
       await this.permissions.assertAccountAccess(user.id, id, organizationId);
     this.permissions.assertCanConnect(member.role);
-    await this.accounts.getOne(id, orgId);
+    const account = await this.accounts.getOne(id, orgId);
+    if (account.connectionSource === 'sellerpundit')
+      throw new BadRequestException(
+        'SellerPundit connections are re-authorized through SellerPundit',
+      );
     // Re-authorizes this account in place; the callback must not create a
-    // second connection/store for the same seller.
+    // second connection/store for the same seller. Body fields are optional
+    // and default to the account's own values.
     return this.oauth.startOAuth({
       userId: user.id,
       organizationId: orgId,
-      internalStoreId: body.internalStoreId ?? null,
-      marketplaceId: body.marketplaceId,
-      environment: body.environment,
-      accountDisplayName: body.accountDisplayName,
+      internalStoreId: body?.internalStoreId ?? account.internalStoreId ?? null,
+      marketplaceId:
+        body?.marketplaceId ||
+        account.marketplaces.find((m) => m.enabled)?.marketplaceId ||
+        'EBAY_US',
+      environment: body?.environment ?? account.environment,
+      accountDisplayName:
+        body?.accountDisplayName?.trim() || account.accountDisplayName,
       reconnectAccountId: id,
     });
   }

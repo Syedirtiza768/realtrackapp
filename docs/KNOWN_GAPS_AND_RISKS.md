@@ -138,6 +138,18 @@ made before the fix keep their placeholder IDs until they are reconnected.
 **Still open:** the Business & Industrial stores page has no Reconnect button,
 and nothing alerts when a token refresh fails.
 
+**Update 2026-11-18**: Sign in with eBay (every vertical) now re-authorizes a
+seller the workspace already has instead of creating a store, matching by eBay
+user ID/username or, for placeholder-ID accounts, by cached business-policy IDs;
+it no longer saves a store under an `unknown_<ms>` ID. The Auto Parts stores and
+store detail pages have a Reconnect button. The Business & Industrial page still
+has none, but its Connect button now reuses the existing store.
+**Still open:** production already holds duplicate stores for the same seller
+(Superior Auto Parts ×2, K. Salvage Auto Parts ×2 plus "Salvage Auto Parts",
+Business & Industrial eBay store ×3, Primemotive/"prime motive", "eBay store" ×2,
+plus an orphan "eBay store" row with no account). They are not merged; a
+placeholder-ID seller with no cached policies still cannot be matched.
+
 **Mitigation**:
 - [ ] Monitor `EbayApiError` logs
 - [ ] Implement exponential backoff retry

@@ -4,6 +4,7 @@ import {
   disconnectEbayAccount,
   getEbayAccount,
   listEbaySyncLogs,
+  reconnectEbayAccount,
   syncEbayListings,
   syncEbayOrders,
   syncEbayPolicies,
@@ -88,6 +89,24 @@ export default function EbayStoreDetailPage() {
     } catch (e: unknown) {
       setMessage(e instanceof Error ? e.message : 'Disconnect failed');
     }
+  };
+
+  const [reconnecting, setReconnecting] = useState(false);
+  const doReconnect = async () => {
+    if (!accountId || reconnecting) return;
+    setMessage(null);
+    setReconnecting(true);
+    try {
+      const data = await reconnectEbayAccount(accountId, organizationId ?? undefined);
+      if (data.authUrl) {
+        window.location.href = data.authUrl;
+        return;
+      }
+      setMessage('No authUrl returned');
+    } catch (e: unknown) {
+      setMessage(e instanceof Error ? e.message : 'Reconnect failed');
+    }
+    setReconnecting(false);
   };
 
   const runSync = async (kind: 'policies' | 'listings' | 'orders') => {
@@ -237,6 +256,21 @@ export default function EbayStoreDetailPage() {
                 >
                   Policy mapping
                 </Link>
+                {account.connectionSource !== 'sellerpundit' && (
+                  <button
+                    type="button"
+                    disabled={reconnecting}
+                    onClick={() => void doReconnect()}
+                    title="Re-authorize this same store. Sign in with its own eBay seller account; a different seller is rejected."
+                    className={`rounded px-3 py-1.5 text-sm disabled:opacity-50 ${
+                      account.connectionStatus === 'active'
+                        ? 'border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+                        : 'bg-[#E53238] hover:bg-[#c42a2f] text-white'
+                    }`}
+                  >
+                    {reconnecting ? 'Opening eBay…' : 'Reconnect'}
+                  </button>
+                )}
                 {account.connectionStatus !== 'disabled' && (
                   <button
                     type="button"

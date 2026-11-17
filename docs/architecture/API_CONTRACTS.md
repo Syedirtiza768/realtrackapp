@@ -365,7 +365,7 @@ category fallback behavior. For `vertical=fashion`, this same upload flow recogn
 | DELETE | `/api/integrations/ebay/:id` | Disconnect account | ebay.manage |
 | POST | `/api/integrations/ebay/:id/sync` | Sync account data | ebay.sync |
 | GET | `/api/integrations/ebay/:id/policies` | Get business policies | ebay.view |
-| POST | `/api/integrations/ebay/accounts/:id/reconnect` | Re-authorize this account in place (since 2026-11-12 the callback no longer creates a second connection/store); different-seller logins are rejected | ebay.connect |
+| POST | `/api/integrations/ebay/accounts/:id/reconnect` | Re-authorize this account in place (since 2026-11-12 the callback no longer creates a second connection/store); different-seller logins are rejected. Body optional since 2026-11-18: `marketplaceId`, `environment`, `accountDisplayName`, `internalStoreId` default to the account's own values. SellerPundit accounts are refused (400). | ebay.connect |
 
 ### Multi-Store
 
@@ -810,7 +810,7 @@ All Fashion routes remain under the normal /api prefix and require JWT plus the 
 | GET | /api/fashion/listings/:id/review | fashion.authenticity.review | Read private review metadata |
 | POST | /api/fashion/listings/:id/quarantine | fashion.incidents.manage | Local quarantine; remote takedown is reported unavailable unless an integration supports it |
 | GET/PATCH | /api/fashion/stores and /api/fashion/stores/:storeId/config | fashion.stores.view/settings.manage | View and configure Fashion store enablement |
-| POST | /api/fashion/ebay/oauth/start | fashion.stores.manage | Start a vertical-tagged eBay OAuth flow (connects a **new** dedicated seller store) |
+| POST | /api/fashion/ebay/oauth/start | fashion.stores.manage | Start a vertical-tagged eBay OAuth flow. Connects a new dedicated seller store; since 2026-11-18 a seller already in the workspace (matched by eBay user ID/username or cached business-policy IDs) is re-authorized in place instead |
 | POST | /api/fashion/ebay/accounts/:id/reconnect | fashion.stores.manage (store admin access) | Re-authorize an existing Fashion connection in place: same account, store, listing mirrors and policies. The callback rejects an eBay login that is not the same seller (checked by seller ID, or by cached business-policy IDs when the stored ID is a placeholder) and returns to `/fashion/stores?error=conflict&message=…`. SellerPundit connections are refused. |
 | POST | /api/fashion/ebay/listings/validate or /publish | fashion.publish | Validate or enqueue an approved Fashion listing against Fashion-enabled seller targets. Validation verifies the exact enabled merchant location for each target marketplace. |
 | POST | /api/fashion/ebay/listings/publish-bulk | fashion.access + fashion.publish | From Catalog, publish selected approved items to chosen Fashion stores. Optional `storePolicies` supplies each store's enabled `marketplaceId` and shipping, payment and return policy names. Omitting `marketplaceId` uses the store default. |
@@ -854,7 +854,7 @@ vertical during OAuth.
 | POST | `/api/business-industrial/webhooks/ebay-enforcement` | signed public webhook (`EBAY_WEBHOOK_SECRET`) | Verify an eBay enforcement signal, quarantine local state, and attempt verified remote withdrawal |
 | GET/POST/POST | `/api/business-industrial/incidents`, `/incidents/:id/takedown`, `/incidents/:id/release` | business_industrial.incidents.view/manage/release | Verified incident intake, retryable takedown, release, and audit state |
 | GET | `/api/business-industrial/stores` | business_industrial.stores.view | List dedicated B&I seller stores |
-| POST | `/api/business-industrial/ebay/oauth/start` | business_industrial.stores.manage | Start vertical-tagged eBay OAuth |
+| POST | `/api/business-industrial/ebay/oauth/start` | business_industrial.stores.manage | Start vertical-tagged eBay OAuth (a seller already in the workspace is re-authorized in place, no new store; since 2026-11-18) |
 | GET | `/api/integrations/ebay/oauth/callback` | Public; uses vertical saved in OAuth state | Complete eBay OAuth and return B&I connections to `/business-industrial/stores` |
 | GET | `/api/business-industrial/ebay/accounts` and `/accounts/:id/policies` | business_industrial.stores.view | List dedicated seller accounts and read stored marketplace policies |
 | POST | `/api/business-industrial/ebay/accounts/:id/policies/sync` | business_industrial.stores.manage | Synchronize payment, return, and fulfillment policies |

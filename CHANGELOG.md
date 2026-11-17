@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-11-18 — Connecting an eBay seller again never creates a second store
+
+- Fixed: on the Auto Parts eBay stores page (`/auto-parts/settings/integrations/ebay`) the only way to fix a `reconnect_required` or disconnected seller was **Sign in with eBay**, which always ran the new-store path. The 2026-11-12 in-place reconnect only covered the explicit Reconnect action (Fashion stores page). Production had 28 eBay accounts, 25 with placeholder `unknown_<ms>` seller IDs, and several sellers with two or three stores (Superior Auto Parts, K. Salvage Auto Parts, Business & Industrial eBay store, Primemotive).
+- **Sign in with eBay** (`POST /api/integrations/ebay/oauth/start`, the Fashion and Business & Industrial connect buttons too) now looks for the seller in the workspace first (`EbayIntegrationsOAuthService.findExistingSellerAccount`): by eBay user ID or username, then, for accounts that only have a placeholder ID, by the new token seeing their cached business-policy IDs. A match is re-authorized in place (`reauthorizeInPlace`): same account, store, listing mirrors, policies and warehouse links; a disabled or `reconnect_required` account becomes `active`, and eBay's real seller ID replaces the placeholder. If one seller already has several accounts, the active one (then the most recently refreshed) is used. Audit action `ebay_account_reconnected` with `afterSnapshot.via = 'connect'`.
+- The callback no longer saves a store under a placeholder seller ID. If eBay's Identity API returns no seller ID and no existing account matches, the connection is refused with "eBay did not return the seller account ID…" (shown on the page) instead of creating an `unknown_<ms>` store that could never be matched again.
+- The explicit reconnect also accepts an account whose stored `ebay_user_id` is actually the eBay username (e.g. `blacklineautoparts`), and falls back to the cached-policy check before calling a real-ID mismatch a different seller.
+- Auto Parts eBay stores page and store detail page: new **Reconnect** button per Direct OAuth seller (red when the seller is not `active`), calling `POST /api/integrations/ebay/accounts/:id/reconnect`. That endpoint's body is now optional (marketplace, environment and name default to the account) and it refuses SellerPundit accounts. OAuth errors now show the reason from `?message=`.
+- Existing duplicate stores are not merged by this change.
+- Covered by `ebay-integrations-oauth.service.spec.ts` (15 tests, 7 new).
+
 ## 2026-11-13 — Catalog Publish dialog can publish to PartsBazar360
 
 - Fixed: the catalog row's **Publish** button opened an eBay-only "Publish to eBay Stores" dialog, so a part could not be sent to partsbazar360.com from there (it showed only eBay stores and an "eBay Category" warning). The dialog (`src/components/channels/PublishModal.tsx`, single and bulk) now lists linked PartsBazar360 sellers under **PartsBazar360.com**; choosing one queues the listing on that seller via `POST /api/channels/bulk-publish` and shows the result in the dialog. eBay and PartsBazar360 can be picked together; if PartsBazar360 fails to queue, eBay is not started.
