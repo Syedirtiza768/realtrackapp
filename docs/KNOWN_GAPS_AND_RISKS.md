@@ -375,7 +375,7 @@ const listings = await this.listingRepo.find({
 - Until an account is subscribed, a sale reaches Omni only through the scheduled order import (`EbayOrderImportService`, Fulfillment API `getOrders`, `ORDER_IMPORT_CRON`, default every 5 minutes, was 15) and the published-listings sync (`quantity_sold`, status).
 - Added 2026-11-18: eBay Platform Notifications for sales. An admin subscribes a connected account with `POST /api/integrations/ebay/accounts/:id/order-notifications` (Trading `SetNotificationPreferences`: `FixedPriceTransaction`, `AuctionCheckoutComplete`, `ItemSold`). eBay then posts signed SOAP to the public `POST /api/integrations/ebay/platform-notifications`, which checks `NotificationSignature` (10-minute freshness), finds the account by the seller's eBay username and queues the same order import on the `ebay-order-sync` queue. Notifications for one account inside a 10-second window share one import job, so a sale shows up about 15 seconds later. The poll stays as the safety net.
 - Production check (2026-11-18, read-only): `EBAY_DEV_ID`, `EBAY_CLIENT_ID` and `EBAY_CLIENT_SECRET` are set and eBay runs in PRODUCTION; `EBAY_PLATFORM_NOTIFICATION_URL` is not set. 14 native-OAuth accounts are active; 12 of them store no eBay username (only `unknown_<timestamp>`), which subscribing now fills in from `GetUser`. The live backend still polls every 15 minutes (`*/15`, compiled in): the 5-minute poll and the import hardening above are not deployed either.
-- Not done: no production account is subscribed; that changes the seller's settings on eBay and is left to the operator. Deployed 2026-11-18 with `EBAY_PLATFORM_NOTIFICATION_URL` set. The production `super_admin` and `admin` roles are customized, so `ebay.notifications.manage` was not auto-granted: grant it in the Roles UI first.
+- Not done: no production account is subscribed; that changes the seller's settings on eBay and is left to the operator. Deployed 2026-11-18 with `EBAY_PLATFORM_NOTIFICATION_URL` set. The production `super_admin` and `admin` roles are customized, so `ebay.notifications.manage` was not auto-granted; it was granted to both by hand on 2026-11-18.
 - Limit: eBay keeps one notification `ApplicationURL` per eBay app, shared by every seller on it. Subscribing refuses to move a URL that already points elsewhere unless `replaceApplicationUrl: true` is sent. Unsubscribing only turns the seller's events off and leaves the URL.
 - Limit: accounts connected through SellerPundit cannot be subscribed (their token belongs to SellerPundit's eBay app); they stay on the poll.
 - `POST /api/channels/webhooks/ebay` is unchanged and still handles only inventory/item topics.
@@ -385,7 +385,8 @@ const listings = await this.listingRepo.find({
 **Action**:
 - [x] Subscribe accounts to eBay Platform Notifications and handle the signed SOAP payloads, then trigger an import for that store (code, 2026-11-18).
 - [x] Deploy with `EBAY_DEV_ID` + `EBAY_PLATFORM_NOTIFICATION_URL` (2026-11-18).
-- [ ] Grant `ebay.notifications.manage` to the customized `super_admin`/`admin` roles, then subscribe each native-OAuth production account (operator).
+- [x] Grant `ebay.notifications.manage` to the customized `super_admin`/`admin` roles (2026-11-18).
+- [ ] Subscribe each native-OAuth production account (operator).
 - [ ] Once accounts are subscribed and sales arrive by push, consider a slower `ORDER_IMPORT_CRON`.
 - [ ] Order lines imported before 2026-11-18 have no `external_listing_id`; backfill would need eBay `getOrder` calls.
 

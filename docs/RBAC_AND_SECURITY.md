@@ -128,7 +128,7 @@ Examples:
 | `super_admin` only | `client_settings.*`, `roles.assign_permissions`, `feature_flags.manage` |
 | `admin` and up | `users.*`, `catalog.clear`, `settings.manage`, `inventory.reconcile` |
 | `super_admin` + `admin` (default) | `listings.delete`, `inventory.delete` (soft-delete; reassignable in Roles UI) |
-| `super_admin` + `admin` | `ebay.notifications.manage` (2026-11-18) — subscribing an account to eBay sale notifications changes the seller's settings on eBay, and the delivery URL is shared by every seller on the eBay app. The endpoints also require an org role that can connect eBay (owner/admin/editor). On production both roles are customized (`roles.isCustomized`), and the registry sync skips customized roles, so grant it in the Roles UI. |
+| `super_admin` + `admin` | `ebay.notifications.manage` (2026-11-18) — subscribing an account to eBay sale notifications changes the seller's settings on eBay, and the delivery URL is shared by every seller on the eBay app. The endpoints also require an org role that can connect eBay (owner/admin/editor). On production both roles are customized (`roles.isCustomized`) and the registry sync skips customized roles, so it was granted to both by hand on 2026-11-18; any future permission key needs the same manual grant there. |
 | `manager` and up | `users.view`, `roles.view`, `ingestion.manage`, `pipeline.manage`, `catalog.import`, `inventory.adjust`, `orders.refund` |
 | `read_write` | `listings.create`, `listings.update`, `catalog.update`, `orders.update`, `orders.ship` |
 | `read_only` | All view permissions |
