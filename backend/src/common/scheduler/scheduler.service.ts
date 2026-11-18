@@ -161,7 +161,8 @@ export class SchedulerService {
   }
 
   /* ─── Orders: Import from Channels (default every 5 minutes) ─── */
-  // eBay has no sale push wired up yet, so this poll is how a sale reaches Omni.
+  // Subscribed eBay accounts also push sales (Platform Notifications →
+  // POST /api/integrations/ebay/platform-notifications); this poll is the safety net.
   // ORDER_IMPORT_CRON overrides the interval.
 
   @Cron(process.env.ORDER_IMPORT_CRON ?? '*/5 * * * *', {

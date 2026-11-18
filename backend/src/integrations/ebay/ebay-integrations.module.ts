@@ -51,6 +51,8 @@ import { EbayListingSyncLog } from './entities/ebay-listing-sync-log.entity.js';
 import { EbayApiAuditService } from './services/ebay-api-audit.service.js';
 import { EbaySyncService } from './services/ebay-sync.service.js';
 import { IntegrationsEbayController } from './controllers/integrations-ebay.controller.js';
+import { EbayPlatformNotificationsController } from './controllers/ebay-platform-notifications.controller.js';
+import { EbayPlatformNotificationsService } from './services/ebay-platform-notifications.service.js';
 import { EbayMultiStoreController } from './controllers/ebay-multi-store.controller.js';
 import { FashionEbayController } from './controllers/fashion-ebay.controller.js';
 import { BusinessIndustrialEbayController } from './controllers/business-industrial-ebay.controller.js';
@@ -107,6 +109,7 @@ import { StorageModule } from '../../storage/storage.module.js';
     FashionEbayController,
     BusinessIndustrialEbayController,
     SellerpunditEbayController,
+    EbayPlatformNotificationsController,
   ],
   providers: [
     EbayIntegrationsRedisConnection,
@@ -134,6 +137,7 @@ import { StorageModule } from '../../storage/storage.module.js';
     EbayOrderSyncProcessor,
     EbayApiAuditService,
     EbaySyncService,
+    EbayPlatformNotificationsService,
   ],
   exports: [
     EbayAccountTokenService,

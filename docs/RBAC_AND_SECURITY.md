@@ -109,7 +109,7 @@ Examples:
 | orders | `orders.view`, `orders.update`, `orders.ship`, `orders.refund`, `orders.import` |
 | channels | `channels.view`, `channels.connect`, `channels.publish`, `channels.sync`, `channels.manage` |
 | stores | `stores.view`, `stores.manage` |
-| ebay | `ebay.view`, `ebay.connect`, `ebay.sync`, `ebay.publish`, `ebay.manage`, `ebay.audit` |
+| ebay | `ebay.view`, `ebay.connect`, `ebay.sync`, `ebay.publish`, `ebay.manage`, `ebay.audit`, `ebay.notifications.manage` |
 | settings | `settings.view`, `settings.manage` |
 | automation | `automation.view`, `automation.manage` |
 | templates | `templates.view`, `templates.manage` |
@@ -128,6 +128,7 @@ Examples:
 | `super_admin` only | `client_settings.*`, `roles.assign_permissions`, `feature_flags.manage` |
 | `admin` and up | `users.*`, `catalog.clear`, `settings.manage`, `inventory.reconcile` |
 | `super_admin` + `admin` (default) | `listings.delete`, `inventory.delete` (soft-delete; reassignable in Roles UI) |
+| `super_admin` + `admin` | `ebay.notifications.manage` (2026-11-18) — subscribing an account to eBay sale notifications changes the seller's settings on eBay, and the delivery URL is shared by every seller on the eBay app. The endpoints also require an org role that can connect eBay (owner/admin/editor). |
 | `manager` and up | `users.view`, `roles.view`, `ingestion.manage`, `pipeline.manage`, `catalog.import`, `inventory.adjust`, `orders.refund` |
 | `read_write` | `listings.create`, `listings.update`, `catalog.update`, `orders.update`, `orders.ship` |
 | `read_only` | All view permissions |
@@ -195,6 +196,7 @@ health() { }
 - `/api/auth/login`
 - `/api/auth/register`
 - `/api/integrations/ebay/callback`
+- `POST /api/integrations/ebay/platform-notifications` — eBay sale notifications (SOAP). No JWT and no throttling (`@SkipThrottle`); trust comes from `NotificationSignature` = `Base64(MD5(Timestamp + EBAY_DEV_ID + EBAY_CLIENT_ID + EBAY_CLIENT_SECRET))`, compared in constant time, plus a 10-minute window on `Timestamp` against replays. A valid notification only queues an order re-import (idempotent), never writes order data from the payload.
 - `/api/client-settings/branding/public`
 
 ### @RequirePermissions(...)

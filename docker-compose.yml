@@ -186,11 +186,13 @@ services:
       EBAY_CLIENT_SECRET: ${EBAY_CLIENT_SECRET:-}
       EBAY_DAILY_PUBLISH_TARGET_LIMIT: ${EBAY_DAILY_PUBLISH_TARGET_LIMIT:-5000}
       EBAY_DEV_ID: ${EBAY_DEV_ID:-}
+      # Public https URL of POST /api/integrations/ebay/platform-notifications (eBay sale push)
+      EBAY_PLATFORM_NOTIFICATION_URL: ${EBAY_PLATFORM_NOTIFICATION_URL:-}
       EBAY_ENVIRONMENT: ${EBAY_ENVIRONMENT:-SANDBOX}
       # Published-listings Trading mirror sync cadence (set DISABLED=1 to no-op the job body)
       PUBLISHED_LISTINGS_SYNC_CRON: ${PUBLISHED_LISTINGS_SYNC_CRON:-*/15 * * * *}
       PUBLISHED_LISTINGS_SYNC_DISABLED: ${PUBLISHED_LISTINGS_SYNC_DISABLED:-0}
-      # eBay order import cadence — how soon a sale shows up in Omni (no eBay push yet)
+      # eBay order import cadence — safety net behind eBay sale notifications (subscribed accounts push sales)
       ORDER_IMPORT_CRON: ${ORDER_IMPORT_CRON:-*/5 * * * *}
       PUBLISHED_LISTINGS_SYNC_STALE_AFTER_HOURS: ${PUBLISHED_LISTINGS_SYNC_STALE_AFTER_HOURS:-24}
       PRIMEMOTIVE_LISTING_WEBHOOK_URL: ${PRIMEMOTIVE_LISTING_WEBHOOK_URL:-}

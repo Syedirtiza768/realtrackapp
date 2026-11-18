@@ -97,7 +97,8 @@ Source of truth: `.env.example` (copy to `.env`). Docker passes these via
 |-----|---------|---------|
 | `EBAY_CLIENT_ID` | — | **Secret.** App ID |
 | `EBAY_CLIENT_SECRET` | — | **Secret.** Cert ID |
-| `EBAY_DEV_ID` | — | **Secret.** Dev ID |
+| `EBAY_DEV_ID` | — | **Secret.** Dev ID. Also needed to verify eBay Platform Notification signatures (`Base64(MD5(Timestamp + DevId + AppId + CertId))`, with AppId = `EBAY_CLIENT_ID` and CertId = `EBAY_CLIENT_SECRET`); while it is unset, `POST /api/integrations/ebay/platform-notifications` answers 503 and subscribing is refused. |
+| `EBAY_PLATFORM_NOTIFICATION_URL` | _(unset)_ | Public **https** URL of `POST /api/integrations/ebay/platform-notifications`, for example `https://app.omnicoreholding.com/api/integrations/ebay/platform-notifications`. Sent to eBay as the app's `ApplicationURL` when an admin subscribes an account to sale notifications (`POST /api/integrations/ebay/accounts/:id/order-notifications`). eBay keeps one such URL per eBay app, shared by every seller on it. Forwarded by `docker-compose.yml`. Added 2026-11-18. |
 | `EBAY_ENVIRONMENT` | `SANDBOX` | `SANDBOX` or `PRODUCTION` |
 | `EBAY_SANDBOX` | — | Legacy override (takes precedence if set) |
 | `EBAY_LISTING_API_MODE` | retired | Ignored since 2026-10; new standard single-item listings always use Trading API. |
@@ -120,7 +121,7 @@ Source of truth: `.env.example` (copy to `.env`). Docker passes these via
 | `PUBLISHED_LISTINGS_SCRAPE_TIMEOUT_MS` | `15000` | HTTP timeout for listing-page scrape. |
 | `PUBLISHED_LISTINGS_SYNC_CRON` | `*/15 * * * *` | Cron for full Trading mirror sync. Use a slower schedule when eBay usage limits are hot. |
 | `PUBLISHED_LISTINGS_SYNC_DISABLED` | `0` | When `1`, cron still registers but the job body no-ops. |
-| `ORDER_IMPORT_CRON` | `*/5 * * * *` | Cron for the eBay order import (Fulfillment API `getOrders`). This poll is how a sale reaches Omni (no eBay push notifications are subscribed), so it sets the worst-case delay before a sale shows on **Orders**. Forwarded by `docker-compose.yml`. Was a fixed `*/15` before 2026-11-18. |
+| `ORDER_IMPORT_CRON` | `*/5 * * * *` | Cron for the eBay order import (Fulfillment API `getOrders`). For accounts subscribed to eBay sale notifications (see `EBAY_PLATFORM_NOTIFICATION_URL`) a sale is pushed within about 15 seconds and this poll is the safety net; for every other account it is still how a sale reaches Omni, so it sets the worst-case delay before a sale shows on **Orders**. Forwarded by `docker-compose.yml`. Was a fixed `*/15` before 2026-11-18. |
 | `PUBLISHED_LISTINGS_SOURCE` | `trading` | Sync data source: `trading` (legacy GetSellerList / ActiveList — quota-limited) or `browse` (Browse API seller search — avoids Trading usage limit). Browse mode forces `skipTrading: true` on enrichment. |
 | `PUBLISHED_LISTINGS_SYNC_ACCOUNT_IDS` | _(empty)_ | Comma-separated `connected_ebay_accounts.id` values. When set the scheduled sync only enqueues these accounts (in listed order). Use to restrict to specific stores. |
 | `PUBLISHED_LISTINGS_BROWSE_COUNTRY` | `US` | ISO country code passed as `itemLocationCountry` filter to Browse seller search. |

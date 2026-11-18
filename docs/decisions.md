@@ -13,6 +13,19 @@ and the narrative log in [docs/context/DECISION_LOG.md](context/DECISION_LOG.md)
 this file for quick day-to-day entries; promote something to a full ADR only if it
 needs that level of ceremony.
 
+## 2026-11-18 — eBay sale notifications trigger the existing import instead of becoming orders
+
+- **Why:** Sales only reached Omni through the order poll (every 5 minutes). eBay can push a SOAP notification per sale once a seller is subscribed through Trading `SetNotificationPreferences`.
+- **Decision:** A notification is only a signal. The endpoint verifies the signature, finds the account by the seller's eBay username (`RecipientUserID`, falling back to `Item.Seller.UserID`; case-insensitive, against `ebay_username` then `ebay_user_id`) and queues the same Fulfillment API import the poll runs. Order data is never built from the SOAP payload, so there is one import path, one watermark and one idempotency check (`channel`, `external_order_id`).
+- **Decision:** Jobs go on the existing `ebay-order-sync` queue with job id `ebay-notify-orders-<accountId>-<10s window>` and run when the window closes plus 3 seconds. A multi-item checkout sends several notifications; this makes it one `getOrders` pass, and the short wait gives eBay time to show the order to `getOrders`. A notification that arrives after a job started falls in the next window, so it is not lost.
+- **Decision:** Reject signatures whose `Timestamp` is more than 10 minutes from now (eBay's guidance), in either direction for clock skew, and compare in constant time. With `EBAY_DEV_ID` unset the endpoint answers 503 rather than accept unverified posts.
+- **Decision:** eBay keeps one `ApplicationURL` per eBay app for all its sellers. Subscribing reads it first and refuses (409) to move a URL that points elsewhere unless the admin sends `replaceApplicationUrl: true`, so another deployment on the same eBay keys is not silently cut off. Unsubscribe disables only that seller's events.
+- **Decision:** Subscribing first calls Trading `GetUser` with the seller's token and stores the login in `ebay_username`. On production, 12 of 14 active accounts were connected while the eBay identity lookup failed and hold only `unknown_<timestamp>` in `ebay_user_id` with no username, so their notifications would otherwise be dropped as "unknown seller". Only accounts we subscribe send notifications, so recording the login at subscribe time covers exactly the accounts that need it. If eBay returns no login and none is stored, subscribing stops before touching eBay settings.
+- **Decision:** SellerPundit-connected accounts are refused: their token belongs to SellerPundit's eBay app, so the call would move SellerPundit's delivery URL and their notifications would be signed with keys we do not have.
+- **Decision:** The webhook skips throttling. eBay sends bursts from a few IPs, and the per-IP limit (10/s) would drop sales notifications; the signature check is cheap.
+- **Not done:** no live account was subscribed — that changes the seller's eBay settings and is the operator's call. The poll stays at 5 minutes until accounts are subscribed and pushes are seen arriving.
+- **Revisit when:** all native production accounts are subscribed and pushes are confirmed; then `ORDER_IMPORT_CRON` can slow down.
+
 ## 2026-11-18 — eBay order lines keep lineItemId and gain the item number; the import watermark only passes saved orders
 
 - **Why:** Order lines stored eBay's `lineItemId` in `external_item_id`, so a sale could not be joined to the listing we published (`ebay_published_listings.ebay_item_id`) and matched our stock by SKU alone. Separately, `stores.last_sync_at` was set to "now" after every run, so an order that failed to import was never fetched again.

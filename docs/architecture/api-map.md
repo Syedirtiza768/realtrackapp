@@ -59,6 +59,7 @@ fixed to drop the `api/` segment. Do **not** "fix" without checking the matching
 | channels | `ebay-publish.controller.ts` | `/channels/ebay` | `ebay.publish` |
 | integrations/ebay | `integrations-ebay.controller.ts` | `/integrations/ebay` | `ebay.view` |
 | integrations/ebay | `ebay-multi-store.controller.ts` | `/ebay` | `ebay.view` |
+| integrations/ebay | `ebay-platform-notifications.controller.ts` | `/integrations/ebay` | `platform-notifications` public (signature-checked); `accounts/:id/order-notifications` `ebay.notifications.manage` |
 | integrations/ebay/sellerpundit | `sellerpundit-ebay.controller.ts` | `/integrations/ebay/sellerpundit` | `ebay.view` / `ebay.manage` / `ebay.connect` |
 | inventory | `inventory.controller.ts` | `/inventory` | `inventory.*` |
 | orders | `orders.controller.ts` | `/orders` | `orders.*` |
@@ -96,6 +97,19 @@ fixed to drop the `api/` segment. Do **not** "fix" without checking the matching
 
 
 Responses are cached in Redis for `PARTS_SEARCH_CACHE_TTL_SECONDS` (default 30 s; part detail ≥ 120 s), keyed separately for internal and public. Degraded answers are never cached.
+
+## eBay sale notifications (2026-11-18)
+
+Push path for eBay sales (Trading API Platform Notifications). Code: `backend/src/integrations/ebay/controllers/ebay-platform-notifications.controller.ts`, `services/ebay-platform-notifications.service.ts`, `services/ebay-platform-notification.util.ts`.
+
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| POST | `/api/integrations/ebay/platform-notifications` | Public, not throttled; `NotificationSignature` checked | eBay's SOAP XML (`text/xml`). Rejects a bad or older-than-10-minutes signature with 401, a non-SOAP body with 400, and answers 503 while `EBAY_DEV_ID` is unset. `FixedPriceTransaction` / `AuctionCheckoutComplete` / `ItemSold` for a connected seller queue `sync-orders` on `ebay-order-sync` → `EbayOrderImportService.importFromConnectedAccount`; other events and unknown sellers get 200 `{ status: 'ignored' }`. |
+| GET | `/api/integrations/ebay/accounts/:id/order-notifications` | `ebay.notifications.manage` + org role that can connect eBay | Reads `GetNotificationPreferences` (app URL, per-seller event switches) and returns `{ ebayUsername, expectedUrl, applicationUrl, applicationEnabled, events, subscribed }`; `subscribed` is false while `ebayUsername` is empty. |
+| POST | `/api/integrations/ebay/accounts/:id/order-notifications` | same | Body `{ replaceApplicationUrl?: boolean }`. First calls `GetUser` and stores the seller's login in `connected_ebay_accounts.ebay_username` when missing or different (notifications are matched by it). Then sets the app `ApplicationURL` to `EBAY_PLATFORM_NOTIFICATION_URL` and enables the three events for the seller (`SetNotificationPreferences` with the seller's token). 409 when the app URL already points elsewhere and `replaceApplicationUrl` is not true; 400 for SellerPundit-connected or inactive accounts or missing env. **Changes settings on eBay.** |
+| DELETE | `/api/integrations/ebay/accounts/:id/order-notifications` | same | Disables the three events for the seller; leaves the shared app URL alone. **Changes settings on eBay.** |
+
+`main.ts` adds a `text` body parser for `text/xml`, `application/xml` and `application/soap+xml` (2 MB), so XML bodies arrive as a string with `rawBody`.
 
 ## Warehouse stock (2026-10-05)
 

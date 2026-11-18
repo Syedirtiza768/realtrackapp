@@ -1,5 +1,6 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import compression from 'compression';
 import { AppModule } from './app.module';
@@ -8,8 +9,15 @@ import { RedisIoAdapter } from './common/redis/redis-io.adapter.js';
 import type Redis from 'ioredis';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     rawBody: true, // preserve raw body for webhook HMAC verification
+  });
+  // eBay Platform Notifications arrive as SOAP XML (text/xml). JSON and
+  // urlencoded parsers are Nest's defaults; this adds a string body + rawBody
+  // for XML so POST /api/integrations/ebay/platform-notifications can verify it.
+  app.useBodyParser('text', {
+    type: ['text/xml', 'application/xml', 'application/soap+xml'],
+    limit: '2mb',
   });
 
   if (process.env.REDIS_SOCKET_ADAPTER === 'true') {

@@ -358,6 +358,13 @@ export const PERMISSION_REGISTRY: PermissionDefinition[] = [
   p('ebay.publish', 'Publish via eBay', 'ebay', READ_ONLY),
   p('ebay.manage', 'Manage eBay accounts', 'ebay', MANAGER_UP),
   p('ebay.audit', 'View eBay API audit logs', 'ebay', MANAGER_UP),
+  p(
+    'ebay.notifications.manage',
+    'Manage eBay sale notifications',
+    'ebay',
+    SUPER_AND_ADMIN,
+    'Subscribe or unsubscribe a connected eBay account to Platform Notifications for sales. Changes the seller settings on eBay; the delivery URL is shared by every seller on the eBay app.',
+  ),
 
   // ── Published listings (live eBay mirror) ──
   p(

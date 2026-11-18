@@ -368,17 +368,24 @@ const listings = await this.listingRepo.find({
 
 ### eBay Sales Arrive by Polling Only
 
-**Status**: Partially mitigated 2026-11-18
+**Status**: Code ready 2026-11-18 — no account subscribed yet, not deployed
 **Priority**: Medium
 
 **Current State**:
-- A sale reaches Omni only through the scheduled order import (`EbayOrderImportService`, Fulfillment API `getOrders`, `ORDER_IMPORT_CRON`, default every 5 minutes, was 15) and the published-listings sync (`quantity_sold`, status).
-- No eBay push notifications are subscribed. `POST /api/channels/webhooks/ebay` exists but handles only inventory/item topics, and nothing calls Trading `SetNotificationPreferences` for `FixedPriceTransaction` / `ItemSold` / `AuctionCheckoutComplete`.
+- Until an account is subscribed, a sale reaches Omni only through the scheduled order import (`EbayOrderImportService`, Fulfillment API `getOrders`, `ORDER_IMPORT_CRON`, default every 5 minutes, was 15) and the published-listings sync (`quantity_sold`, status).
+- Added 2026-11-18: eBay Platform Notifications for sales. An admin subscribes a connected account with `POST /api/integrations/ebay/accounts/:id/order-notifications` (Trading `SetNotificationPreferences`: `FixedPriceTransaction`, `AuctionCheckoutComplete`, `ItemSold`). eBay then posts signed SOAP to the public `POST /api/integrations/ebay/platform-notifications`, which checks `NotificationSignature` (10-minute freshness), finds the account by the seller's eBay username and queues the same order import on the `ebay-order-sync` queue. Notifications for one account inside a 10-second window share one import job, so a sale shows up about 15 seconds later. The poll stays as the safety net.
+- Production check (2026-11-18, read-only): `EBAY_DEV_ID`, `EBAY_CLIENT_ID` and `EBAY_CLIENT_SECRET` are set and eBay runs in PRODUCTION; `EBAY_PLATFORM_NOTIFICATION_URL` is not set. 14 native-OAuth accounts are active; 12 of them store no eBay username (only `unknown_<timestamp>`), which subscribing now fills in from `GetUser`. The live backend still polls every 15 minutes (`*/15`, compiled in): the 5-minute poll and the import hardening above are not deployed either.
+- Not done: no production account is subscribed; that changes the seller's settings on eBay and is left to the operator. It needs `EBAY_DEV_ID` and `EBAY_PLATFORM_NOTIFICATION_URL` set and deployed first.
+- Limit: eBay keeps one notification `ApplicationURL` per eBay app, shared by every seller on it. Subscribing refuses to move a URL that already points elsewhere unless `replaceApplicationUrl: true` is sent. Unsubscribing only turns the seller's events off and leaves the URL.
+- Limit: accounts connected through SellerPundit cannot be subscribed (their token belongs to SellerPundit's eBay app); they stay on the poll.
+- `POST /api/channels/webhooks/ebay` is unchanged and still handles only inventory/item topics.
 - Fixed 2026-11-18: an order that failed to import was skipped for good (the store watermark moved past it). The watermark now holds at the earliest failed order for up to 7 days, and the order plus its lines save in one transaction.
 - Fixed 2026-11-18: active connected eBay accounts are polled even when their Omni store row is paused or suspended (archived stores are still skipped).
 
 **Action**:
-- [ ] Subscribe accounts to eBay Platform Notifications and handle the signed SOAP payloads, then trigger an import for that store.
+- [x] Subscribe accounts to eBay Platform Notifications and handle the signed SOAP payloads, then trigger an import for that store (code, 2026-11-18).
+- [ ] Deploy with `EBAY_DEV_ID` + `EBAY_PLATFORM_NOTIFICATION_URL`, then subscribe each native-OAuth production account (operator).
+- [ ] Once accounts are subscribed and sales arrive by push, consider a slower `ORDER_IMPORT_CRON`.
 - [ ] Order lines imported before 2026-11-18 have no `external_listing_id`; backfill would need eBay `getOrder` calls.
 
 ### Forgot Password Flow
