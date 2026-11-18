@@ -13,6 +13,15 @@ and the narrative log in [docs/context/DECISION_LOG.md](context/DECISION_LOG.md)
 this file for quick day-to-day entries; promote something to a full ADR only if it
 needs that level of ceremony.
 
+## 2026-11-18 — eBay order lines keep lineItemId and gain the item number; the import watermark only passes saved orders
+
+- **Why:** Order lines stored eBay's `lineItemId` in `external_item_id`, so a sale could not be joined to the listing we published (`ebay_published_listings.ebay_item_id`) and matched our stock by SKU alone. Separately, `stores.last_sync_at` was set to "now" after every run, so an order that failed to import was never fetched again.
+- **Decision:** Add `order_items.external_listing_id` for the eBay item number instead of repurposing `external_item_id` — `OrderFulfillmentService` sends `external_item_id` back to eBay as `lineItemId` when uploading tracking.
+- **Decision:** `last_sync_at` is now the import watermark: the run's start time on a clean run, else the earliest failed order's creation time, but never more than 7 days back so one broken order cannot pin the window. Each run re-reads 10 minutes before it, which is safe because import is idempotent on `(channel, external_order_id)`.
+- **Decision:** Active connected eBay accounts are polled even if their Omni store row is paused/suspended: pausing a store in Omni does not stop sales on eBay. Archived stores stay excluded.
+- **Decision:** Shorten the poll to 5 minutes (`ORDER_IMPORT_CRON`) rather than build eBay Platform Notifications now — push needs a live per-account subscription and a signed SOAP endpoint.
+- **Revisit when:** eBay sale notifications are subscribed; then the poll can go back to a slower safety-net schedule.
+
 ## 2026-11-18 — "Sign in with eBay" re-authorizes a seller the workspace already has
 
 - **Why:** The 2026-11-12 fix only reused the store when the OAuth flow carried `reconnectAccountId` (the Fashion Reconnect button). The Auto Parts stores page had no Reconnect button, so operators fixed `reconnect_required` and disconnected sellers with Sign in with eBay, which always created a new connection, store and account. Because eBay's Identity API had been called on the wrong host, every one of those was saved as `unknown_<ms>`, so the duplicate-seller guard (a store with the same `ebay_user_id`) never matched. Production ended up with duplicate stores for Superior Auto Parts, K. Salvage Auto Parts, Business & Industrial and Primemotive.

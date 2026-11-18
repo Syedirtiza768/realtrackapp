@@ -34,6 +34,21 @@ export class OrderItem {
   })
   externalItemId!: string | null;
 
+  /**
+   * Channel listing number the line sold from (eBay item number / legacyItemId).
+   * externalItemId stays eBay's lineItemId — shipping fulfillment sends that back.
+   */
+  @Index('idx_order_item_external_listing', {
+    where: '"external_listing_id" IS NOT NULL',
+  })
+  @Column({
+    name: 'external_listing_id',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
+  externalListingId!: string | null;
+
   @Column({ type: 'varchar', length: 100, nullable: true })
   sku!: string | null;
 

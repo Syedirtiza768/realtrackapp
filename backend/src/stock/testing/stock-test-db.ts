@@ -44,10 +44,10 @@ export async function createStockTestDb(additionalEntities: Function[] = []): Pr
     CREATE TABLE stores (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), organization_id uuid, channel text DEFAULT 'ebay', store_name text DEFAULT 'Store', status text DEFAULT 'active');
     CREATE TABLE orders (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), store_id uuid, channel text DEFAULT 'ebay', status text DEFAULT 'pending',
       external_order_id text, buyer_username text, shipping_name text, shipping_country text, ordered_at timestamptz DEFAULT now());
-    CREATE TABLE order_items (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), order_id uuid, listing_id uuid, external_item_id text, sku text,
-      title text DEFAULT 'Item', quantity int, created_at timestamptz DEFAULT now());
+    CREATE TABLE order_items (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), order_id uuid, listing_id uuid, external_item_id text,
+      external_listing_id text, sku text, title text DEFAULT 'Item', quantity int, created_at timestamptz DEFAULT now());
     CREATE TABLE organization_members (user_id uuid, organization_id uuid);
-    CREATE TABLE ebay_published_listings (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), store_id uuid, sku text, catalog_product_id uuid,
+    CREATE TABLE ebay_published_listings (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), organization_id uuid, store_id uuid, sku text, catalog_product_id uuid,
       offer_id text, ebay_item_id text, marketplace_id text DEFAULT 'EBAY_US', listing_status text DEFAULT 'active',
       quantity_available int DEFAULT 0, updated_at timestamptz DEFAULT now());
     CREATE TABLE listing_channel_instances (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), listing_id uuid, connection_id uuid, store_id uuid,

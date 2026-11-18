@@ -256,6 +256,8 @@ export class OrdersService {
     };
     items: Array<{
       externalItemId?: string;
+      /** Channel listing number (eBay item number); see OrderItem.externalListingId. */
+      externalListingId?: string;
       listingId?: string;
       sku?: string;
       title: string;
@@ -296,26 +298,26 @@ export class OrdersService {
       orderedAt: data.orderedAt ?? new Date(),
     });
 
-    const savedOrder = await this.orderRepo.save(order);
-
-    // Create order items
-    for (const item of data.items) {
-      const totalPrice = (item.quantity * parseFloat(item.unitPrice)).toFixed(
-        2,
-      );
-      await this.itemRepo.save(
+    // Order + lines commit together. A line that fails to insert must not leave a
+    // half-saved order behind: the idempotency check above would then skip it forever.
+    const savedOrder = await this.orderRepo.manager.transaction(async (em) => {
+      const saved = await em.getRepository(Order).save(order);
+      const lines = data.items.map((item) =>
         this.itemRepo.create({
-          orderId: savedOrder.id,
+          orderId: saved.id,
           listingId: item.listingId ?? null,
           externalItemId: item.externalItemId ?? null,
+          externalListingId: item.externalListingId ?? null,
           sku: item.sku ?? null,
           title: item.title,
           quantity: item.quantity,
           unitPrice: item.unitPrice,
-          totalPrice,
+          totalPrice: (item.quantity * parseFloat(item.unitPrice)).toFixed(2),
         }),
       );
-    }
+      if (lines.length) await em.getRepository(OrderItem).save(lines);
+      return saved;
+    });
 
     this.logger.log(
       `Imported order ${savedOrder.id} from ${data.channel}:${data.externalOrderId} (${data.items.length} items)`,

@@ -366,6 +366,21 @@ const listings = await this.listingRepo.find({
 
 ## Feature Gaps
 
+### eBay Sales Arrive by Polling Only
+
+**Status**: Partially mitigated 2026-11-18
+**Priority**: Medium
+
+**Current State**:
+- A sale reaches Omni only through the scheduled order import (`EbayOrderImportService`, Fulfillment API `getOrders`, `ORDER_IMPORT_CRON`, default every 5 minutes, was 15) and the published-listings sync (`quantity_sold`, status).
+- No eBay push notifications are subscribed. `POST /api/channels/webhooks/ebay` exists but handles only inventory/item topics, and nothing calls Trading `SetNotificationPreferences` for `FixedPriceTransaction` / `ItemSold` / `AuctionCheckoutComplete`.
+- Fixed 2026-11-18: an order that failed to import was skipped for good (the store watermark moved past it). The watermark now holds at the earliest failed order for up to 7 days, and the order plus its lines save in one transaction.
+- Fixed 2026-11-18: active connected eBay accounts are polled even when their Omni store row is paused or suspended (archived stores are still skipped).
+
+**Action**:
+- [ ] Subscribe accounts to eBay Platform Notifications and handle the signed SOAP payloads, then trigger an import for that store.
+- [ ] Order lines imported before 2026-11-18 have no `external_listing_id`; backfill would need eBay `getOrder` calls.
+
 ### Forgot Password Flow
 
 **Status**: UI exists, backend unverified  

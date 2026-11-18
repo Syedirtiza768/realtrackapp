@@ -113,6 +113,28 @@ describeIt('Order stock flows (PostgreSQL integration)', () => {
     expect(await lineStatus(lineId)).toBe('reserved');
   });
 
+  it('matches an eBay line whose SKU differs from ours through the published listing item number', async () => {
+    const s = await setup();
+    await ops.receive(s.scope, { itemId: s.itemId, warehouseId: s.warehouseId, locationId: s.locationId, quantity: 1 });
+    await ds.query(
+      `INSERT INTO ebay_published_listings (organization_id, store_id, sku, catalog_product_id, ebay_item_id) VALUES ($1,$2,'EBAY-ONLY-SKU',$3,'316000000001')`,
+      [s.orgId, s.storeId, s.catalogProductId],
+    );
+    const [{ id: orderId }] = await ds.query(`INSERT INTO orders (store_id, external_order_id) VALUES ($1, 'EBAY-ITEMNO') RETURNING id`, [s.storeId]);
+    const [{ id: lineId }] = await ds.query(
+      `INSERT INTO order_items (order_id, sku, external_listing_id, quantity) VALUES ($1, 'EBAY-ONLY-SKU', '316000000001', 1) RETURNING id`,
+      [orderId],
+    );
+    const { lineId: unknownLine, orderId: unknownOrder } = await placeOrder(s.storeId, 'NOT-OURS', 1);
+
+    await orders.allocateOrder(orderId);
+    await orders.allocateOrder(unknownOrder);
+
+    expect(await lineStatus(lineId)).toBe('reserved');
+    expect((await ds.query(`SELECT inventory_item_id FROM order_items WHERE id = $1`, [lineId]))[0].inventory_item_id).toBe(s.itemId);
+    expect(await lineStatus(unknownLine)).toBe('unmatched');
+  });
+
   it('dropships on-demand items that are never held in stock', async () => {
     const s = await setup();
     await ds.query(`UPDATE inventory_items SET sourcing_mode = 'on_demand' WHERE id = $1`, [s.itemId]);

@@ -194,7 +194,7 @@ delivered timestamps support signed outbound webhook retries.
 `id`, `channelOrderId`, `channel`, `status`, `buyerUsername`, `buyerEmail`, `totalAmount` numeric(12,2), `currency`, `shippingAddress` jsonb, `orderDate`
 
 #### `order_items`
-`id`, `orderId` FK, `listingRecordId` FK, `sku`, `title`, `quantity`, `unitPrice` numeric(12,2)
+`id`, `order_id` FK, `listing_id` FK → listing_records, `external_item_id` (eBay `lineItemId`), `external_listing_id` (eBay item number, added 2026-11-18), `sku`, `title`, `quantity`, `unit_price` numeric(10,2), `total_price`, `fulfilled`, `inventory_item_id`, `stock_status`. Full column notes in [DATABASE_MAP.md](../DATABASE_MAP.md).
 
 ### Inventory Module
 

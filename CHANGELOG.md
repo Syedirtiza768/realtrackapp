@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-11-18 — eBay sales: item number on order lines, no skipped orders, 5-minute import
+
+- Added: `order_items.external_listing_id` stores the eBay item number (`legacyItemId`) each line sold from, so a sale can be joined to `ebay_published_listings.ebay_item_id`. `external_item_id` keeps eBay's `lineItemId` because shipping fulfillment sends it back to eBay. Migration `1791800000000-OrderItemExternalListingId` is additive (nullable column + partial index); older rows stay NULL.
+- Changed: stock allocation (`OrderStockService.resolveItem`) falls back to that item number when the line's SKU is missing or not ours. It finds our published listing and matches the stock item by the listing's catalog product, then by the listing's SKU.
+- Fixed: an order that failed to import was skipped forever, because `stores.last_sync_at` moved past it. The watermark now stays at the earliest failed order (for at most 7 days, then an error is logged). Each run also re-reads 10 minutes before the watermark. `OrdersService.importOrder` now saves the order and its lines in one transaction, so a failed line no longer leaves a half-saved order that later runs skip.
+- Changed: the import also polls the primary store of every active connected eBay account, even when that store row is paused or suspended (archived stores are still skipped).
+- Changed: the order import runs every 5 minutes instead of 15 (`ORDER_IMPORT_CRON`, forwarded in `docker-compose.yml`). eBay push notifications for sales are still not subscribed; see `docs/KNOWN_GAPS_AND_RISKS.md`.
+- Backend only: `orders/order-import-ebay.service.ts`, `orders/orders.service.ts`, `orders/entities/order-item.entity.ts`, `stock/order-stock.service.ts`, `common/scheduler/scheduler.service.ts`. Tests: new `order-import-ebay.service.spec.ts` (7), two new cases in `orders.service.spec.ts`, and one new PostgreSQL case in `order-stock.flow.int.spec.ts`. Not deployed: production runs layered images, so this needs a backend release that includes the migration.
+
 ## 2026-11-18 — Connecting an eBay seller again never creates a second store
 
 - Fixed: on the Auto Parts eBay stores page (`/auto-parts/settings/integrations/ebay`) the only way to fix a `reconnect_required` or disconnected seller was **Sign in with eBay**, which always ran the new-store path. The 2026-11-12 in-place reconnect only covered the explicit Reconnect action (Fashion stores page). Production had 28 eBay accounts, 25 with placeholder `unknown_<ms>` seller IDs, and several sellers with two or three stores (Superior Auto Parts, K. Salvage Auto Parts, Business & Industrial eBay store, Primemotive).

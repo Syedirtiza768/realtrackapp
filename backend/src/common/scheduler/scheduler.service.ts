@@ -160,13 +160,17 @@ export class SchedulerService {
     });
   }
 
-  /* ─── Orders: Import from Channels every 15 minutes ─── */
+  /* ─── Orders: Import from Channels (default every 5 minutes) ─── */
+  // eBay has no sale push wired up yet, so this poll is how a sale reaches Omni.
+  // ORDER_IMPORT_CRON overrides the interval.
 
-  @Cron('*/15 * * * *', { name: 'order-import-from-channels' })
+  @Cron(process.env.ORDER_IMPORT_CRON ?? '*/5 * * * *', {
+    name: 'order-import-from-channels',
+  })
   async scheduleOrderImport(): Promise<void> {
     await this.leader.runIfLeader(
       'order-import-from-channels',
-      840,
+      240,
       async () => {
         const jobId = `order-import-${Date.now()}`;
         await this.ordersQueue.add(

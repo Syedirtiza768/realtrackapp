@@ -120,6 +120,7 @@ Source of truth: `.env.example` (copy to `.env`). Docker passes these via
 | `PUBLISHED_LISTINGS_SCRAPE_TIMEOUT_MS` | `15000` | HTTP timeout for listing-page scrape. |
 | `PUBLISHED_LISTINGS_SYNC_CRON` | `*/15 * * * *` | Cron for full Trading mirror sync. Use a slower schedule when eBay usage limits are hot. |
 | `PUBLISHED_LISTINGS_SYNC_DISABLED` | `0` | When `1`, cron still registers but the job body no-ops. |
+| `ORDER_IMPORT_CRON` | `*/5 * * * *` | Cron for the eBay order import (Fulfillment API `getOrders`). This poll is how a sale reaches Omni (no eBay push notifications are subscribed), so it sets the worst-case delay before a sale shows on **Orders**. Forwarded by `docker-compose.yml`. Was a fixed `*/15` before 2026-11-18. |
 | `PUBLISHED_LISTINGS_SOURCE` | `trading` | Sync data source: `trading` (legacy GetSellerList / ActiveList — quota-limited) or `browse` (Browse API seller search — avoids Trading usage limit). Browse mode forces `skipTrading: true` on enrichment. |
 | `PUBLISHED_LISTINGS_SYNC_ACCOUNT_IDS` | _(empty)_ | Comma-separated `connected_ebay_accounts.id` values. When set the scheduled sync only enqueues these accounts (in listed order). Use to restrict to specific stores. |
 | `PUBLISHED_LISTINGS_BROWSE_COUNTRY` | `US` | ISO country code passed as `itemLocationCountry` filter to Browse seller search. |

@@ -46,6 +46,14 @@ describe('OrdersService (regression)', () => {
       findOneBy: jest.fn(),
       create: jest.fn((d) => ({ ...d })),
       save: jest.fn((o) => Promise.resolve({ id: 'order-new', ...o })),
+      // importOrder writes the order and its lines inside one transaction.
+      manager: {
+        transaction: jest.fn((cb: (em: unknown) => Promise<unknown>) =>
+          cb({
+            getRepository: (e: unknown) => (e === Order ? orderRepo : itemRepo),
+          }),
+        ),
+      } as never,
       createQueryBuilder: jest.fn(() => ({
         leftJoinAndSelect: jest.fn().mockReturnThis(),
         andWhere: jest.fn().mockReturnThis(),
@@ -153,6 +161,66 @@ describe('OrdersService (regression)', () => {
     expect(itemRepo.save).toHaveBeenCalledTimes(1);
     // Stock allocation (StockModule) listens for this on every new order.
     expect(events.emit).toHaveBeenCalledWith('order.new', expect.objectContaining({ orderId: result.id, channel: 'shopify' }));
+  });
+
+  it('importOrder saves the order and its lines in one transaction, with the eBay item number', async () => {
+    orderRepo.findOne.mockResolvedValue(null);
+    await service.importOrder({
+      channel: 'ebay',
+      externalOrderId: 'EBAY-9',
+      financials: { subtotal: '40', total: '40' },
+      items: [
+        {
+          externalItemId: 'LI-1',
+          externalListingId: '316000000001',
+          sku: 'SKU-1',
+          title: 'A',
+          quantity: 1,
+          unitPrice: '15',
+        },
+        {
+          externalItemId: 'LI-2',
+          externalListingId: '316000000002',
+          title: 'B',
+          quantity: 1,
+          unitPrice: '25',
+        },
+      ],
+    });
+    const { transaction } = orderRepo.manager as unknown as {
+      transaction: jest.Mock;
+    };
+    expect(transaction).toHaveBeenCalledTimes(1);
+    expect(itemRepo.save).toHaveBeenCalledTimes(1);
+    const [[savedLines]] = itemRepo.save.mock.calls as unknown[][];
+    expect(savedLines).toEqual([
+      expect.objectContaining({
+        orderId: 'order-new',
+        externalItemId: 'LI-1',
+        externalListingId: '316000000001',
+        totalPrice: '15.00',
+      }),
+      expect.objectContaining({
+        orderId: 'order-new',
+        externalItemId: 'LI-2',
+        externalListingId: '316000000002',
+        sku: null,
+      }),
+    ]);
+  });
+
+  it('importOrder does not emit order.new when saving the lines fails', async () => {
+    orderRepo.findOne.mockResolvedValue(null);
+    itemRepo.save.mockRejectedValueOnce(new Error('value too long'));
+    await expect(
+      service.importOrder({
+        channel: 'ebay',
+        externalOrderId: 'EBAY-10',
+        financials: { subtotal: '10', total: '10' },
+        items: [{ title: 'A', quantity: 1, unitPrice: '10' }],
+      }),
+    ).rejects.toThrow('value too long');
+    expect(events.emit).not.toHaveBeenCalled();
   });
 
   it('importOrder does not emit order.new for a duplicate', async () => {

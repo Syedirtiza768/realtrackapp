@@ -347,14 +347,21 @@
 | Column | Type | Notes |
 |--------|------|-------|
 | `id` | uuid | Primary key |
-| `orderId` | uuid | FK to orders |
-| `listingRecordId` | uuid | FK to listing_records |
-| `sku` | varchar | Product SKU |
+| `order_id` | uuid | FK to orders (cascade delete) |
+| `listing_id` | uuid | FK to listing_records (set null). Not filled by the eBay importer |
+| `external_item_id` | varchar(100) | Channel line ID. eBay: `lineItemId` — sent back to eBay by shipping fulfillment |
+| `external_listing_id` | varchar(100) | Channel listing number the line sold from. eBay: item number (`legacyItemId`); joins to `ebay_published_listings.ebay_item_id`. Added 2026-11-18 (migration `1791800000000`); older rows are NULL |
+| `sku` | varchar(100) | SKU on the channel order |
 | `title` | text | Item title |
 | `quantity` | int | Quantity ordered |
-| `unitPrice` | numeric(12,2) | Price per unit |
-| `totalPrice` | numeric(12,2) | Line total |
-| `createdAt` | timestamptz | Auto-generated |
+| `unit_price` | numeric(10,2) | Price per unit |
+| `total_price` | numeric(10,2) | Line total |
+| `fulfilled` | boolean | Default false |
+| `inventory_item_id` | uuid | SKU-master item the line consumes (StockModule) |
+| `stock_status` | varchar(24) | See WAREHOUSE_INVENTORY.md |
+| `created_at` | timestamptz | Auto-generated |
+
+*Corrected 2026-11-18 from the entity: the table previously listed `listingRecordId` and camelCase names.*
 
 ---
 

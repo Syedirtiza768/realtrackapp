@@ -55,6 +55,8 @@ type OrderRow = {
 type OrderItemRow = {
   id: string;
   listing_id: string | null;
+  /** Channel listing number (eBay item number) — fallback match via ebay_published_listings. */
+  external_listing_id: string | null;
   sku: string | null;
   quantity: number;
   inventory_item_id: string | null;
@@ -149,7 +151,7 @@ export class OrderStockService {
       if (order.channel === 'motoark') throw new BadRequestException('Use the MotoArk order-events contract to allocate external order stock');
       if (CLOSED_ORDER_STATUSES.has(order.status)) return;
       const lines = (await em.query(
-        `SELECT id, listing_id, sku, quantity, inventory_item_id, stock_status
+        `SELECT id, listing_id, external_listing_id, sku, quantity, inventory_item_id, stock_status
            FROM order_items WHERE order_id = $1 ORDER BY created_at FOR UPDATE`,
         [orderId],
       )) as OrderItemRow[];
@@ -258,7 +260,10 @@ export class OrderStockService {
     await em.getRepository(ProcurementRequest).save(open);
   }
 
-  /** Matches an order line to the SKU master: explicit link → listing → catalog id → SKU. */
+  /**
+   * Matches an order line to the SKU master:
+   * explicit link → listing → catalog id → SKU → the listing we published under that eBay item number.
+   */
   private async resolveItem(em: EntityManager, org: string, line: OrderItemRow): Promise<InventoryItem | null> {
     const repo = em.getRepository(InventoryItem);
     if (line.inventory_item_id) {
@@ -271,7 +276,27 @@ export class OrderStockService {
         (await repo.findOneBy({ organizationId: org, catalogProductId: line.listing_id }));
       if (byListing) return byListing;
     }
-    if (line.sku?.trim()) return repo.findOneBy({ organizationId: org, sku: line.sku.trim() });
+    if (line.sku?.trim()) {
+      const bySku = await repo.findOneBy({ organizationId: org, sku: line.sku.trim() });
+      if (bySku) return bySku;
+    }
+    // eBay SKU missing or different from ours: follow the eBay item number to our published listing.
+    if (line.external_listing_id) {
+      const published = (await em.query(
+        `SELECT catalog_product_id, sku FROM ebay_published_listings
+          WHERE organization_id = $1 AND ebay_item_id = $2
+          ORDER BY (catalog_product_id IS NULL), updated_at DESC LIMIT 1`,
+        [org, line.external_listing_id],
+      )) as Array<{ catalog_product_id: string | null; sku: string | null }>;
+      const listing = published[0];
+      if (listing?.catalog_product_id) {
+        const byProduct = await repo.findOneBy({ organizationId: org, catalogProductId: listing.catalog_product_id });
+        if (byProduct) return byProduct;
+      }
+      if (listing?.sku?.trim() && listing.sku.trim() !== line.sku?.trim()) {
+        return repo.findOneBy({ organizationId: org, sku: listing.sku.trim() });
+      }
+    }
     return null;
   }
 
