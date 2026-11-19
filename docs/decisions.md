@@ -13,6 +13,14 @@ and the narrative log in [docs/context/DECISION_LOG.md](context/DECISION_LOG.md)
 this file for quick day-to-day entries; promote something to a full ADR only if it
 needs that level of ceremony.
 
+## 2026-11-19 — Merging duplicate eBay stores: identity by policy and item IDs, survivor wins, batches
+
+- **Why:** Until PR #12 every reconnect created a new account and store, and most accounts stored placeholder `unknown_<ms>` seller IDs, so production held several stores per seller. Display names were not trustworthy: "All About Mercedes" held K. Euro Japan's login, and B.JLRWORLD, "eBay store" and GMCadiFordRover4*4 were one seller.
+- **Decision:** Two accounts are the same seller only when they share business-policy IDs (fetched from eBay with each account's own token) and eBay item IDs; both are unique to one seller. Keep the active account with the most Omni data; move everything Omni-owned to it; where a unique row exists on both sides, keep the survivor's; carry catalog links onto the survivor's mirror row for the same item. Retire duplicates (disabled / archived, names suffixed) rather than delete them, and delete after a week.
+- **Decision:** Bulk changes to `ebay_published_listings` run in committed batches of 2,000 rows with `lock_timeout = 5s`, after indexing the foreign-key columns that point at it (migration `1791900000000`). A single-transaction delete without those indexes blocked the published-listings sync for 8 minutes.
+- **Decision:** Primemotive stays as one store per workspace (Auto Parts and Business & Industrial); Prime Wardrobe De and US stay separate stores for their marketplaces although they share one eBay login.
+- **Revisit when:** the retired rows are deleted (2026-11-26 or later), or when a seller needs two Omni stores on purpose — the OAuth callback re-authorizes the preferred existing account and cannot target a second one.
+
 ## 2026-11-18 — eBay sale notifications trigger the existing import instead of becoming orders
 
 - **Why:** Sales only reached Omni through the order poll (every 5 minutes). eBay can push a SOAP notification per sale once a seller is subscribed through Trading `SetNotificationPreferences`.

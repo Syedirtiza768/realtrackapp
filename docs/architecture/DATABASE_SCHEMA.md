@@ -188,6 +188,18 @@ retain a listing snapshot so consumers can process removals after the mirror
 row is no longer present. Delivery attempt, next-attempt, last-error, and
 delivered timestamps support signed outbound webhook retries.
 
+Migration `1791900000000-EbayListingForeignKeyIndexes` (2026-11-18) adds
+partial indexes on the foreign-key columns that reference this table and
+`ebay_listing_channels`: `listing_action_logs.ebay_published_listing_id`,
+`listing_action_logs.ebay_listing_channel_id`,
+`ebay_published_listings.ebay_listing_channel_id`,
+`ebay_published_listing_bulk_job_items.published_listing_id` and
+`ebay_api_errors.ebay_listing_channel_id`. Without them every deleted mirror row
+scanned `listing_action_logs`, and every deleted listing channel scanned the whole
+mirror table, so bulk deletes held locks long enough to block the
+published-listings sync. Bulk changes to the mirror should still run in batches of
+a few thousand rows per transaction.
+
 ### Orders Module
 
 #### `orders`
