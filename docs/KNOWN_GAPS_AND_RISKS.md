@@ -150,6 +150,16 @@ Business & Industrial eBay store Ã—3, Primemotive/"prime motive", "eBay store" Ã
 plus an orphan "eBay store" row with no account). They are not merged; a
 placeholder-ID seller with no cached policies still cannot be matched.
 
+**Update 2026-11-19**: the duplicates above were merged into one account per
+seller ([record](operations/EBAY_DUPLICATE_STORE_MERGE_2026-11-18.md)). Still
+open: the retired accounts and archived stores remain in the eBay stores list
+until they are deleted (planned after 2026-11-26); the published-listings
+sync/enrichment job had been writing rows of disabled accounts; Primemotive
+(two workspaces) and Prime Wardrobe De/US share one eBay login each by decision;
+an account row that holds another seller's login cannot be reconnected to the
+right seller (the Reconnect check compares against the wrong seller's cached
+policies), so such rows must be retired and the real seller connected fresh.
+
 **Mitigation**:
 - [ ] Monitor `EbayApiError` logs
 - [ ] Implement exponential backoff retry
