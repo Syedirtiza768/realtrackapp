@@ -1,5 +1,11 @@
 > ⚠️ MOVED → [/docs/architecture/DEPLOYMENT.md](DEPLOYMENT.md) (2026-06-06)
 
+## Auto Parts publish dialog lists stores from every workspace (2026-11-19, main b5dc7649)
+
+Deployed to production on 2026-11-19 as frontend overlay `realtrackapp-frontend:publish-all-stores-20261119-b5dc7649` (bundle `index-DFsxB-xW.js`, CSS unchanged) = `FROM ebay-store-reuse-20261118-8611a1ac` + a new `dist/`. Built from the live frontend recipe (which reproduced the live `index-Dl7uTV6z.js` byte for byte) plus `PublishModal.tsx` and `PublishProgressPanel.tsx` from main `b5dc7649` and only the one added `storeOrganizationIds` line in `CatalogManager.tsx` (live `CatalogManager.tsx` is older than main's). Only the frontend container was recreated; the backend stayed on `order-import-20261119-71fe0d42`. Checked live: the site serves the new bundle, the bundle contains the new strings, `/api/health` returns 200. A signed-in browser check of the dialog was not done. Rollback tag `realtrackapp-frontend:rollback-publish-all-stores-20261119`; release files and `compose-args-frontend.txt` in `/home/ubuntu/realtrackapp-publish-all-stores-20261119-b5dc7649/`.
+
+The live frontend source is now: `c7803e6d` + `FashionStoresPage.tsx`@`daa563fa` + `catalog/shared/CatalogResultsTable.tsx`@`61ead14e` + `EbayStoresSettingsPage.tsx`, `EbayStoreDetailPage.tsx`, `src/lib/ebayIntegrationsApi.ts` (each `git merge-file` of its `c7803e6d` copy, base `9142eaaa`, other `8611a1ac`) + `PublishModal.tsx` and `PublishProgressPanel.tsx`@`b5dc7649` + `CatalogManager.tsx`@`c7803e6d` with the `storeOrganizationIds: params.storeOrganizationIds,` line.
+
 ## B&I eBay OAuth callback destination — 2026-11-04
 
 Production backend image `realtrackapp-backend:ebay-oauth-return-20261104-r1`
