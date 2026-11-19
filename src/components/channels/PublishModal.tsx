@@ -1,13 +1,15 @@
 /* ─── PublishModal ──────────────────────────────────────────
  *  Multi-store publishing modal — destination selection only.
  *  Destinations: eBay stores (handed to CatalogManager, which
- *  shows an inline progress panel) and linked PartsBazar360
+ *  shows an inline progress panel) from every workspace the user
+ *  belongs to — each store is published under the workspace that
+ *  owns its eBay account — and linked PartsBazar360
  *  sellers (queued directly from here via /channels/bulk-publish;
  *  partsbazar360.com is a push channel, not an eBay store).
  * ────────────────────────────────────────────────────────── */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQueries, useQuery } from '@tanstack/react-query';
 import {
   X,
   Send,
@@ -31,12 +33,17 @@ import {
   type ProfileSelection,
 } from '../catalog/profileUtils';
 import type { StoreOverrides } from '../catalog/PublishProgressPanel';
+import { useAuth } from '../auth/AuthContext';
 
 /* ── Types ────────────────────────────────────────────────── */
 
 export interface PublishStartParams {
   mode: 'single' | 'bulk';
+  /** Workspace the user had selected when publishing (fallback owner). */
   organizationId: string;
+  /** storeId → workspace that owns the store's eBay account. Bulk jobs are
+   *  created once per workspace because the API checks stores against it. */
+  storeOrganizationIds: Record<string, string>;
   listing?: SearchItem;
   listingIds?: string[];
   stores: Store[];
@@ -98,6 +105,11 @@ export default function PublishModal(props: Props) {
   const listingIds = mode === 'bulk' ? props.listingIds : undefined;
 
   /* ── eBay stores ─────────────────────────────────────────── */
+  // The store list is user-scoped on the server (store access + active,
+  // policy-ready accounts). Each store's owning workspace comes from the
+  // eBay accounts of every workspace the user belongs to, so stores in
+  // other workspaces are offered too instead of only the active one.
+  const { organizations } = useAuth();
   const { data: stores = [], isLoading: storesLoading } = useQuery({
     queryKey: ['ebay-stores', organizationId],
     queryFn: () => getStoresByChannel('ebay'),
@@ -105,32 +117,58 @@ export default function PublishModal(props: Props) {
     staleTime: 60_000,
   });
 
-  const {
-    data: ebayAccounts = [],
-    isLoading: accountsLoading,
-    isError: accountsError,
-  } = useQuery({
-    queryKey: ['ebay-accounts', organizationId],
-    queryFn: () => listEbayAccounts(organizationId ?? undefined),
-    enabled: open && !!organizationId,
-    staleTime: 60_000,
+  const accountQueries = useQueries({
+    queries: organizations.map((org) => ({
+      queryKey: ['ebay-accounts', org.organizationId],
+      queryFn: () => listEbayAccounts(org.organizationId),
+      enabled: open,
+      staleTime: 60_000,
+    })),
   });
+  const accountsLoading = accountQueries.some((query) => query.isLoading);
+  const accountsError =
+    accountQueries.length > 0 && accountQueries.every((query) => query.isError);
+  const someAccountsFailed =
+    !accountsError && accountQueries.some((query) => query.isError);
 
-  const accountStoreIds = useMemo(
-    () => new Set(
-      ebayAccounts
-        .filter((account) => account.connectionStatus === 'active')
-        .map((account) => account.primaryStoreId),
-    ),
-    [ebayAccounts],
+  const accountsKey = accountQueries.map((query) => query.dataUpdatedAt).join(',');
+  const storeOrganizationIds = useMemo(() => {
+    const map: Record<string, string> = {};
+    accountQueries.forEach((query, index) => {
+      const orgId = organizations[index]?.organizationId;
+      if (!orgId) return;
+      for (const account of query.data ?? []) {
+        if (account.connectionStatus !== 'active') continue;
+        if (!map[account.primaryStoreId]) map[account.primaryStoreId] = orgId;
+      }
+    });
+    return map;
+    // accountQueries is a new array each render; accountsKey tracks its data.
+  }, [accountsKey, organizations]);
+
+  const orgNames = useMemo(
+    () => new Map(organizations.map((org) => [org.organizationId, org.name])),
+    [organizations],
   );
-  const activeStores = useMemo(
-    () => stores.filter(
-      (store) => store.status === 'active' && accountStoreIds.has(store.id),
-    ),
-    [stores, accountStoreIds],
+  const activeStores = useMemo(() => {
+    const eligible = stores.filter(
+      (store) => store.status === 'active' && !!storeOrganizationIds[store.id],
+    );
+    // Current workspace first, then the others grouped by workspace name.
+    const rank = (store: Store) => {
+      const orgId = storeOrganizationIds[store.id];
+      return orgId === organizationId ? '' : orgNames.get(orgId) ?? orgId;
+    };
+    return eligible
+      .map((store, index) => ({ store, index }))
+      .sort((a, b) => rank(a.store).localeCompare(rank(b.store)) || a.index - b.index)
+      .map(({ store }) => store);
+  }, [stores, storeOrganizationIds, organizationId, orgNames]);
+  const showWorkspaceLabels = useMemo(
+    () => new Set(activeStores.map((store) => storeOrganizationIds[store.id])).size > 1,
+    [activeStores, storeOrganizationIds],
   );
-  const storeScopeLoading = storesLoading || (!!organizationId && accountsLoading);
+  const storeScopeLoading = storesLoading || accountsLoading;
 
   /* ── PartsBazar360 sellers (push channel) ────────────────── */
   const { data: partsBazar } = useQuery({
@@ -317,16 +355,21 @@ export default function PublishModal(props: Props) {
 
     if (selected.size === 0) return;
     const selectedStores = activeStores.filter((s) => selected.has(s.id));
+    const selectedOrganizations: Record<string, string> = {};
+    for (const store of selectedStores) {
+      selectedOrganizations[store.id] = storeOrganizationIds[store.id] ?? organizationId;
+    }
     onPublishStart({
       mode,
       organizationId,
+      storeOrganizationIds: selectedOrganizations,
       listing,
       listingIds,
       stores: selectedStores,
       overrides,
       profiles,
     });
-  }, [selected, pbSelected, pbBusy, totalSelected, partsBazarStores, activeStores, mode, listing, listingIds, overrides, profiles, organizationId, onPublishStart]);
+  }, [selected, pbSelected, pbBusy, totalSelected, partsBazarStores, activeStores, mode, listing, listingIds, overrides, profiles, organizationId, storeOrganizationIds, onPublishStart]);
 
   if (!open) return null;
 
@@ -486,7 +529,13 @@ export default function PublishModal(props: Props) {
 
           {accountsError && (
             <div role="alert" className="rounded-lg border border-red-800/60 bg-red-950/30 p-3 text-sm text-red-300">
-              Unable to load eBay accounts for this workspace. Refresh and try again.
+              Unable to load eBay accounts. Refresh and try again.
+            </div>
+          )}
+
+          {someAccountsFailed && !storeScopeLoading && (
+            <div role="alert" className="rounded-lg border border-amber-800/60 bg-amber-950/30 p-3 text-xs text-amber-300">
+              Stores from some workspaces could not be loaded and are not listed.
             </div>
           )}
 
@@ -552,6 +601,11 @@ export default function PublishModal(props: Props) {
                         <span className="text-sm text-slate-600 dark:text-slate-200 font-medium block truncate">
                           {store.storeName}
                         </span>
+                        {showWorkspaceLabels && (
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400 block truncate">
+                            {orgNames.get(storeOrganizationIds[store.id]) ?? 'Other workspace'}
+                          </span>
+                        )}
                         {store.externalStoreId && (
                           <span className="text-[10px] text-slate-500 dark:text-slate-400 block">
                             {store.externalStoreId}
@@ -646,7 +700,7 @@ export default function PublishModal(props: Props) {
               {!storeScopeLoading && organizationId && !accountsError && activeStores.length === 0 && partsBazarStores.length === 0 && (
                 <div className="text-center py-6 text-sm text-slate-500 dark:text-slate-400">
                   <StoreIcon size={24} className="mx-auto mb-2 text-slate-500 dark:text-slate-600" />
-                  <p>No active eBay stores found in this workspace.</p>
+                  <p>No active eBay stores found in your workspaces.</p>
                   <p className="text-xs mt-1">
                     Go to Settings → Channels to connect your eBay account.
                   </p>

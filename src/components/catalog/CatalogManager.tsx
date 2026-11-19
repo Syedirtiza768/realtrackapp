@@ -453,6 +453,7 @@ export default function CatalogManager() {
       id: `pub-${Date.now()}`,
       mode: params.mode,
       organizationId: params.organizationId,
+      storeOrganizationIds: params.storeOrganizationIds,
       listing: params.listing,
       listingIds: params.listingIds,
       listingNames,

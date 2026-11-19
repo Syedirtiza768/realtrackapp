@@ -119,6 +119,8 @@ in manual review; do not force-retry them until title selection is fixed.
 
 **Resolution**: Scope the publish dialog's store list to active eBay accounts in the selected workspace, pass its `organizationId` to durable job creation, and include the same ID when polling job targets. No backend or schema change is required.
 
+**Update (2026-11-19)**: Workspace-only scoping hid most stores (users in the Business & Industrial workspace saw only "prime motive"). The dialog now lists stores from every workspace the user belongs to and sends one bulk job per owning workspace, each with that workspace's `organizationId`.
+
 **Files**: `src/components/catalog/CatalogManager.tsx`, `src/components/channels/PublishModal.tsx`, `src/components/catalog/PublishProgressPanel.tsx`, `src/lib/publishApi.ts`
 
 ### R18: eBay Publish Changed Reviewed Titles and Business Policies

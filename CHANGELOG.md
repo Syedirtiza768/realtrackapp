@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-19 — Auto Parts publish dialog lists stores from every workspace
+
+- Fixed: the Auto Parts catalog publish dialog listed only the eBay stores of the selected workspace. The app picks the Business & Industrial workspace first for users who belong to it, so on production those users saw only that workspace's one active store ("prime motive") and none of the Super Admin auto-parts stores (Primemotive, BLACKLINEAUTOPARTS, GMCadiFordRover4*4 Parts, Salvage, Superior, Southern Cross AU, …).
+- The dialog now loads the eBay accounts of every workspace the user belongs to and offers each active store the user can access (the existing `/api/stores/by-channel/ebay` list: store access, active account, default policies set). Stores of the selected workspace come first; when stores from more than one workspace are listed, each shows its workspace name. If one workspace's accounts fail to load, the others are still listed with a warning.
+- Bulk publish creates one durable job per workspace (`POST /api/ebay/listings/publish-bulk` with that workspace's `organizationId`) and polls each job's targets with the same ID, because the API only accepts stores owned by the workspace it is called with. A job that fails to start counts as failed for its stores only; the other workspaces' jobs still run. Single-listing publish was not workspace-scoped and is unchanged.
+- Frontend only (`src/components/channels/PublishModal.tsx`, `src/components/catalog/PublishProgressPanel.tsx`, `src/components/catalog/CatalogManager.tsx`). No backend change, no migration.
+
 ## 2026-11-18 — eBay sales can be pushed to Omni (Platform Notifications)
 
 - Added: `POST /api/integrations/ebay/platform-notifications`, a public endpoint for eBay's SOAP Platform Notifications. It checks `NotificationSignature` (`Base64(MD5(Timestamp + DevId + AppId + CertId))`) and rejects notifications older than 10 minutes. For `FixedPriceTransaction`, `AuctionCheckoutComplete` and `ItemSold` it finds the connected account by the seller's eBay username and queues the existing Fulfillment API order import (`ebay-order-sync` queue). Notifications for one account inside 10 seconds share one job, so a sale shows up about 15 seconds after it happens. The 5-minute poll stays as the safety net; the import is idempotent.

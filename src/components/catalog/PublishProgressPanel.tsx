@@ -32,6 +32,7 @@ import {
   publishToEbay,
   type PublishResult,
   type PublishRequest,
+  type DurableBulkPublishTarget,
 } from '../../lib/publishApi';
 import type { SearchItem } from '../../types/search';
 import type { Store } from '../../types/multiStore';
@@ -79,6 +80,9 @@ export interface PublishJob {
   id: string;
   mode: 'single' | 'bulk';
   organizationId: string;
+  /** storeId → workspace that owns the store's eBay account. Missing
+   *  entries fall back to organizationId. */
+  storeOrganizationIds?: Record<string, string>;
   listing?: SearchItem;
   listingIds?: string[];
   /** listingId → human-readable title, for bulk progress rows. */
@@ -215,42 +219,128 @@ export default function PublishProgressPanel({ job, onDismiss }: Props) {
       const ids = job.listingIds ?? [];
       const storeIdArray = job.stores.map((s) => s.id);
       if (!ids.length || !storeIdArray.length) return;
-      try {
-        const submitted = await createDurableBulkPublishJob(
-          ids,
-          storeIdArray,
-          job.id,
-          job.organizationId,
-        );
 
-        // Listings the server couldn't resolve to a catalog product (e.g. deleted)
-        // never got a target row — mark them failed individually instead of
-        // leaving them stuck "pending" or letting them get conflated with the rest.
-        if (submitted.skipped?.length) {
-          const skippedReasons = new Map(
-            submitted.skipped.map((s) => [s.listingId, s.reason]),
-          );
-          setListingProgress((prev) =>
-            prev.map((lp) =>
-              skippedReasons.has(lp.listingId)
-                ? {
-                    ...lp,
-                    status: 'failed',
-                    failedStores: storeIdArray.length,
-                    error: skippedReasons.get(lp.listingId),
-                  }
-                : lp,
-            ),
-          );
+      // The durable bulk-publish API only accepts stores owned by the
+      // workspace it is called with, so create one job per workspace.
+      const storesByOrg = new Map<string, string[]>();
+      for (const storeId of storeIdArray) {
+        const orgId = job.storeOrganizationIds?.[storeId] ?? job.organizationId;
+        storesByOrg.set(orgId, [...(storesByOrg.get(orgId) ?? []), storeId]);
+      }
+
+      const submissions: Array<{
+        orgId: string;
+        jobId: string;
+        targetCount: number;
+        storeCount: number;
+      }> = [];
+      const failedGroups: Array<{ storeCount: number; message: string }> = [];
+      // Listings the server couldn't resolve to a catalog product (e.g. deleted)
+      // never got a target row — count them as failed for that job's stores
+      // instead of leaving them stuck "pending".
+      const skipped = new Map<string, { storeCount: number; reason: string }>();
+      for (const [orgId, storeIds] of storesByOrg) {
+        if (cancelled) return;
+        try {
+          const submitted = await createDurableBulkPublishJob(ids, storeIds, job.id, orgId);
+          submissions.push({
+            orgId,
+            jobId: submitted.jobId,
+            targetCount: submitted.targetCount,
+            storeCount: storeIds.length,
+          });
+          for (const entry of submitted.skipped ?? []) {
+            const prev = skipped.get(entry.listingId);
+            skipped.set(entry.listingId, {
+              storeCount: (prev?.storeCount ?? 0) + storeIds.length,
+              reason: entry.reason,
+            });
+          }
+        } catch (err: unknown) {
+          // The whole request for this workspace failed before any targets were
+          // created (permissions, daily limit, network) — it applies to every
+          // listing for this workspace's stores.
+          failedGroups.push({
+            storeCount: storeIds.length,
+            message: err instanceof Error ? err.message : 'Unknown error',
+          });
         }
+      }
+      if (cancelled) return;
 
+      const groupFailedStores = failedGroups.reduce((sum, g) => sum + g.storeCount, 0);
+      const groupError = failedGroups.length
+        ? `Bulk publish request failed: ${failedGroups.map((g) => g.message).join('; ')}`
+        : undefined;
+      const totalTargets = submissions.reduce((sum, s) => sum + s.targetCount, 0);
+      // Each submitted job creates one target per (listing, store).
+      const storesPerListing = submissions.reduce((sum, s) => sum + s.storeCount, 0);
+
+      const applyRows = (
+        byListing: Map<string, DurableBulkPublishTarget[]>,
+      ) => {
+        setListingProgress((prev) =>
+          prev.map((lp) => {
+            const rows = byListing.get(lp.listingId) ?? [];
+            const skip = skipped.get(lp.listingId);
+            const extraFailed = groupFailedStores + (skip?.storeCount ?? 0);
+            if (!rows.length && !extraFailed) return lp;
+            const pending = rows.some(
+              (row) => row.status === 'pending' || row.status === 'processing',
+            );
+            const successStores = rows.filter((row) => row.status === 'success').length;
+            const failedStores =
+              rows.filter((row) => row.status === 'failed' || row.status === 'skipped')
+                .length + extraFailed;
+            const storeResults: PublishResult[] = rows
+              .filter((row) => row.status === 'success' || row.status === 'failed')
+              .map((row) => ({
+                storeId: row.storeId ?? row.ebayAccountId,
+                storeName: row.storeName ?? row.ebayAccountId,
+                success: row.status === 'success',
+                offerId: row.resultPayload?.offerId,
+                listingId: row.resultPayload?.listingId,
+                error:
+                  row.errorPayload?.message ?? row.errorPayload?.errors?.join('; '),
+              }));
+            const waiting =
+              pending || rows.length + (skip?.storeCount ?? 0) < storesPerListing;
+            const status: ListingPublishStatus = waiting
+              ? 'publishing'
+              : failedStores === 0
+                ? 'success'
+                : successStores === 0
+                  ? 'failed'
+                  : 'partial';
+            return {
+              ...lp,
+              status,
+              successStores,
+              failedStores,
+              error:
+                storeResults.find((result) => !result.success)?.error ??
+                skip?.reason ??
+                groupError,
+              storeResults,
+            };
+          }),
+        );
+      };
+
+      if (!submissions.length) {
+        applyRows(new Map());
+        return;
+      }
+
+      try {
         while (!cancelled) {
-          const targets = await fetchDurableBulkPublishTargets(
-            submitted.jobId,
-            job.organizationId,
-          );
+          const targets = (
+            await Promise.all(
+              submissions.map((s) => fetchDurableBulkPublishTargets(s.jobId, s.orgId)),
+            )
+          ).flat();
           if (cancelled) return;
-          const byListing = new Map<string, typeof targets>();
+          const byListing = new Map<string, DurableBulkPublishTarget[]>();
           for (const target of targets) {
             const sourceId = target.resultPayload?.sourceListingId;
             if (!sourceId) continue;
@@ -258,67 +348,28 @@ export default function PublishProgressPanel({ job, onDismiss }: Props) {
             rows.push(target);
             byListing.set(sourceId, rows);
           }
-
-          setListingProgress((prev) =>
-            prev.map((lp) => {
-              const rows = byListing.get(lp.listingId) ?? [];
-              if (!rows.length) return lp;
-              const pending = rows.some(
-                (row) => row.status === 'pending' || row.status === 'processing',
-              );
-              const successStores = rows.filter((row) => row.status === 'success').length;
-              const failedStores = rows.filter(
-                (row) => row.status === 'failed' || row.status === 'skipped',
-              ).length;
-              const storeResults: PublishResult[] = rows
-                .filter((row) => row.status === 'success' || row.status === 'failed')
-                .map((row) => ({
-                  storeId: row.storeId ?? row.ebayAccountId,
-                  storeName: row.storeName ?? row.ebayAccountId,
-                  success: row.status === 'success',
-                  offerId: row.resultPayload?.offerId,
-                  listingId: row.resultPayload?.listingId,
-                  error:
-                    row.errorPayload?.message ?? row.errorPayload?.errors?.join('; '),
-                }));
-              const status: ListingPublishStatus = pending
-                ? 'publishing'
-                : failedStores === 0
-                  ? 'success'
-                  : successStores === 0
-                    ? 'failed'
-                    : 'partial';
-              return {
-                ...lp,
-                status,
-                successStores,
-                failedStores,
-                error: storeResults.find((result) => !result.success)?.error,
-                storeResults,
-              };
-            }),
-          );
+          applyRows(byListing);
 
           const pendingTargets = targets.some(
             (target) => target.status === 'pending' || target.status === 'processing',
           );
-          if (!pendingTargets && targets.length >= submitted.targetCount) break;
+          if (!pendingTargets && targets.length >= totalTargets) break;
           await waitForPoll(3_000);
         }
       } catch (err: unknown) {
         if (cancelled) return;
-        // The whole bulk-publish request failed before any per-listing targets
-        // were created (e.g. permissions, daily limit, network) — this genuinely
-        // applies to every listing, unlike a single unresolvable listing (handled
-        // via `submitted.skipped` above), so it's fine to mark all rows here.
         const msg = err instanceof Error ? err.message : 'Unknown error';
         setListingProgress((prev) =>
-          prev.map((lp) => ({
-            ...lp,
-            status: 'failed',
-            failedStores: storeIdArray.length,
-            error: `Bulk publish request failed: ${msg}`,
-          })),
+          prev.map((lp) =>
+            lp.status === 'pending' || lp.status === 'publishing'
+              ? {
+                  ...lp,
+                  status: 'failed',
+                  failedStores: storeIdArray.length,
+                  error: `Could not read publish progress: ${msg}`,
+                }
+              : lp,
+          ),
         );
       }
     };

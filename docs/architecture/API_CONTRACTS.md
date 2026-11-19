@@ -660,7 +660,7 @@ Full integration guide: `docs/integrations/partsbazar360-trading-enrichment.md`
 
 | Method | Path | Purpose | Permission |
 |--------|------|---------|------------|
-| POST | `/api/ebay/listings/publish-bulk` | Enqueue 1–500 listing IDs against 1–10 stores as one durable job; clients send the active `organizationId` so stores are checked in the selected workspace; enforces the 5,000 target/day organization quota and checks the shared eBay Trading API allowance before creating the job | `ebay.publish` |
+| POST | `/api/ebay/listings/publish-bulk` | Enqueue 1–500 listing IDs against 1–10 stores as one durable job; every store must belong to the `organizationId` sent (the Auto Parts catalog dialog lists stores from all the user's workspaces and sends one request per owning workspace, then polls each job's targets with the same ID); enforces the 5,000 target/day organization quota and checks the shared eBay Trading API allowance before creating the job | `ebay.publish` |
 | GET | `/api/ebay/listing-jobs/:id` | Read durable publish-job status | `ebay.view` |
 | GET | `/api/ebay/listing-jobs/:id/targets` | Read per-listing/per-store progress and results | `ebay.view` |
 | POST | `/api/ebay/listings/publish-bulk` | Enqueue 1–500 listing IDs against 1–10 stores as one durable job; accepts an optional `organizationId` validated against the caller's workspace membership, and enforces the 5,000 target/day organization quota. Optional `requestedFulfillmentPolicyName`, `requestedPaymentPolicyName`, and `requestedReturnPolicyName` apply shared profile names to every target and are resolved against each store's own synced policy IDs. | `ebay.publish` |
