@@ -365,6 +365,24 @@
 
 ---
 
+#### `ebay_cross_store_sale_syncs` (2026-11-20, migration `1791900000000`)
+
+One row per (order line, other listing of the sold SKU), written by `CrossStoreSaleSyncService` (raw SQL, no entity). Unique `(order_item_id, target_key)` makes retries safe.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | uuid | Primary key |
+| `order_id` / `order_item_id` | uuid | FK to orders / order_items (cascade delete) |
+| `target_key` | varchar(64) | Target published listing id, or `line` when the whole line was skipped |
+| `target_published_listing_id`, `target_store_id`, `target_item_id` | uuid / uuid / varchar | The other listing acted on |
+| `sku`, `sold_item_id`, `sold_qty` | varchar / varchar / int | What sold, where |
+| `action` | varchar(20) | `end`, `set_quantity`, `none` |
+| `status` | varchar(20) | `done`, `skipped`, `failed` |
+| `reason` | varchar(60) | Why skipped: `already_ended`, `already_zero`, `account_not_connected`, `stock_sync_managed`, `different_part_number` / `different_make` / `different_size` / `unrelated_title`, `no_sku`, `sku_too_short`, `sku_too_common` |
+| `quantity_before`, `quantity_after` | int | Live available on eBay before, and what it was set to |
+| `error`, `attempts` | text / int | Last eBay error; times the pair was processed |
+| `created_at`, `updated_at` | timestamptz | |
+
 ### Parts Search Module (2026-10-27)
 
 `parts_search_events` (migration `1791600000000-CreatePartsSearchEvents`). It is the audit + demand log for the Parts Search portal.

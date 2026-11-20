@@ -111,6 +111,15 @@ Push path for eBay sales (Trading API Platform Notifications). Code: `backend/sr
 
 `main.ts` adds a `text` body parser for `text/xml`, `application/xml` and `application/soap+xml` (2 MB), so XML bodies arrive as a string with `rawBody`.
 
+## Cross-store sale sync (2026-11-20)
+
+A part sold on one eBay store is ended (or its quantity lowered) on every other store. It runs on its own for each imported eBay order (`order.new` → queue `ebay-cross-store-sale-sync`). Code: `backend/src/orders/cross-store-sale-sync.{service,util,controller}.ts`. Off switch: feature flag `ebay_cross_store_sale_sync`.
+
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| GET | `/api/inventory-sync/ebay/sales?limit=&status=` | `orders.view` | Recent actions from `ebay_cross_store_sale_syncs`, newest first: sold store/SKU, target store/item, `action` (`end` / `set_quantity` / `none`), `status` (`done` / `skipped` / `failed`), `reason`, quantity before/after, error. |
+| POST | `/api/inventory-sync/ebay/sales/run` | `orders.import` | Body `{ orderIds?: uuid[], since?: ISO date, dryRun?: boolean }`. `dryRun` reads eBay and returns what would change, without changing anything (≤ 100 orders). Otherwise queues the orders; pairs already done are not repeated. 400 while the flag is off. **Ends / revises live eBay listings.** |
+
 ## Warehouse stock (2026-10-05)
 
 `/api/stock/*` — warehouses, bins, SKU stock, documents, procurement and purchase orders, order stock, and channel quantity sync. The full table is in [API_CONTRACTS.md](API_CONTRACTS.md#warehouse-stock-apistock) and the design is in [WAREHOUSE_INVENTORY.md](WAREHOUSE_INVENTORY.md). This is distinct from `/api/inventory/*` (the Auto Parts enrichment workbench).

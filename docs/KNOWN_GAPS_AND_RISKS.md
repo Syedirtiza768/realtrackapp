@@ -499,3 +499,10 @@ const listings = await this.listingRepo.find({
 ---
 
 *Last updated: 2026-05-29*
+
+## Cross-store sale sync limits (2026-11-20)
+
+- A sale reaches Omni through the 5-minute order poll (or a sale notification, for subscribed accounts), so another store can still sell the part in that window.
+- Listings on disconnected eBay accounts (on 2026-11-20: K. Brit Auto Depot - UK, K. Euro Japan Auto Parts, K. Salvage Dismantlers - DE, K. TOYOTA LEXUS NISSAN, VW & RR, Prime Wardrobe De, Business & Industrial eBay store) cannot be ended. A notification lists them; reconnect the account and re-run `POST /api/inventory-sync/ebay/sales/run`.
+- The same-item title check is conservative. A translated copy whose title shares only the brand (e.g. a German "Kapuzenpulli" for an English "Zip Hoodie" with no size in the German title) is skipped with reason `unrelated_title` and stays live.
+- Matching needs a SKU on both listings. Listings without a SKU, or with a SKU shorter than 3 characters, are never synced.

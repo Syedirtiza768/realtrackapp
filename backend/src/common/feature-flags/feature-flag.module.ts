@@ -55,6 +55,11 @@ export class FeatureFlagModule implements OnModuleInit {
         false,
       ],
       [
+        'ebay_cross_store_sale_sync',
+        'A part sold on one eBay store is ended (or its quantity lowered) on every other connected eBay store',
+        true,
+      ],
+      [
         'multi_vertical_catalog',
         'Enable Business & Industrial and Fashion catalog workflows',
         false,

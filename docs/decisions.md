@@ -13,6 +13,16 @@ and the narrative log in [docs/context/DECISION_LOG.md](context/DECISION_LOG.md)
 this file for quick day-to-day entries; promote something to a full ADR only if it
 needs that level of ceremony.
 
+## 2026-11-20 — Cross-store sale sync works on listings, not on warehouse stock
+
+- **Why:** A part sold on one eBay store stayed live on the others. The StockModule's channel push could only fix that for SKUs that have a warehouse stock item, linked warehouses and push enabled per store: 1,860 SKUs against ~1.36 M mirrored listings, push off, and every recent order line `unmatched`.
+- **Decision:** On each new eBay order, end or lower every other live listing of the same SKU directly, from the listing mirror. No stock items are needed. Stores whose stock the StockModule pushes are skipped, so the two never fight over one listing.
+- **Decision:** Act on live eBay quantities, not the mirror. The mirror is days old for many stores, so each listing is read with `GetItem` (or the offer) first, and the new quantity is `live available − sold`. One-off parts (quantity 1) end; stocked parts drop by the sold quantity. Trading revise takes the listing total (sold + available), so the result is read back and corrected if eBay applied it as the available quantity.
+- **Decision:** Match across all workspaces. The same auto parts sit in Super Admin stores and in the B&I "prime motive" store, and the fashion stores share SKUs too. All workspaces on this deployment belong to one business.
+- **Decision:** SKU equality is necessary but not sufficient. Production reuses labels for different items (`Custom-Listing-ABD`, `GLB-001`, some fashion SKUs). The title must also describe the same item, using signals that survive translation: part numbers, car makes, brand/model words and clothing sizes. When unsure, it leaves the listing alone (it records the reason, e.g. `different_part_number`) rather than end the wrong item. A few translated clothing titles with only the brand in common are skipped for this reason.
+- **Decision:** One row per (order line, listing) in `ebay_cross_store_sale_syncs` makes retries safe. Only failed pairs are retried. Pairs skipped because the account was disconnected are retried on a manual re-run, so they can be finished after reconnecting.
+- **Decision:** The feature flag `ebay_cross_store_sale_sync` is an off switch, seeded enabled. The user asked for this behaviour on every connected store.
+
 ## 2026-11-18 — eBay sale notifications trigger the existing import instead of becoming orders
 
 - **Why:** Sales only reached Omni through the order poll (every 5 minutes). eBay can push a SOAP notification per sale once a seller is subscribed through Trading `SetNotificationPreferences`.

@@ -404,6 +404,10 @@ TypeORM CLI configuration for migrations:
 | `orders.service.ts` | Business logic |
 | `order-import-ebay.service.ts` | eBay order import |
 | `processors/order-import.processor.ts` | Import processor |
+| `cross-store-sale-sync.service.ts` | A sale on one eBay store ends / lowers the same SKU on every other store (listens to `order.new`) |
+| `cross-store-sale-sync.util.ts` | Pure rules: quantity plan, SKU guard, same-item title check |
+| `cross-store-sale-sync.controller.ts` | `/api/inventory-sync/ebay/sales` (list, re-run, dry run) |
+| `processors/cross-store-sale-sync.processor.ts` | Queue `ebay-cross-store-sale-sync` worker (concurrency 1) |
 | `entities/order.entity.ts` | Order |
 | `entities/order-item.entity.ts` | Order line items |
 

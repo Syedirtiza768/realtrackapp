@@ -66,6 +66,15 @@ Shared by Auto Parts, Fashion and B&I at `/<workspace>/stock`. Design: [../archi
 - Channel quantity per store = linked warehouse stock − buffer + capped supplier quantity. It runs in shadow mode until push is enabled per store.
 - Weighted-average cost, valuation and aging reports, and a CSV-exportable ledger.
 
+## Cross-store sale sync (2026-11-20)
+
+When a part sells on one eBay store, Omni removes it from every other connected eBay store, in every workspace, within a few minutes of the order import.
+- One-off parts (quantity 1) are ended. Stocked parts drop by the quantity sold.
+- Quantities are read live from eBay first. Listings already ended or at 0 are left alone.
+- The SKU must match **and** the title must describe the same item (part number, car make, brand/model words, size), so a SKU label reused for different parts never ends the wrong listing. Translated copies on DE/FR/ES/IT sites still count.
+- Stores whose eBay account is disconnected cannot be changed. Omni sends a notification listing those listings, so they can be ended by hand or the account reconnected.
+- History and a dry run: `/api/inventory-sync/ebay/sales`. Off switch: feature flag `ebay_cross_store_sale_sync`.
+
 ## Parts Search portal (2026-10-26)
 
 `/parts-search` — search the whole PartsBazar360 catalogue from inside Omni Core. Anyone who can open the Auto Parts workspace can use it (same `dashboard.view` permission, same login).
