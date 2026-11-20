@@ -401,6 +401,33 @@ describe('CrossStoreSaleSyncService', () => {
     ]);
   });
 
+  it('skips a stale mirror row eBay no longer knows instead of failing', async () => {
+    const t = setup({
+      targets: [target({ id: 'pl-b', ebay_item_id: '200' })],
+    });
+    t.trading.getItemDetails.mockRejectedValueOnce(
+      new Error(
+        'This item cannot be accessed because the listing has been deleted or you are not the seller.',
+      ),
+    );
+    const [r] = await t.service.syncOrder('order-1');
+    expect(r).toEqual(
+      expect.objectContaining({
+        status: 'skipped',
+        reason: 'listing_not_found',
+      }),
+    );
+    expect(t.trading.endFixedPriceItem).not.toHaveBeenCalled();
+    expect(t.recorded()).toEqual([
+      {
+        targetKey: 'pl-b',
+        status: 'skipped',
+        action: 'none',
+        reason: 'listing_not_found',
+      },
+    ]);
+  });
+
   it('dry run reads eBay but changes and records nothing', async () => {
     const t = setup({
       targets: [target({ id: 'pl-b', ebay_item_id: '200' })],

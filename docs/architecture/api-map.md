@@ -117,7 +117,7 @@ A part sold on one eBay store is ended (or its quantity lowered) on every other 
 
 | Method | Path | Auth | Purpose |
 |--------|------|------|---------|
-| GET | `/api/inventory-sync/ebay/sales?limit=&status=` | `orders.view` | Recent actions from `ebay_cross_store_sale_syncs`, newest first: sold store/SKU, target store/item, `action` (`end` / `set_quantity` / `none`), `status` (`done` / `skipped` / `failed`), `reason`, quantity before/after, error. |
+| GET | `/api/inventory-sync/ebay/sales?limit=&status=` | `orders.view` | Recent actions from `ebay_cross_store_sale_syncs`, newest first: sold store/SKU, target store/item, `action` (`end` / `set_quantity` / `none`), `status` (`done` / `skipped` / `failed`), `reason` (e.g. `already_ended`, `already_zero`, `account_not_connected`, `listing_not_found`, `different_make`), quantity before/after, error. |
 | POST | `/api/inventory-sync/ebay/sales/run` | `orders.import` | Body `{ orderIds?: uuid[], since?: ISO date, dryRun?: boolean }`. `dryRun` reads eBay and returns what would change, without changing anything (≤ 100 orders). Otherwise queues the orders; pairs already done are not repeated. 400 while the flag is off. **Ends / revises live eBay listings.** |
 
 ## Warehouse stock (2026-10-05)

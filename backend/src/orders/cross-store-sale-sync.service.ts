@@ -11,6 +11,7 @@ import {
   CROSS_STORE_SALE_SYNC_FLAG,
   CROSS_STORE_SALE_SYNC_QUEUE,
   MAX_TARGETS_PER_SKU,
+  isListingNotFoundError,
   isLiveTradingStatus,
   isSamePart,
   samePartVerdict,
@@ -480,11 +481,11 @@ export class CrossStoreSaleSyncService {
       }
       return { ...result, status: 'done' };
     } catch (err) {
-      return {
-        ...result,
-        status: 'failed',
-        error: ((err as Error).message ?? String(err)).slice(0, 1000),
-      };
+      const message = ((err as Error).message ?? String(err)).slice(0, 1000);
+      if (isListingNotFoundError(message)) {
+        return { ...result, reason: 'listing_not_found', error: message };
+      }
+      return { ...result, status: 'failed', error: message };
     }
   }
 

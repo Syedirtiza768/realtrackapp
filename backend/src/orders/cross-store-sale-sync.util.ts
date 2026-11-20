@@ -72,6 +72,18 @@ export function isLiveTradingStatus(
   return (status ?? 'Active').toLowerCase() === 'active';
 }
 
+/**
+ * eBay's answer for an item number this account cannot see (Trading error 17:
+ * the listing was deleted, or belongs to another seller). The mirror still
+ * holds such rows from old imports; nothing can be done to them, so they are
+ * skipped instead of failing (and retrying) the whole order.
+ */
+export function isListingNotFoundError(
+  message: string | null | undefined,
+): boolean {
+  return /listing has been deleted|you are not the seller/i.test(message ?? '');
+}
+
 /* ── Same-part check ──────────────────────────────────────────────
  * One SKU label is sometimes reused for different items ("Custom-Listing-ABD"
  * on 20 different parts, "GLB-001" on glove boxes of different cars), while
