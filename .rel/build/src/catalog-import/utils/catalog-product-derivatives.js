@@ -1,0 +1,288 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.placementLikelyRequired = placementLikelyRequired;
+exports.priceBandFromPrice = priceBandFromPrice;
+exports.computeCatalogProductDerived = computeCatalogProductDerived;
+const motors_category_buckets_js_1 = require("../config/motors-category-buckets.js");
+const NON_EMPTY = (v) => v != null && String(v).trim().length > 0;
+function fitmentRows(product) {
+    const f = product.fitmentData;
+    if (!f || !Array.isArray(f))
+        return [];
+    return f;
+}
+function fitmentText(value) {
+    if (typeof value === 'string')
+        return value.trim();
+    if (typeof value === 'number' && Number.isFinite(value))
+        return String(value);
+    return '';
+}
+function yearFromEntry(e) {
+    const y = e['Year'] ?? e['year'];
+    if (y == null)
+        return null;
+    const n = parseInt(fitmentText(y), 10);
+    return Number.isFinite(n) ? n : null;
+}
+function makeFromEntry(e) {
+    const m = e['Make'] ?? e['make'];
+    return fitmentText(m).toLowerCase();
+}
+function modelFromEntry(e) {
+    const m = e['Model'] ?? e['model'];
+    return fitmentText(m).toLowerCase();
+}
+function placementLikelyRequired(partType) {
+    if (!partType)
+        return false;
+    const t = partType.toLowerCase();
+    return (/head\s*light|headlight|tail\s*light|taillight|lamp|fog\s*light/i.test(t) ||
+        /bumper|fender|hood|bonnet|door\s*panel|mirror|quarter\s*panel|rocker/i.test(t) ||
+        /deck\s*lid|trunk\s*lid|tailgate/i.test(t));
+}
+function priceBandFromPrice(price) {
+    if (price == null || !Number.isFinite(Number(price)))
+        return 'unknown';
+    const p = Number(price);
+    if (p < 100)
+        return 'under_100';
+    if (p < 200)
+        return '100_199';
+    if (p < 500)
+        return '200_499';
+    if (p < 1000)
+        return '500_999';
+    return '1000_plus';
+}
+function duplicateFitmentCount(rows) {
+    const sigs = new Map();
+    for (const e of rows) {
+        const value = (...keys) => {
+            const raw = keys
+                .map((key) => e[key])
+                .find((candidate) => candidate != null);
+            return fitmentText(raw).replace(/\s+/g, ' ').toLowerCase();
+        };
+        const y = yearFromEntry(e) ?? '';
+        const mk = makeFromEntry(e).replace(/\s+/g, ' ');
+        const md = modelFromEntry(e).replace(/\s+/g, ' ');
+        const trim = value('Trim', 'trim', 'Submodel', 'submodel');
+        const engine = value('Engine', 'engine');
+        const platform = value('Platform', 'platform');
+        const bodyStyle = value('BodyStyle', 'bodyStyle', 'Body Style', 'body_style');
+        const driveType = value('DriveType', 'driveType', 'Drive Type', 'drive_type');
+        const key = [y, mk, md, trim, engine, platform, bodyStyle, driveType].join('|');
+        const existing = sigs.get(key) ?? {
+            count: 0,
+            rowVariants: new Set(),
+        };
+        existing.count += 1;
+        existing.rowVariants.add(normalizedFitmentRow(e));
+        sigs.set(key, existing);
+    }
+    let dups = 0;
+    for (const { count, rowVariants } of sigs.values()) {
+        if (count > 1 && rowVariants.size > 1)
+            dups += count - 1;
+    }
+    return dups;
+}
+function normalizedFitmentRow(row) {
+    const normalize = (value) => {
+        if (typeof value === 'string') {
+            return value.trim().replace(/\s+/g, ' ').toLowerCase();
+        }
+        if (Array.isArray(value))
+            return value.map(normalize);
+        if (value && typeof value === 'object') {
+            return Object.fromEntries(Object.entries(value)
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([key, entry]) => [key, normalize(entry)]));
+        }
+        return value;
+    };
+    return JSON.stringify(normalize(row));
+}
+function categoryBucketsForProduct(categoryId) {
+    if (!categoryId)
+        return [];
+    const out = [];
+    const cid = String(categoryId).trim();
+    Object.keys(motors_category_buckets_js_1.MOTORS_CATEGORY_BUCKETS).forEach((bucket) => {
+        const ids = motors_category_buckets_js_1.MOTORS_CATEGORY_BUCKETS[bucket];
+        if (ids.length && ids.includes(cid)) {
+            out.push(bucket);
+        }
+    });
+    return out;
+}
+function strictReadyGates(product) {
+    const missing = [];
+    if (!NON_EMPTY(product.title))
+        missing.push('title');
+    if (product.price == null || Number(product.price) <= 0)
+        missing.push('price');
+    if (product.quantity == null || product.quantity < 1)
+        missing.push('quantity');
+    if (!NON_EMPTY(product.brand))
+        missing.push('brand');
+    if (!NON_EMPTY(product.partType))
+        missing.push('partType');
+    if (!NON_EMPTY(product.mpn))
+        missing.push('mpn');
+    if (!NON_EMPTY(product.description))
+        missing.push('description');
+    const imgCount = product.imageUrls?.filter((u) => NON_EMPTY(u)).length ?? 0;
+    if (imgCount < 1)
+        missing.push('images');
+    const fit = fitmentRows(product);
+    if (fit.length < 1)
+        missing.push('fitment');
+    if (!NON_EMPTY(product.shippingProfile))
+        missing.push('shippingProfile');
+    if (!NON_EMPTY(product.returnProfile))
+        missing.push('returnProfile');
+    if (!NON_EMPTY(product.paymentProfile))
+        missing.push('paymentProfile');
+    return { ok: missing.length === 0, missing };
+}
+function manualReviewReasons(product, derived) {
+    const reasons = [];
+    if (!derived.has_images)
+        reasons.push('MISSING_IMAGES');
+    if (!derived.has_oem_number)
+        reasons.push('MISSING_OEM');
+    if (placementLikelyRequired(product.partType) &&
+        !NON_EMPTY(product.placement)) {
+        reasons.push('MISSING_PLACEMENT');
+    }
+    if (!derived.has_fitment)
+        reasons.push('MISSING_FITMENT');
+    if (derived.duplicate_fitment_row_count > 0)
+        reasons.push('DUP_FITMENT');
+    if (derived.title_length > 0 && derived.title_length < 20)
+        reasons.push('TITLE_SHORT');
+    if (derived.title_length > 80)
+        reasons.push('TITLE_LONG');
+    if (product.brand &&
+        product.brandNormalized &&
+        product.brand.trim().toUpperCase().replace(/\s+/g, ' ') !==
+            product.brandNormalized.toUpperCase().replace(/\s+/g, ' ')) {
+        reasons.push('BRAND_NORMALIZE');
+    }
+    return reasons;
+}
+function storeRoutingRecommendation(product, readiness, band) {
+    if (readiness !== 'ready') {
+        return 'Do not route — fix readiness (staging only)';
+    }
+    const make = fitmentRows(product)[0];
+    const mk = make ? makeFromEntry(make) : '';
+    if (mk && product.brand) {
+        return `Candidate: brand=${product.brand} make=${mk} band=${band} — assign store manually`;
+    }
+    if (band === '1000_plus' || band === '500_999') {
+        return 'Premium / high-ticket route — assign store manually';
+    }
+    return 'General Motors catalog — assign store manually';
+}
+function computeCatalogProductDerived(product) {
+    const urls = (product.imageUrls ?? []).filter((u) => NON_EMPTY(u));
+    const image_count = urls.length;
+    const has_images = image_count >= 1;
+    const rows = fitmentRows(product);
+    const fitment_count = rows.length;
+    const has_fitment = fitment_count >= 1;
+    const makes = new Set();
+    const models = new Set();
+    const years = [];
+    for (const e of rows) {
+        const mk = makeFromEntry(e);
+        const md = modelFromEntry(e);
+        if (mk)
+            makes.add(mk);
+        if (mk || md)
+            models.add(`${mk}::${md}`);
+        const y = yearFromEntry(e);
+        if (y != null)
+            years.push(y);
+    }
+    const year_min = years.length ? Math.min(...years) : null;
+    const year_max = years.length ? Math.max(...years) : null;
+    const price_band = priceBandFromPrice(product.price != null ? Number(product.price) : null);
+    const title_length = product.title?.length ?? 0;
+    const has_oem_number = NON_EMPTY(product.oemPartNumber);
+    const has_placement = NON_EMPTY(product.placement);
+    const has_material = NON_EMPTY(product.material);
+    const has_features = NON_EMPTY(product.features);
+    const has_country = NON_EMPTY(product.countryOfOrigin);
+    const duplicate_fitment_row_count = duplicateFitmentCount(rows);
+    const has_duplicate_fitment = duplicate_fitment_row_count > 0;
+    const gates = strictReadyGates(product);
+    const mr = manualReviewReasons(product, {
+        has_images,
+        has_oem_number,
+        has_fitment,
+        duplicate_fitment_row_count,
+        title_length,
+    });
+    const readiness_status = gates.ok && mr.length === 0 ? 'ready' : 'needs_review';
+    const weights = [
+        { ok: NON_EMPTY(product.title), pts: 10 },
+        { ok: product.price != null && Number(product.price) > 0, pts: 10 },
+        { ok: product.quantity != null && product.quantity >= 1, pts: 10 },
+        { ok: NON_EMPTY(product.brand), pts: 10 },
+        { ok: NON_EMPTY(product.partType), pts: 10 },
+        { ok: NON_EMPTY(product.mpn), pts: 10 },
+        { ok: NON_EMPTY(product.description), pts: 10 },
+        { ok: has_images, pts: 10 },
+        { ok: has_fitment, pts: 10 },
+        {
+            ok: NON_EMPTY(product.shippingProfile) &&
+                NON_EMPTY(product.returnProfile) &&
+                NON_EMPTY(product.paymentProfile),
+            pts: 10,
+        },
+    ];
+    const data_completeness_score = Math.min(100, weights.reduce((s, w) => s + (w.ok ? w.pts : 0), 0));
+    const marketplace_us_ready = readiness_status === 'ready' && has_oem_number && has_images && has_fitment;
+    const marketplace_multi_candidate = data_completeness_score >= 80 &&
+        has_fitment &&
+        has_oem_number &&
+        has_images;
+    const marketplace_de_review = marketplace_multi_candidate;
+    const marketplace_au_review = marketplace_multi_candidate;
+    const marketplace_manual_review = readiness_status !== 'ready' || mr.length > 0;
+    return {
+        image_count,
+        has_images,
+        fitment_count,
+        has_fitment,
+        unique_make_count: makes.size,
+        unique_model_count: models.size,
+        year_min,
+        year_max,
+        price_band,
+        title_length,
+        has_oem_number,
+        has_placement,
+        has_material,
+        has_features,
+        has_country,
+        duplicate_fitment_row_count,
+        has_duplicate_fitment,
+        data_completeness_score,
+        readiness_status,
+        readiness_missing_gates: gates.missing,
+        store_routing_recommendation: storeRoutingRecommendation(product, readiness_status, price_band),
+        manual_review_reasons: mr,
+        marketplace_us_ready,
+        marketplace_de_review,
+        marketplace_au_review,
+        marketplace_multi_candidate,
+        marketplace_manual_review,
+        category_buckets: categoryBucketsForProduct(product.categoryId),
+    };
+}
+//# sourceMappingURL=catalog-product-derivatives.js.map

@@ -7,6 +7,8 @@
 - Added: each sale notification now queues a second order-import pass 30 s after the first (job id `…-recheck`), so an order eBay had not yet published to `getOrders` when the first pass ran is picked up within a minute instead of at the next poll. Imports are idempotent.
 - Path after a sale: eBay notification → order import at the end of the 10 s coalescing window + 3 s → `order.new` → cross-store sale sync job (5 s delay) → other listings ended or lowered. Typically under 30 s; the 5-minute poll stays as the safety net.
 - Backend only: `integrations/ebay/services/ebay-platform-notifications.service.ts`, `ebay-platform-notification.util.ts` (+ spec).
+- Deployed 2026-11-21 as backend overlay `realtrackapp-backend:sale-push-subscribe-20261121-0befd9ad` = `FROM cross-store-sync-20261120-fe3e21e5` + the two compiled files (live versions differed from the new build only by this change). Rollback tag `rollback-sale-push-subscribe-20261121`; release dir `/home/ubuntu/realtrackapp-sale-push-subscribe-20261121-0befd9ad/` (`ebay-notify.cjs status|subscribe [id8,…]` runs the service in a one-off container).
+- Subscribed on 2026-11-21: all 12 active native eBay accounts now deliver `FixedPriceTransaction`, `AuctionCheckoutComplete` and `ItemSold` to `https://app.omnicoreholding.com/api/integrations/ebay/platform-notifications` (eBay status read back as subscribed for each). Subscribing also replaced 8 `unknown_<ts>` placeholders with the real eBay logins from `GetUser`. The 7 disconnected accounts stay on the 5-minute poll until reconnected and subscribed.
 
 ## 2026-11-20 — A part sold on one eBay store is removed from the other stores
 

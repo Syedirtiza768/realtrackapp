@@ -1,0 +1,1 @@
+{"version":3,"file":"upload-limits.js","sourceRoot":"","sources":["../../../../backend/src/storage/upload-limits.ts"],"names":[],"mappings":";;;AAMa,QAAA,2BAA2B,GAAG,MAAM,CAC/C,OAAO,CAAC,GAAG,CAAC,wBAAwB,IAAI,IAAI,CAC7C,GAAG,IAAI,GAAG,IAAI,CAAC;AAEH,QAAA,2BAA2B,GAAG;IACzC,MAAM,EAAE,EAAE,QAAQ,EAAE,mCAA2B,EAAE;CAClD,CAAC"}

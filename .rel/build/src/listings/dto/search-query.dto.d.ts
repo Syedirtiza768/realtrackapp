@@ -1,0 +1,36 @@
+export declare const SEARCH_SORT_MODES: readonly ["relevance", "newest", "oldest", "price_asc", "price_desc", "title_asc", "title_desc", "sku_asc", "sku_desc", "team_asc", "team_desc", "condition_asc", "condition_desc", "stock_asc", "stock_desc", "status_asc", "status_desc", "ebay_asc", "ebay_desc", "image_asc", "image_desc"];
+export type SearchSortMode = (typeof SEARCH_SORT_MODES)[number];
+export declare class SearchQueryDto {
+    limit?: number;
+    offset?: number;
+    cursor?: string;
+    q?: string;
+    exactSku?: string;
+    brands?: string;
+    categories?: string;
+    categoryNames?: string;
+    conditions?: string;
+    types?: string;
+    sourceFiles?: string;
+    formats?: string;
+    locations?: string;
+    mpns?: string;
+    pipelineJobIds?: string;
+    marketplaces?: string;
+    teamIds?: string;
+    makes?: string;
+    models?: string;
+    minPrice?: number;
+    maxPrice?: number;
+    hasImage?: string;
+    hasPrice?: string;
+    catalogStatus?: string;
+    stockLevel?: string;
+    shippingProfiles?: string;
+    importedFrom?: string;
+    importedTo?: string;
+    filterMode?: 'and' | 'or';
+    groupBySku?: string;
+    vertical?: string;
+    sort?: SearchSortMode;
+}

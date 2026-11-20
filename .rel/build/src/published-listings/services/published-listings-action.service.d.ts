@@ -1,0 +1,34 @@
+import { Repository } from 'typeorm';
+import { User } from '../../auth/entities/user.entity.js';
+import { EbayInventoryApiService } from '../../channels/ebay/ebay-inventory-api.service.js';
+import { EbayPublishService } from '../../channels/ebay/ebay-publish.service.js';
+import { EbayTradingApiService } from '../../channels/ebay/ebay-trading-api.service.js';
+import { ListingActionLogWriterService } from '../../integrations/ebay/services/listing-action-log-writer.service.js';
+import { EbayListingChannel } from '../../integrations/ebay/entities/ebay-listing-channel.entity.js';
+import { EbayPublishedListing } from '../entities/ebay-published-listing.entity.js';
+import type { RevisePublishedListingDto, UpdatePoliciesDto } from '../dto/published-listings.dto.js';
+import { PublishedListingsHealthService } from './published-listings-health.service.js';
+import { PublishedListingsAuditService } from './published-listings-audit.service.js';
+import { PublishedListingsSyncService } from './published-listings-sync.service.js';
+export declare class PublishedListingsActionService {
+    private readonly listingRepo;
+    private readonly channelRepo;
+    private readonly inventoryApi;
+    private readonly tradingApi;
+    private readonly ebayPublish;
+    private readonly health;
+    private readonly audit;
+    private readonly actionLog;
+    private readonly sync;
+    private readonly logger;
+    constructor(listingRepo: Repository<EbayPublishedListing>, channelRepo: Repository<EbayListingChannel>, inventoryApi: EbayInventoryApiService, tradingApi: EbayTradingApiService, ebayPublish: EbayPublishService, health: PublishedListingsHealthService, audit: PublishedListingsAuditService, actionLog: ListingActionLogWriterService, sync: PublishedListingsSyncService);
+    private resolveOfferId;
+    revise(id: string, organizationId: string, user: User, dto: RevisePublishedListingDto): Promise<EbayPublishedListing>;
+    updatePolicies(id: string, organizationId: string, user: User, dto: UpdatePoliciesDto): Promise<EbayPublishedListing>;
+    endListing(id: string, organizationId: string, user: User): Promise<EbayPublishedListing>;
+    relist(id: string, organizationId: string, user: User): Promise<EbayPublishedListing>;
+    private toTradingRelistInput;
+    private restoreInventoryOffer;
+    private updateChannelAfterRelist;
+    refreshListing(id: string, organizationId: string, user: User): Promise<EbayPublishedListing>;
+}

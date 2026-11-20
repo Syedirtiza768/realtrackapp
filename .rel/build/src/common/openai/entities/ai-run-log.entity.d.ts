@@ -1,0 +1,44 @@
+export declare class AiRunLog {
+    id: string;
+    sku: string | null;
+    partNumber: string | null;
+    partType: string | null;
+    price: number | null;
+    donorVehicle: Record<string, unknown> | null;
+    marketplace: string | null;
+    batchId: string | null;
+    enhancementId: string | null;
+    lane: string;
+    model: string;
+    attempt: number;
+    promptVersion: string;
+    routingPolicyVersion: number | null;
+    inputTokens: number | null;
+    outputTokens: number | null;
+    costUsd: number | null;
+    latencyMs: number | null;
+    validationScore: number | null;
+    complianceScore: number | null;
+    hardFails: string[];
+    softFails: string[];
+    escalated: boolean;
+    passedGate: boolean;
+    fitmentRowCount: number | null;
+    fitmentSource: string | null;
+    fitmentRowsPre: number | null;
+    fitmentRowsPost: number | null;
+    tokensSavedEstimate: number | null;
+    humanApproved: boolean | null;
+    humanRejected: boolean | null;
+    rejectionReason: string | null;
+    published: boolean | null;
+    publishError: string | null;
+    ebayCategoryId: string | null;
+    fieldEdits: Array<{
+        field: string;
+        aiValue: string;
+        finalValue: string;
+    }> | null;
+    guardFixes: string[] | null;
+    createdAt: Date;
+}

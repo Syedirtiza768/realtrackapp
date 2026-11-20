@@ -1,0 +1,13 @@
+import { Warehouse, WarehouseLocation } from './warehouse.entity.js';
+import { InventoryItemSource, Supplier } from './supplier.entity.js';
+import { InventoryItem, InventoryUnit, StockLevel } from './inventory-item.entity.js';
+import { StockDocument, StockDocumentLine } from './stock-document.entity.js';
+import { ProcurementRequest, StockMovement, StockReservation } from './stock-movement.entity.js';
+import { ChannelStockSyncState, StoreStockPolicy, StoreWarehouseLink, UserWarehouseAssignment } from './store-stock.entity.js';
+export * from './warehouse.entity.js';
+export * from './supplier.entity.js';
+export * from './inventory-item.entity.js';
+export * from './stock-document.entity.js';
+export * from './stock-movement.entity.js';
+export * from './store-stock.entity.js';
+export declare const STOCK_ENTITIES: (typeof Warehouse | typeof WarehouseLocation | typeof Supplier | typeof InventoryItemSource | typeof InventoryItem | typeof StockLevel | typeof InventoryUnit | typeof StockDocument | typeof StockDocumentLine | typeof StockMovement | typeof StockReservation | typeof ProcurementRequest | typeof StoreWarehouseLink | typeof StoreStockPolicy | typeof ChannelStockSyncState | typeof UserWarehouseAssignment)[];

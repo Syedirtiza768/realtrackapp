@@ -1,0 +1,38 @@
+export declare class MasterProduct {
+    id: string;
+    organizationId: string | null;
+    sku: string;
+    brand: string | null;
+    mpn: string | null;
+    oemNumber: string | null;
+    upc: string | null;
+    ean: string | null;
+    epid: string | null;
+    title: string;
+    partType: string | null;
+    condition: string;
+    conditionDescription: string | null;
+    description: string | null;
+    shortDescription: string | null;
+    features: string[];
+    costPrice: number | null;
+    retailPrice: number | null;
+    mapPrice: number | null;
+    currency: string;
+    totalQuantity: number;
+    warehouseLocation: string | null;
+    weightLbs: number | null;
+    dimensions: Record<string, unknown> | null;
+    imageUrls: string[];
+    ebayCategoryId: string | null;
+    ebayCategoryName: string | null;
+    itemSpecifics: Record<string, string[]>;
+    aiSearchKeywords: string[];
+    aiConfidence: Record<string, number> | null;
+    aiEnrichedAt: Date | null;
+    status: 'draft' | 'ready' | 'published' | 'archived' | 'error';
+    sourceFile: string | null;
+    listingRecordId: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+}

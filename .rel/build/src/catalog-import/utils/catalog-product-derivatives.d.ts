@@ -1,0 +1,36 @@
+import type { CatalogProduct } from '../entities/catalog-product.entity.js';
+import { type MotorsCategoryBucket } from '../config/motors-category-buckets.js';
+export type ReadinessStatus = 'ready' | 'needs_review';
+export interface CatalogProductDerived {
+    image_count: number;
+    has_images: boolean;
+    fitment_count: number;
+    has_fitment: boolean;
+    unique_make_count: number;
+    unique_model_count: number;
+    year_min: number | null;
+    year_max: number | null;
+    price_band: string;
+    title_length: number;
+    has_oem_number: boolean;
+    has_placement: boolean;
+    has_material: boolean;
+    has_features: boolean;
+    has_country: boolean;
+    duplicate_fitment_row_count: number;
+    has_duplicate_fitment: boolean;
+    data_completeness_score: number;
+    readiness_status: ReadinessStatus;
+    readiness_missing_gates: string[];
+    store_routing_recommendation: string;
+    manual_review_reasons: string[];
+    marketplace_us_ready: boolean;
+    marketplace_de_review: boolean;
+    marketplace_au_review: boolean;
+    marketplace_multi_candidate: boolean;
+    marketplace_manual_review: boolean;
+    category_buckets: MotorsCategoryBucket[];
+}
+export declare function placementLikelyRequired(partType: string | null | undefined): boolean;
+export declare function priceBandFromPrice(price: number | null | undefined): string;
+export declare function computeCatalogProductDerived(product: CatalogProduct): CatalogProductDerived;

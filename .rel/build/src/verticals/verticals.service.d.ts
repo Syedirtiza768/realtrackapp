@@ -1,0 +1,86 @@
+import { FeatureFlagService } from '../common/feature-flags/feature-flag.service.js';
+import { Store } from '../channels/entities/store.entity.js';
+import { ConnectedEbayAccount } from '../integrations/ebay/entities/connected-ebay-account.entity.js';
+import { CatalogProduct } from '../catalog-import/entities/catalog-product.entity.js';
+import { ListingRecord } from '../listings/listing-record.entity.js';
+import { EbayTaxonomyApiService } from '../channels/ebay/ebay-taxonomy-api.service.js';
+import { EbaySellingMetadataService } from '../channels/ebay/ebay-selling-metadata.service.js';
+import type { ProductAttributes, ProductVertical, VerticalCategoryMetadata, VerticalConfig, VerticalPublishProjection } from './vertical.types.js';
+import { ProductFamily } from './entities/product-family.entity.js';
+import { ProductVariant } from './entities/product-variant.entity.js';
+import { VariantMarketplaceMapping } from './entities/variant-marketplace-mapping.entity.js';
+import { ProductMarketplaceCategory } from './entities/product-marketplace-category.entity.js';
+import { BusinessIndustrialReview } from './entities/business-industrial-review.entity.js';
+import { Repository } from 'typeorm';
+type ProductLike = Pick<CatalogProduct, 'vertical' | 'verticalAttributes' | 'verticalValidationStatus' | 'manualReview' | 'title' | 'description' | 'brand' | 'mpn' | 'partType' | 'price' | 'quantity' | 'categoryId' | 'categoryName' | 'conditionId' | 'conditionLabel' | 'imageUrls'>;
+export declare class VerticalsService {
+    private readonly featureFlags;
+    private readonly taxonomy;
+    private readonly sellingMetadata;
+    private readonly storeRepo;
+    private readonly accountRepo;
+    private readonly productRepo;
+    private readonly listingRepo;
+    private readonly familyRepo;
+    private readonly variantRepo;
+    private readonly mappingRepo;
+    private readonly categoryRepo;
+    private readonly businessIndustrialReviewRepo;
+    private readonly logger;
+    private readonly metadataCache;
+    private readonly metadataTtlMs;
+    constructor(featureFlags: FeatureFlagService, taxonomy: EbayTaxonomyApiService, sellingMetadata: EbaySellingMetadataService, storeRepo: Repository<Store>, accountRepo: Repository<ConnectedEbayAccount>, productRepo: Repository<CatalogProduct>, listingRepo: Repository<ListingRecord>, familyRepo: Repository<ProductFamily>, variantRepo: Repository<ProductVariant>, mappingRepo: Repository<VariantMarketplaceMapping>, categoryRepo: Repository<ProductMarketplaceCategory>, businessIndustrialReviewRepo: Repository<BusinessIndustrialReview>);
+    assertFeatureEnabled(): Promise<void>;
+    assertIntakeVerticalEnabled(vertical: ProductVertical, storeId?: string): Promise<void>;
+    getProfiles(): import("./vertical.types.js").VerticalProfile[];
+    getStoreConfig(store: Store): VerticalConfig;
+    listStoresForOrganization(organizationId: string): Promise<Array<Store & {
+        verticalConfig: VerticalConfig;
+    }>>;
+    getStoreConfigForOrganization(storeId: string, organizationId: string): Promise<VerticalConfig>;
+    updateFashionStoreConfig(storeId: string, organizationId: string, enabled: boolean): Promise<VerticalConfig>;
+    updateStoreConfig(storeId: string, organizationId: string, patch: Partial<VerticalConfig>): Promise<VerticalConfig>;
+    resolveVertical(product: Pick<ProductLike, 'vertical'> | null | undefined, listing: Pick<ListingRecord, 'vertical'> | null | undefined, frozenVertical?: ProductVertical | null): ProductVertical;
+    normalizeIntakeVertical(value: unknown): ProductVertical;
+    buildAttributes(vertical: ProductVertical, data: Record<string, string>): ProductAttributes;
+    buildPublishProjection(params: {
+        vertical: ProductVertical;
+        product: ProductLike;
+        listing: ListingRecord | null;
+        storeId: string;
+        marketplaceId: string;
+    }): Promise<VerticalPublishProjection | null>;
+    getCategoryMetadata(storeId: string, marketplaceId: string, categoryId: string): Promise<VerticalCategoryMetadata>;
+    persistCategoryMetadata(productId: string, organizationId: string | null, vertical: ProductVertical, metadata: VerticalCategoryMetadata): Promise<ProductMarketplaceCategory>;
+    createFamily(input: {
+        organizationId: string;
+        catalogProductId: string;
+        name: string;
+        slug: string;
+        vertical: ProductVertical;
+    }): Promise<ProductFamily>;
+    createVariant(input: {
+        organizationId: string;
+        familyId: string;
+        sku: string;
+        price?: number;
+        quantity?: number;
+        attributes?: unknown;
+        imageUrls?: string[];
+        conditionId?: string;
+    }): Promise<ProductVariant>;
+    listVariants(familyId: string, organizationId: string): Promise<ProductVariant[]>;
+    createVariantMapping(input: {
+        organizationId: string;
+        variantId: string;
+        ebayAccountId: string;
+        marketplaceId: string;
+        inventorySku?: string;
+    }): Promise<VariantMarketplaceMapping>;
+    private assertStoreOrganization;
+    private assertFeatureEnabledForNonAutomotive;
+    private buildAspects;
+    private mapCondition;
+    private pickSupportedConditionId;
+}
+export {};

@@ -1,0 +1,30 @@
+import { ListingRecord } from '../../listings/listing-record.entity.js';
+export type IngestionJobStatus = 'pending' | 'uploading' | 'processing' | 'ai_complete' | 'review_required' | 'approved' | 'rejected' | 'failed' | 'cancelled';
+export type IngestionMode = 'single' | 'bulk' | 'bundle';
+export type SourceType = 'upload' | 'camera' | 'url' | 'api';
+export type ReviewStatus = 'pending' | 'auto_approved' | 'needs_review' | 'approved' | 'rejected';
+export declare class IngestionJob {
+    id: string;
+    status: IngestionJobStatus;
+    mode: IngestionMode;
+    sourceType: SourceType;
+    imageCount: number;
+    aiProvider: string | null;
+    aiModel: string | null;
+    aiStartedAt: Date | null;
+    aiCompletedAt: Date | null;
+    aiCostUsd: number | null;
+    reviewStatus: ReviewStatus;
+    reviewedBy: string | null;
+    reviewedAt: Date | null;
+    reviewNotes: string | null;
+    listingId: string | null;
+    listing?: ListingRecord;
+    attemptCount: number;
+    maxAttempts: number;
+    lastError: string | null;
+    nextRetryAt: Date | null;
+    createdBy: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+}

@@ -1,0 +1,31 @@
+import type { ProductVertical } from '../../../verticals/vertical.types.js';
+import { Organization } from '../../../auth/entities/organization.entity.js';
+import { CatalogProduct } from '../../../catalog-import/entities/catalog-product.entity.js';
+import { ConnectedEbayAccount } from './connected-ebay-account.entity.js';
+export type EbayListingChannelStatus = 'draft' | 'validating' | 'ready' | 'publishing' | 'published' | 'failed' | 'revising' | 'ended' | 'deleted';
+export declare class EbayListingChannel {
+    id: string;
+    organizationId: string;
+    organization: Organization;
+    catalogProductId: string;
+    catalogProduct: CatalogProduct;
+    ebayAccountId: string;
+    ebayAccount: ConnectedEbayAccount;
+    marketplaceId: string;
+    vertical: ProductVertical | null;
+    internalSku: string | null;
+    ebayInventorySku: string | null;
+    offerId: string | null;
+    listingId: string | null;
+    listingUrl: string | null;
+    channelPrice: string | null;
+    channelQuantity: number | null;
+    listingStatus: EbayListingChannelStatus;
+    lastErrorCode: string | null;
+    lastErrorMessage: string | null;
+    publishedAt: Date | null;
+    lastRevisedAt: Date | null;
+    lastSyncedAt: Date | null;
+    createdAt: Date;
+    updatedAt: Date;
+}

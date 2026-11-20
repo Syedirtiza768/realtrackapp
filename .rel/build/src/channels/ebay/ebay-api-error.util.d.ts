@@ -1,0 +1,20 @@
+export declare function formatEbayApiError(err: unknown, fallback?: string): string;
+export declare function isEbayOverseasWarehouseBlockError(err: unknown): boolean;
+export declare function formatEbayOverseasWarehouseBlockError(err: unknown, context?: {
+    storeName?: string;
+    merchantLocationKey?: string;
+}): string | null;
+export declare function isEbayInvalidAccessTokenError(err: unknown): boolean;
+export declare function extractEbayErrorParameter(err: unknown, paramName: string): string | undefined;
+export declare function isEbayOfferAlreadyExistsError(err: unknown): boolean;
+export declare function isEbayOfferUnavailableError(err: unknown): boolean;
+export declare function isEbayDuplicateActiveListingError(err: unknown): boolean;
+export declare function isEbayInvalidItemConditionError(err: unknown): boolean;
+export declare function isEbayInvalidBusinessPolicyError(err: unknown): boolean;
+export declare function isEbayPartsAccessoriesReturnPolicyError(err: unknown): boolean;
+export declare function isEbaySellingLimitError(err: unknown): boolean;
+export declare function isEbayInvalidCategoryError(err: unknown): boolean;
+export declare function isEbayInvalidCompatibilitiesError(err: unknown): boolean;
+export declare function isEbayRecoverableBusinessPolicyError(err: unknown): boolean;
+export declare function isEbayTitleMissingTransientError(err: unknown): boolean;
+export declare function isEbayAvailabilityMissingTransientError(err: unknown): boolean;

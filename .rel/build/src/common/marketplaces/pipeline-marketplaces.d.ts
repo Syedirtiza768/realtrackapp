@@ -1,0 +1,12 @@
+export declare const PIPELINE_MARKETPLACE_CODES: readonly ["US", "UK", "AU", "DE"];
+export type PipelineMarketplaceCode = (typeof PIPELINE_MARKETPLACE_CODES)[number];
+export declare const PIPELINE_OUTPUT_MARKETPLACE_CODES: readonly ["US", "UK", "AU", "DE"];
+export type PipelineOutputMarketplaceCode = (typeof PIPELINE_OUTPUT_MARKETPLACE_CODES)[number];
+export declare function pipelineMarketplaceToEbayId(code: PipelineMarketplaceCode): string;
+export declare function isPipelineMarketplaceCode(value: string): value is PipelineMarketplaceCode;
+export declare function storeMatchesPipelineMarketplace(ebayMarketplaceId: string | null | undefined, code: PipelineMarketplaceCode): boolean;
+export declare function ebayMarketplaceIdToPipelineCode(ebayMarketplaceId: string | null | undefined): PipelineMarketplaceCode | null;
+export declare function shouldApplyJobProfilesToOutput(outputMarketplace: PipelineOutputMarketplaceCode, jobMarketplace: PipelineMarketplaceCode | null | undefined): boolean;
+export declare function allPipelineOutputMarketplaces(): PipelineOutputMarketplaceCode[];
+export declare function resolveJobOutputMarketplaces(jobMarketplace: PipelineMarketplaceCode | null | undefined): PipelineOutputMarketplaceCode[];
+export declare function shouldApplyJobProfilesToCatalogMaster(jobMarketplace: PipelineMarketplaceCode | null | undefined, catalogSourceMarketplace: PipelineOutputMarketplaceCode): boolean;

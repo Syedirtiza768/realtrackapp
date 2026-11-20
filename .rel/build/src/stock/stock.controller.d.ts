@@ -1,0 +1,255 @@
+import { User } from '../auth/entities/user.entity.js';
+import { RbacService } from '../rbac/rbac.service.js';
+import { AdjustDto, BootstrapDto, CreateAdjustmentDocDto, CreateCountDto, CreateItemDto, CreateTransferDto, DamageDto, DocumentsQueryDto, GenerateLocationsDto, ItemSourceDto, ItemsQueryDto, LocationDto, MovementsQueryDto, MoveDto, ReceiveDocumentDto, ReceiveDto, RecordCountDto, ScanDto, SetStoreLinksDto, StorePolicyDto, UpdateItemDto, UpdateLocationDto, UpdateWarehouseDto, WarehouseAssignmentsDto, WarehouseDto } from './dto/stock.dto.js';
+import { StockAccessService } from './stock-access.service.js';
+import { WarehousesService } from './warehouses.service.js';
+import { InventoryItemsService } from './inventory-items.service.js';
+import { SuppliersService } from './suppliers.service.js';
+import { StockOperationsService } from './stock-operations.service.js';
+import { StockReportsService } from './stock-reports.service.js';
+import { StockSetupService } from './stock-setup.service.js';
+export declare class StockController {
+    private readonly access;
+    private readonly rbac;
+    private readonly warehouses;
+    private readonly items;
+    private readonly suppliers;
+    private readonly ops;
+    private readonly reports;
+    private readonly setup;
+    constructor(access: StockAccessService, rbac: RbacService, warehouses: WarehousesService, items: InventoryItemsService, suppliers: SuppliersService, ops: StockOperationsService, reports: StockReportsService, setup: StockSetupService);
+    private scope;
+    private can;
+    summary(user: User, org?: string): Promise<{
+        [x: string]: unknown;
+    }>;
+    setupStatus(user: User, org?: string): Promise<{
+        initialized: boolean;
+    }>;
+    bootstrap(user: User, dto: BootstrapDto, org?: string): Promise<import("./stock-setup.service.js").BootstrapReport>;
+    listWarehouses(user: User, org?: string, inactive?: string): Promise<any>;
+    createWarehouse(user: User, dto: WarehouseDto, org?: string): Promise<import("./entities/warehouse.entity.js").Warehouse>;
+    updateWarehouse(user: User, id: string, dto: UpdateWarehouseDto, org?: string): Promise<import("./entities/warehouse.entity.js").Warehouse>;
+    listLocations(user: User, id: string, org?: string, inactive?: string): Promise<any>;
+    createLocation(user: User, id: string, dto: LocationDto, org?: string): Promise<import("./entities/warehouse.entity.js").WarehouseLocation>;
+    generateLocations(user: User, id: string, dto: GenerateLocationsDto, org?: string): Promise<{
+        requested: number;
+        created: number;
+    }>;
+    updateLocation(user: User, id: string, dto: UpdateLocationDto, org?: string): Promise<import("./entities/warehouse.entity.js").WarehouseLocation>;
+    stores(user: User, org?: string): Promise<any>;
+    setStoreLinks(user: User, storeId: string, dto: SetStoreLinksDto, org?: string): Promise<import("./entities/store-stock.entity.js").StoreWarehouseLink[]>;
+    setStorePolicy(user: User, storeId: string, dto: StorePolicyDto, org?: string): Promise<import("./entities/store-stock.entity.js").StoreStockPolicy>;
+    getAssignments(user: User, userId: string, org?: string): Promise<import("./entities/store-stock.entity.js").UserWarehouseAssignment[]>;
+    setAssignments(user: User, userId: string, dto: WarehouseAssignmentsDto, org?: string): Promise<{
+        userId: string;
+        warehouseIds: string[];
+        restricted: boolean;
+    }>;
+    listItems(user: User, q: ItemsQueryDto, org?: string): Promise<{
+        total: number;
+        limit: number;
+        offset: number;
+        items: {
+            id: unknown;
+            sku: unknown;
+            title: unknown;
+            imageUrl: unknown;
+            vertical: unknown;
+            trackingMode: unknown;
+            sourcingMode: unknown;
+            status: unknown;
+            catalogProductId: unknown;
+            listingRecordId: unknown;
+            productVariantId: unknown;
+            onHand: unknown;
+            reserved: unknown;
+            damaged: unknown;
+            inbound: unknown;
+            available: unknown;
+            sourceable: unknown;
+            sourceCount: unknown;
+            pendingProcurement: unknown;
+            lowStockThreshold: unknown;
+            reorderPoint: unknown;
+            breakdown: {};
+            lastReceivedAt: unknown;
+            unitCost: unknown;
+            bestSourceCost: unknown;
+            updatedAt: unknown;
+        }[];
+    }>;
+    createItem(user: User, dto: CreateItemDto, org?: string): Promise<import("./entities/inventory-item.entity.js").InventoryItem>;
+    itemDetail(user: User, id: string, org?: string): Promise<{
+        item: {
+            unitCost: string | null | undefined;
+            id: string;
+            organizationId: string;
+            vertical: string;
+            sku: string;
+            title: string | null;
+            imageUrl: string | null;
+            catalogProductId: string | null;
+            listingRecordId: string | null;
+            productVariantId: string | null;
+            trackingMode: import("./entities/inventory-item.entity.js").TrackingMode;
+            sourcingMode: import("./entities/inventory-item.entity.js").SourcingMode;
+            currency: string;
+            barcode: string | null;
+            lowStockThreshold: number;
+            reorderPoint: number;
+            reorderQty: number;
+            status: import("./entities/inventory-item.entity.js").InventoryItemStatus;
+            createdAt: Date;
+            updatedAt: Date;
+        };
+        levels: any;
+        units: any;
+        reservations: any;
+        procurement: any;
+        channels: any;
+        movements: any;
+        links: Record<string, unknown>;
+    }>;
+    updateItem(user: User, id: string, dto: UpdateItemDto, org?: string): Promise<import("./entities/inventory-item.entity.js").InventoryItem>;
+    scan(user: User, dto: ScanDto, org?: string): Promise<{
+        code: string;
+        items: any;
+        locations: any;
+        units: any;
+    }>;
+    listSources(user: User, id: string, org?: string): Promise<any>;
+    upsertSource(user: User, id: string, dto: ItemSourceDto, org?: string): Promise<import("./entities/supplier.entity.js").InventoryItemSource>;
+    removeSource(user: User, id: string, sourceId: string, org?: string): Promise<{
+        deleted: boolean;
+    }>;
+    receive(user: User, dto: ReceiveDto, org?: string): Promise<{
+        documentId: string | null;
+        replayed: boolean;
+        itemId: string;
+    }>;
+    adjust(user: User, dto: AdjustDto, org?: string): Promise<import("./entities/stock-document.entity.js").StockDocument | {
+        status: string;
+        message: string;
+        id: string;
+        organizationId: string;
+        docType: import("./entities/stock-document.entity.js").StockDocumentType;
+        docNumber: string;
+        warehouseId: string;
+        destWarehouseId: string | null;
+        supplierId: string | null;
+        reasonCode: string | null;
+        reference: string | null;
+        note: string | null;
+        expectedAt: Date | null;
+        currency: string | null;
+        metadata: Record<string, unknown>;
+        createdBy: string | null;
+        approvedBy: string | null;
+        completedBy: string | null;
+        completedAt: Date | null;
+        createdAt: Date;
+        updatedAt: Date;
+    } | {
+        status: string;
+        replayed: boolean;
+    }>;
+    move(user: User, dto: MoveDto, org?: string): Promise<{
+        moved: number;
+    }>;
+    damage(user: User, dto: DamageDto, org?: string): Promise<{
+        ok: boolean;
+    }>;
+    listDocuments(user: User, q: DocumentsQueryDto, org?: string): Promise<{
+        total: any;
+        items: any;
+    }>;
+    getDocument(user: User, id: string, org?: string): Promise<{
+        lines: any;
+        id: string;
+        organizationId: string;
+        docType: import("./entities/stock-document.entity.js").StockDocumentType;
+        docNumber: string;
+        status: import("./entities/stock-document.entity.js").StockDocumentStatus;
+        warehouseId: string;
+        destWarehouseId: string | null;
+        supplierId: string | null;
+        reasonCode: string | null;
+        reference: string | null;
+        note: string | null;
+        expectedAt: Date | null;
+        currency: string | null;
+        metadata: Record<string, unknown>;
+        createdBy: string | null;
+        approvedBy: string | null;
+        completedBy: string | null;
+        completedAt: Date | null;
+        createdAt: Date;
+        updatedAt: Date;
+    }>;
+    cancelDocument(user: User, id: string, org?: string): Promise<import("./entities/stock-document.entity.js").StockDocument>;
+    createAdjustment(user: User, dto: CreateAdjustmentDocDto, org?: string): Promise<import("./entities/stock-document.entity.js").StockDocument | {
+        status: string;
+        message: string;
+        id: string;
+        organizationId: string;
+        docType: import("./entities/stock-document.entity.js").StockDocumentType;
+        docNumber: string;
+        warehouseId: string;
+        destWarehouseId: string | null;
+        supplierId: string | null;
+        reasonCode: string | null;
+        reference: string | null;
+        note: string | null;
+        expectedAt: Date | null;
+        currency: string | null;
+        metadata: Record<string, unknown>;
+        createdBy: string | null;
+        approvedBy: string | null;
+        completedBy: string | null;
+        completedAt: Date | null;
+        createdAt: Date;
+        updatedAt: Date;
+    }>;
+    approveAdjustment(user: User, id: string, org?: string): Promise<import("./entities/stock-document.entity.js").StockDocument>;
+    createTransfer(user: User, dto: CreateTransferDto, org?: string): Promise<import("./entities/stock-document.entity.js").StockDocument>;
+    shipTransfer(user: User, id: string, org?: string): Promise<import("./entities/stock-document.entity.js").StockDocument>;
+    receiveTransfer(user: User, id: string, dto: ReceiveDocumentDto, org?: string): Promise<import("./entities/stock-document.entity.js").StockDocument>;
+    createCount(user: User, dto: CreateCountDto, org?: string): Promise<import("./entities/stock-document.entity.js").StockDocument>;
+    recordCount(user: User, id: string, dto: RecordCountDto, org?: string): Promise<{
+        saved: number;
+    }>;
+    submitCount(user: User, id: string, org?: string): Promise<import("./entities/stock-document.entity.js").StockDocument | {
+        variances: number;
+        message: string;
+        id: string;
+        organizationId: string;
+        docType: import("./entities/stock-document.entity.js").StockDocumentType;
+        docNumber: string;
+        status: import("./entities/stock-document.entity.js").StockDocumentStatus;
+        warehouseId: string;
+        destWarehouseId: string | null;
+        supplierId: string | null;
+        reasonCode: string | null;
+        reference: string | null;
+        note: string | null;
+        expectedAt: Date | null;
+        currency: string | null;
+        metadata: Record<string, unknown>;
+        createdBy: string | null;
+        approvedBy: string | null;
+        completedBy: string | null;
+        completedAt: Date | null;
+        createdAt: Date;
+        updatedAt: Date;
+    }>;
+    movements(user: User, q: MovementsQueryDto, org?: string): Promise<{
+        total: any;
+        items: any;
+    }>;
+    valuation(user: User, org?: string): Promise<any>;
+    aging(user: User, org?: string): Promise<{
+        buckets: any;
+        oldest: any;
+    }>;
+}

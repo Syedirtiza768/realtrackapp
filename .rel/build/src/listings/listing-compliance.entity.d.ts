@@ -1,0 +1,35 @@
+import { ListingRecord } from './listing-record.entity.js';
+export declare class ListingCompliance {
+    id: string;
+    listingId: string;
+    listing: ListingRecord;
+    productCompliancePolicyId: string | null;
+    regionalProductCompliancePolicies: string | null;
+    productSafetyPictograms: string | null;
+    productSafetyStatements: string | null;
+    productSafetyComponent: string | null;
+    regulatoryDocumentIds: string | null;
+    manufacturerName: string | null;
+    manufacturerAddressLine1: string | null;
+    manufacturerAddressLine2: string | null;
+    manufacturerCity: string | null;
+    manufacturerCountry: string | null;
+    manufacturerPostalCode: string | null;
+    manufacturerStateOrProvince: string | null;
+    manufacturerPhone: string | null;
+    manufacturerEmail: string | null;
+    manufacturerContactUrl: string | null;
+    responsiblePerson1: string | null;
+    responsiblePerson1Type: string | null;
+    responsiblePerson1AddressLine1: string | null;
+    responsiblePerson1AddressLine2: string | null;
+    responsiblePerson1City: string | null;
+    responsiblePerson1Country: string | null;
+    responsiblePerson1PostalCode: string | null;
+    responsiblePerson1StateOrProvince: string | null;
+    responsiblePerson1Phone: string | null;
+    responsiblePerson1Email: string | null;
+    responsiblePerson1ContactUrl: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+}

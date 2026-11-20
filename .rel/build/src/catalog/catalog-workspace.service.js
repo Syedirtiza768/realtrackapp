@@ -1,0 +1,1270 @@
+"use strict";
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+var __param = (this && this.__param) || function (paramIndex, decorator) {
+    return function (target, key) { decorator(target, key, paramIndex); }
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.CatalogWorkspaceService = void 0;
+exports.isLivePublicationStatus = isLivePublicationStatus;
+exports.resolvePublicationStatus = resolvePublicationStatus;
+const common_1 = require("@nestjs/common");
+const typeorm_1 = require("@nestjs/typeorm");
+const typeorm_2 = require("typeorm");
+const user_organization_service_js_1 = require("../auth/user-organization.service.js");
+const catalog_product_entity_js_1 = require("../catalog-import/entities/catalog-product.entity.js");
+const listing_record_entity_js_1 = require("../listings/listing-record.entity.js");
+const store_access_service_js_1 = require("../channels/store-access.service.js");
+const connected_ebay_account_entity_js_1 = require("../integrations/ebay/entities/connected-ebay-account.entity.js");
+const ebay_listing_channel_entity_js_1 = require("../integrations/ebay/entities/ebay-listing-channel.entity.js");
+const listing_action_log_entity_js_1 = require("../integrations/ebay/entities/listing-action-log.entity.js");
+const ebay_published_listing_entity_js_1 = require("../published-listings/entities/ebay-published-listing.entity.js");
+const team_entity_js_1 = require("../teams/entities/team.entity.js");
+const teams_service_js_1 = require("../teams/teams.service.js");
+const rbac_service_js_1 = require("../rbac/rbac.service.js");
+const fashion_review_entity_js_1 = require("../verticals/entities/fashion-review.entity.js");
+const business_industrial_review_entity_js_1 = require("../verticals/entities/business-industrial-review.entity.js");
+const fashion_listings_service_js_1 = require("../verticals/fashion-listings.service.js");
+const business_industrial_service_js_1 = require("../verticals/business-industrial.service.js");
+const catalog_workspace_dto_js_1 = require("./catalog-workspace.dto.js");
+const SEARCH_SOURCE = `concat_ws(' ', p.sku, p.title, p.brand, p.mpn, p.category_id, p.category_name, p.description, p.part_type, p.source_file, p.location, cast(p.vertical_attributes as text))`;
+const SAFE_PRICE = `p.price`;
+const SAFE_QTY = `coalesce(p.quantity, 0)`;
+const LIVE_PUBLICATION_STATUSES = new Set(['published', 'active', 'out_of_stock']);
+function isLivePublicationStatus(status) {
+    return LIVE_PUBLICATION_STATUSES.has(String(status ?? '').trim().toLowerCase());
+}
+function resolvePublicationStatus(input) {
+    if (input.verticalValidationStatus === 'quarantined' ||
+        input.manualReview)
+        return 'blocked';
+    if (input.publications.some((publication) => isLivePublicationStatus(publication.listingStatus)) ||
+        input.verticalValidationStatus === 'published' ||
+        Boolean(input.ebayItemId?.trim()))
+        return 'published';
+    return 'unpublished';
+}
+const ATTRIBUTE_KEYS = {
+    automotive: ['make', 'model', 'partType', 'placement', 'oemPartNumber'],
+    business_industrial: [
+        'categoryFamily',
+        'manufacturer',
+        'model',
+        'mpn',
+        'inventoryMode',
+        'shippingMode',
+        'inputVoltage',
+        'inputFrequency',
+        'mounting',
+        'countryOfOrigin',
+        'ratedVoltage',
+        'ratedCurrent',
+        'series',
+        'enclosureRating',
+    ],
+    fashion: [
+        'brand',
+        'department',
+        'productType',
+        'itemType',
+        'categoryFamily',
+        'size',
+        'sizeSystem',
+        'color',
+        'secondaryColor',
+        'material',
+        'style',
+        'pattern',
+        'condition',
+        'authenticityStatus',
+        'variantAvailability',
+    ],
+};
+function split(value) {
+    if (!value?.trim())
+        return [];
+    return [
+        ...new Set(value
+            .split(',')
+            .map((item) => item.trim())
+            .filter(Boolean)),
+    ].slice(0, 100);
+}
+function label(value) {
+    return value
+        .replace(/([a-z])([A-Z])/g, '$1 $2')
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+function parseAttributes(value) {
+    if (!value?.trim())
+        return {};
+    let parsed;
+    try {
+        parsed = JSON.parse(value);
+    }
+    catch {
+        throw new common_1.BadRequestException('attributes must be valid JSON');
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
+        throw new common_1.BadRequestException('attributes must be a JSON object');
+    const result = {};
+    for (const [key, raw] of Object.entries(parsed)) {
+        if (!/^[a-zA-Z][a-zA-Z0-9_]{0,63}$/.test(key))
+            throw new common_1.BadRequestException(`Invalid vertical attribute filter: ${key}`);
+        const values = Array.isArray(raw) ? raw : [raw];
+        if (Array.isArray(raw) && !raw.length)
+            continue;
+        if (!values.length ||
+            values.some((item) => typeof item !== 'string' &&
+                typeof item !== 'number' &&
+                typeof item !== 'boolean'))
+            throw new common_1.BadRequestException(`Invalid values for vertical attribute filter: ${key}`);
+        result[key] = values.map(String).filter(Boolean).slice(0, 100);
+    }
+    return result;
+}
+function csv(value) {
+    let text = '';
+    if (typeof value === 'string' ||
+        typeof value === 'number' ||
+        typeof value === 'boolean')
+        text = String(value);
+    else if (value != null)
+        text = JSON.stringify(value);
+    return '"' + text.replace(/"/g, '""') + '"';
+}
+let CatalogWorkspaceService = class CatalogWorkspaceService {
+    productRepo;
+    channelRepo;
+    accountRepo;
+    teamRepo;
+    auditRepo;
+    fashionReviewRepo;
+    businessReviewRepo;
+    organizations;
+    storeAccess;
+    teams;
+    rbac;
+    fashion;
+    businessIndustrial;
+    publishedListingRepo;
+    listingRepo;
+    facetCache = new Map();
+    constructor(productRepo, channelRepo, accountRepo, teamRepo, auditRepo, fashionReviewRepo, businessReviewRepo, organizations, storeAccess, teams, rbac, fashion, businessIndustrial, publishedListingRepo, listingRepo) {
+        this.productRepo = productRepo;
+        this.channelRepo = channelRepo;
+        this.accountRepo = accountRepo;
+        this.teamRepo = teamRepo;
+        this.auditRepo = auditRepo;
+        this.fashionReviewRepo = fashionReviewRepo;
+        this.businessReviewRepo = businessReviewRepo;
+        this.organizations = organizations;
+        this.storeAccess = storeAccess;
+        this.teams = teams;
+        this.rbac = rbac;
+        this.fashion = fashion;
+        this.businessIndustrial = businessIndustrial;
+        this.publishedListingRepo = publishedListingRepo;
+        this.listingRepo = listingRepo;
+    }
+    async search(user, vertical, dto) {
+        const started = Date.now();
+        const scope = await this.scope(user, dto.organizationId, dto.teamIds);
+        const limit = Math.min(dto.limit ?? 25, 500);
+        const offset = dto.offset ?? 0;
+        const qb = this.baseQuery(vertical, dto, scope);
+        this.applySearchAndFilters(qb, vertical, dto, scope);
+        this.applySort(qb, dto.sort, Boolean(dto.q?.trim()));
+        const [products, total] = await qb
+            .skip(offset)
+            .take(limit)
+            .getManyAndCount();
+        const items = await this.hydrateItems(products, scope, vertical);
+        return {
+            vertical,
+            total,
+            limit,
+            offset,
+            nextCursor: offset + items.length < total ? String(offset + items.length) : null,
+            queryTimeMs: Date.now() - started,
+            items,
+        };
+    }
+    async suggest(user, vertical, q, limit = 10, organizationId) {
+        const started = Date.now();
+        const scope = await this.scope(user, organizationId);
+        const trimmed = q.trim();
+        if (!trimmed)
+            return { vertical, suggestions: [], queryTimeMs: Date.now() - started };
+        const qb = this.baseQuery(vertical, { q: trimmed }, scope);
+        const contains = `%${this.escapeLike(trimmed)}%`;
+        qb.andWhere(`${SEARCH_SOURCE} ILIKE :suggestContains ESCAPE '\\'`, {
+            suggestContains: contains,
+        });
+        const products = await qb
+            .select(['p.sku', 'p.title', 'p.brand', 'p.mpn', 'p.categoryName'])
+            .take(Math.min(limit * 12, 100))
+            .getMany();
+        const values = new Map();
+        for (const product of products) {
+            const candidates = [
+                ['sku', product.sku],
+                ['title', product.title],
+                ['brand', product.brand],
+                ['category', product.categoryName],
+                ['mpn', product.mpn],
+            ];
+            for (const [type, value] of candidates) {
+                const normalized = value?.trim();
+                if (!normalized ||
+                    !normalized.toLowerCase().includes(trimmed.toLowerCase()))
+                    continue;
+                const key = `${type}:${normalized.toLowerCase()}`;
+                const existing = values.get(key);
+                values.set(key, {
+                    type,
+                    value: normalized,
+                    label: `${label(type)}: ${normalized}`,
+                    count: (existing?.count ?? 0) + 1,
+                    score: type === 'sku' ? 100 : type === 'title' ? 80 : 60,
+                });
+            }
+        }
+        return {
+            vertical,
+            suggestions: [...values.values()]
+                .sort((a, b) => b.score - a.score ||
+                b.count - a.count ||
+                a.value.localeCompare(b.value))
+                .slice(0, Math.min(limit, 20)),
+            queryTimeMs: Date.now() - started,
+        };
+    }
+    async facets(user, vertical, dto) {
+        const started = Date.now();
+        const scope = await this.scope(user, dto.organizationId, dto.teamIds);
+        const cacheKey = `${user.id}:${scope.organizationId}:${vertical}:${JSON.stringify(dto)}`;
+        const cached = this.facetCache.get(cacheKey);
+        if (cached && cached.expiresAt > Date.now())
+            return cached.value;
+        const scopedBase = () => {
+            const qb = this.baseQuery(vertical, dto, scope);
+            this.applySearchAndFilters(qb, vertical, dto, scope);
+            return qb;
+        };
+        const run = async (column, extra = '') => {
+            const facet = scopedBase()
+                .select(column, 'value')
+                .addSelect('COUNT(*)', 'count')
+                .andWhere(extra || `${column} IS NOT NULL AND ${column} != ''`)
+                .groupBy(column)
+                .orderBy('count', 'DESC')
+                .limit(100);
+            const rows = await facet.getRawMany();
+            return rows
+                .filter((row) => row.value != null && String(row.value).trim())
+                .map((row) => ({
+                value: String(row.value),
+                label: label(String(row.value)),
+                count: Number(row.count) || 0,
+            }));
+        };
+        const [brands, categoriesRaw, conditions, types, sourceFiles, formats, locations, mpns, teams, shippingProfiles, stockLevels, catalogStatuses, validationStatuses, priceRaw, totalFiltered,] = await Promise.all([
+            run('p.brand'),
+            scopedBase()
+                .select('p.categoryId', 'id')
+                .addSelect('p.categoryName', 'value')
+                .addSelect('COUNT(*)', 'count')
+                .andWhere("((p.categoryName IS NOT NULL AND p.categoryName != '') OR (p.categoryId IS NOT NULL AND p.categoryId != ''))")
+                .groupBy('p.categoryId')
+                .addGroupBy('p.categoryName')
+                .orderBy('count', 'DESC')
+                .limit(100)
+                .getRawMany(),
+            scopedBase()
+                .select("coalesce(nullif(p.condition_label, ''), nullif(p.condition_id, ''))", 'value')
+                .addSelect('COUNT(*)', 'count')
+                .andWhere("((p.condition_label IS NOT NULL AND p.condition_label != '') OR (p.condition_id IS NOT NULL AND p.condition_id != ''))")
+                .groupBy("coalesce(nullif(p.condition_label, ''), nullif(p.condition_id, ''))")
+                .orderBy('count', 'DESC')
+                .limit(100)
+                .getRawMany()
+                .then((rows) => rows
+                .filter((row) => row.value != null && String(row.value).trim())
+                .map((row) => ({
+                value: String(row.value),
+                label: label(String(row.value)),
+                count: Number(row.count) || 0,
+            }))),
+            run('p.partType'),
+            run('p.sourceFile'),
+            run('p.format'),
+            run('p.location'),
+            run('p.mpn'),
+            scopedBase()
+                .innerJoin(team_entity_js_1.Team, 'facetTeam', 'facetTeam.id = p.teamId')
+                .select('p.teamId', 'value')
+                .addSelect('facetTeam.name', 'label')
+                .addSelect('facetTeam.color', 'color')
+                .addSelect('COUNT(*)', 'count')
+                .groupBy('p.teamId')
+                .addGroupBy('facetTeam.name')
+                .addGroupBy('facetTeam.color')
+                .orderBy('count', 'DESC')
+                .limit(100)
+                .getRawMany()
+                .then((rows) => rows.map((row) => ({
+                value: row.value,
+                label: row.label,
+                count: Number(row.count) || 0,
+                color: row.color,
+            }))),
+            run('p.shippingProfile'),
+            Promise.resolve(['in_stock', 'low_stock', 'out_of_stock'].map((value) => ({
+                value,
+                label: label(value),
+                count: 0,
+            }))),
+            Promise.resolve([
+                'published',
+                'unpublished',
+                'blocked',
+                'ready_to_publish',
+                'need_images',
+            ].map((value) => ({
+                value,
+                label: label(value),
+                count: 0,
+            }))),
+            run('p.verticalValidationStatus'),
+            scopedBase()
+                .select(`MIN(${SAFE_PRICE})`, 'min')
+                .addSelect(`MAX(${SAFE_PRICE})`, 'max')
+                .getRawOne(),
+            scopedBase().getCount(),
+        ]);
+        const [stockCounts, statusCounts, attributeFacets] = await Promise.all([
+            this.countStockLevels(scopedBase),
+            this.countCatalogStatuses(scopedBase, vertical, scope),
+            this.attributeFacets(scopedBase, vertical),
+        ]);
+        const safeStockCounts = stockCounts;
+        const safeStatusCounts = statusCounts;
+        const value = {
+            vertical,
+            totalFiltered,
+            queryTimeMs: Date.now() - started,
+            brands,
+            categories: categoriesRaw.map((row) => ({
+                value: row.id || row.value,
+                label: row.value || row.id,
+                count: Number(row.count) || 0,
+            })),
+            conditions,
+            types,
+            sourceFiles,
+            formats,
+            locations,
+            mpns,
+            teams,
+            marketplaces: await this.marketplaceFacets(scopedBase(), scope, vertical),
+            shippingProfiles,
+            stockLevels: stockLevels.map((entry) => ({
+                ...entry,
+                count: safeStockCounts[entry.value] ?? 0,
+            })),
+            catalogStatuses: catalogStatuses.map((entry) => ({
+                ...entry,
+                count: safeStatusCounts[entry.value] ?? 0,
+            })),
+            validationStatuses,
+            attributeFacets,
+            priceRange: {
+                min: priceRaw?.min == null ? null : Number(priceRaw.min),
+                max: priceRaw?.max == null ? null : Number(priceRaw.max),
+            },
+        };
+        this.facetCache.set(cacheKey, { expiresAt: Date.now() + 30_000, value });
+        return value;
+    }
+    async summary(user, vertical, organizationId) {
+        const scope = await this.scope(user, organizationId);
+        const qb = this.baseQuery(vertical, {}, scope);
+        const [total, withImages, published] = await Promise.all([
+            qb.clone().getCount(),
+            qb.clone().andWhere('array_length(p.imageUrls, 1) > 0').getCount(),
+            qb
+                .clone()
+                .andWhere(this.publishedSql(scope))
+                .setParameters(this.publishedParameters(scope, vertical))
+                .getCount(),
+        ]);
+        return {
+            vertical,
+            organizationId: scope.organizationId,
+            total,
+            withImages,
+            missingImages: Math.max(0, total - withImages),
+            published,
+        };
+    }
+    async detail(user, vertical, id, organizationId) {
+        const scope = await this.scope(user, organizationId);
+        const product = await this.baseQuery(vertical, {}, scope)
+            .andWhere('p.id = :productId', { productId: id })
+            .getOne();
+        if (!product)
+            throw new common_1.NotFoundException('Catalog product not found');
+        return this.hydrateItems([product], scope, vertical).then((items) => items[0]);
+    }
+    async patch(user, vertical, id, dto, organizationId) {
+        const scope = await this.scope(user, organizationId);
+        const product = await this.findScopedProduct(vertical, id, scope);
+        if (product.verticalValidationStatus === 'deleted')
+            throw new common_1.ConflictException('Deleted catalog products must be restored through the catalog lifecycle action');
+        if (vertical === 'fashion')
+            await this.fashion.update(user, id, dto, scope.organizationId);
+        else if (vertical === 'business_industrial')
+            await this.businessIndustrial.updateListing(user, id, dto, scope.organizationId);
+        else
+            throw new common_1.BadRequestException('Catalog inline updates are not available for this vertical');
+        return this.detail(user, vertical, id, scope.organizationId);
+    }
+    async bulkTeam(user, vertical, dto) {
+        const scope = await this.scope(user, dto.organizationId);
+        await this.assertTeamTarget(user, dto.teamId ?? null, scope);
+        return this.bulkEach(dto.productIds, async (id) => {
+            const product = await this.findScopedProduct(vertical, id, scope);
+            this.assertNotQuarantined(product);
+            const before = { teamId: product.teamId };
+            product.teamId = dto.teamId ?? null;
+            await this.productRepo.save(product);
+            await this.auditRepo.save(this.auditRepo.create({
+                organizationId: scope.organizationId,
+                catalogProductId: id,
+                userId: user.id,
+                action: `${vertical}.catalog.assign_team`,
+                result: 'success',
+                beforeSnapshot: before,
+                afterSnapshot: { teamId: product.teamId },
+            }));
+            return { id, teamId: product.teamId };
+        });
+    }
+    async bulkPolicies(user, vertical, dto) {
+        const scope = await this.scope(user, dto.organizationId);
+        if (dto.shippingProfile === undefined &&
+            dto.paymentProfile === undefined &&
+            dto.returnProfile === undefined)
+            throw new common_1.BadRequestException('At least one policy field is required');
+        return this.bulkEach(dto.productIds, async (id) => {
+            const product = await this.findScopedProduct(vertical, id, scope);
+            if (!this.allowBusinessIndustrialOperatorBypass(vertical))
+                this.assertNotQuarantined(product);
+            const before = {
+                shippingProfile: product.shippingProfile,
+                paymentProfile: product.paymentProfile,
+                returnProfile: product.returnProfile,
+            };
+            if (dto.shippingProfile !== undefined)
+                product.shippingProfile = dto.shippingProfile?.trim() || null;
+            if (dto.paymentProfile !== undefined)
+                product.paymentProfile = dto.paymentProfile?.trim() || null;
+            if (dto.returnProfile !== undefined)
+                product.returnProfile = dto.returnProfile?.trim() || null;
+            await this.productRepo.save(product);
+            await this.auditRepo.save(this.auditRepo.create({
+                organizationId: scope.organizationId,
+                catalogProductId: id,
+                userId: user.id,
+                action: `${vertical}.catalog.manage_policies`,
+                result: 'success',
+                beforeSnapshot: before,
+                afterSnapshot: {
+                    shippingProfile: product.shippingProfile,
+                    paymentProfile: product.paymentProfile,
+                    returnProfile: product.returnProfile,
+                },
+            }));
+            return {
+                id,
+                shippingProfile: product.shippingProfile,
+                paymentProfile: product.paymentProfile,
+                returnProfile: product.returnProfile,
+            };
+        });
+    }
+    async bulkDelete(user, vertical, dto) {
+        const scope = await this.scope(user, dto.organizationId);
+        return this.bulkEach(dto.productIds, async (id) => {
+            const product = await this.findScopedProduct(vertical, id, scope);
+            this.assertNotQuarantined(product);
+            const published = await this.channelRepo.exists({
+                where: [
+                    {
+                        organizationId: scope.organizationId,
+                        catalogProductId: id,
+                        vertical,
+                        listingStatus: 'published',
+                    },
+                    ...(vertical === 'automotive'
+                        ? [
+                            {
+                                organizationId: scope.organizationId,
+                                catalogProductId: id,
+                                vertical: (0, typeorm_2.IsNull)(),
+                                listingStatus: 'published',
+                            },
+                        ]
+                        : []),
+                ],
+            });
+            if (published ||
+                product.verticalValidationStatus === 'published' ||
+                Boolean(product.ebayItemId?.trim()))
+                throw new common_1.ConflictException('Withdraw marketplace publications before deleting this product');
+            const beforeStatus = product.verticalValidationStatus;
+            product.verticalValidationStatus = 'deleted';
+            await this.productRepo.save(product);
+            await this.auditRepo.save(this.auditRepo.create({
+                organizationId: scope.organizationId,
+                catalogProductId: id,
+                userId: user.id,
+                action: `${vertical}.catalog.delete`,
+                result: 'success',
+                beforeSnapshot: { verticalValidationStatus: beforeStatus },
+                afterSnapshot: { verticalValidationStatus: 'deleted' },
+            }));
+            return { id, deleted: true };
+        });
+    }
+    async exportCsv(user, vertical, dto) {
+        const query = dto.query ?? new catalog_workspace_dto_js_1.CatalogQueryDto();
+        const scope = await this.scope(user, query.organizationId);
+        const qb = this.baseQuery(vertical, query, scope);
+        this.applySearchAndFilters(qb, vertical, query, scope);
+        if (dto.productIds?.length)
+            qb.andWhere('p.id IN (:...exportProductIds)', {
+                exportProductIds: [...new Set(dto.productIds)],
+            });
+        const products = await qb
+            .orderBy('p.updatedAt', 'DESC')
+            .addOrderBy('p.id', 'ASC')
+            .getMany();
+        const items = await this.hydrateItems(products, scope, vertical);
+        const keys = new Set([
+            'id',
+            'sku',
+            'title',
+            'brand',
+            'mpn',
+            'category',
+            'condition',
+            'price',
+            'quantity',
+            'status',
+            'reviewStatus',
+            'publicationStatus',
+            'team',
+            'shippingProfile',
+            'paymentProfile',
+            'returnProfile',
+            'sourceFile',
+            'createdAt',
+            'updatedAt',
+        ]);
+        for (const item of items)
+            for (const key of Object.keys(item.verticalAttributes))
+                keys.add(`attribute_${key}`);
+        const columns = [...keys];
+        const rows = [columns.map(csv).join(',')];
+        for (const item of items) {
+            const row = {
+                id: item.id,
+                sku: item.sku,
+                title: item.title,
+                brand: item.brand,
+                mpn: item.mpn,
+                category: item.categoryName ?? item.categoryId,
+                condition: item.conditionLabel ?? item.conditionId,
+                price: item.price,
+                quantity: item.quantity,
+                status: item.verticalValidationStatus,
+                reviewStatus: item.reviewStatus,
+                publicationStatus: item.publicationStatus,
+                team: item.teamName,
+                shippingProfile: item.shippingProfile,
+                paymentProfile: item.paymentProfile,
+                returnProfile: item.returnProfile,
+                sourceFile: item.sourceFile,
+                createdAt: item.createdAt.toISOString(),
+                updatedAt: item.updatedAt.toISOString(),
+            };
+            for (const [key, value] of Object.entries(item.verticalAttributes))
+                row[`attribute_${key}`] = Array.isArray(value)
+                    ? value.join(' | ')
+                    : value;
+            rows.push(columns.map((column) => csv(row[column])).join(','));
+        }
+        return rows.join('\n');
+    }
+    baseQuery(vertical, dto, scope) {
+        const qb = this.productRepo
+            .createQueryBuilder('p')
+            .where('p.organizationId = :organizationId', {
+            organizationId: scope.organizationId,
+        })
+            .andWhere('p.vertical = :vertical', { vertical })
+            .andWhere("p.verticalValidationStatus <> 'deleted'");
+        if (vertical === 'fashion')
+            qb.andWhere("(COALESCE(p.vertical_attributes->>'_intakeSource', '') <> 'capture' " +
+                "OR COALESCE(p.vertical_attributes->>'_catalogAdded', 'true') = 'true')");
+        if (!scope.manageAllTeams) {
+            if (scope.teamIds.length)
+                qb.andWhere('(p.teamId IS NULL OR p.teamId IN (:...visibleTeamIds))', {
+                    visibleTeamIds: scope.teamIds,
+                });
+            else
+                qb.andWhere('p.teamId IS NULL');
+        }
+        return qb;
+    }
+    applySearchAndFilters(qb, vertical, dto, scope) {
+        const q = dto.q?.trim();
+        if (q) {
+            const contains = `%${this.escapeLike(q)}%`;
+            qb.andWhere(`(${SEARCH_SOURCE} ILIKE :catalogContains ESCAPE '\\' OR similarity(${SEARCH_SOURCE}, :catalogSearch) > 0.15)`, { catalogContains: contains, catalogSearch: q });
+            qb.addSelect(`CASE WHEN lower(coalesce(p.sku, '')) = lower(:catalogExact) THEN 100 ELSE similarity(${SEARCH_SOURCE}, :catalogSearch) END`, 'catalogRelevance').setParameter('catalogExact', q);
+        }
+        this.inFilter(qb, 'p.brand', dto.brands, 'catalogBrands');
+        const categories = split(dto.categories);
+        if (categories.length)
+            qb.andWhere('(p.categoryId IN (:...catalogCategories) OR p.categoryName IN (:...catalogCategories))', { catalogCategories: categories });
+        const conditions = split(dto.conditions);
+        if (conditions.length)
+            qb.andWhere('(p.conditionId IN (:...catalogConditions) OR p.conditionLabel IN (:...catalogConditions))', { catalogConditions: conditions });
+        this.inFilter(qb, 'p.partType', dto.types, 'catalogTypes');
+        this.inFilter(qb, 'p.sourceFile', dto.sourceFiles, 'catalogSourceFiles');
+        this.inFilter(qb, 'p.format', dto.formats, 'catalogFormats');
+        this.inFilter(qb, 'p.location', dto.locations, 'catalogLocations');
+        this.inFilter(qb, 'p.mpn', dto.mpns, 'catalogMpns');
+        this.inFilter(qb, 'p.shippingProfile', dto.shippingProfiles, 'catalogShippingProfiles');
+        if (dto.minPrice != null &&
+            dto.maxPrice != null &&
+            dto.minPrice > dto.maxPrice)
+            throw new common_1.BadRequestException('minPrice cannot be greater than maxPrice');
+        if (dto.minPrice != null)
+            qb.andWhere(`${SAFE_PRICE} >= :catalogMinPrice`, {
+                catalogMinPrice: dto.minPrice,
+            });
+        if (dto.maxPrice != null)
+            qb.andWhere(`${SAFE_PRICE} <= :catalogMaxPrice`, {
+                catalogMaxPrice: dto.maxPrice,
+            });
+        if (dto.hasImage === '1')
+            qb.andWhere('array_length(p.imageUrls, 1) > 0');
+        if (dto.hasPrice === '1')
+            qb.andWhere('p.price IS NOT NULL');
+        const stock = split(dto.stockLevel);
+        if (stock.length) {
+            const parts = [];
+            if (stock.includes('in_stock'))
+                parts.push(`${SAFE_QTY} > 0`);
+            if (stock.includes('low_stock'))
+                parts.push(`(${SAFE_QTY} > 0 AND ${SAFE_QTY} <= 2)`);
+            if (stock.includes('out_of_stock'))
+                parts.push(`${SAFE_QTY} <= 0`);
+            if (parts.length)
+                qb.andWhere(`(${parts.join(' OR ')})`);
+        }
+        const status = split(dto.catalogStatus);
+        if (status.length) {
+            const publishedSql = this.publishedSql(scope);
+            const blockedSql = "(p.manual_review = true OR p.vertical_validation_status IN ('quarantined', 'blocked', 'rejected'))";
+            const parts = [];
+            if (status.includes('published'))
+                parts.push(`(${publishedSql} AND NOT ${blockedSql})`);
+            if (status.includes('unpublished'))
+                parts.push(`(NOT ${publishedSql} AND NOT ${blockedSql})`);
+            if (status.includes('blocked'))
+                parts.push(blockedSql);
+            if (status.includes('need_images'))
+                parts.push('(NOT ' +
+                    publishedSql +
+                    ' AND NOT ' +
+                    blockedSql +
+                    ' AND array_length(p.imageUrls, 1) IS NULL)');
+            if (status.includes('ready_to_publish'))
+                parts.push('(NOT ' +
+                    publishedSql +
+                    ' AND NOT ' +
+                    blockedSql +
+                    ' AND array_length(p.imageUrls, 1) > 0)');
+            if (parts.length)
+                qb.andWhere('(' + parts.join(' OR ') + ')').setParameters(this.publishedParameters(scope, vertical));
+        }
+        this.inFilter(qb, 'p.verticalValidationStatus', dto.validationStatuses, 'catalogValidationStatuses');
+        if (dto.importedFrom)
+            qb.andWhere('p.createdAt >= :catalogImportedFrom', {
+                catalogImportedFrom: dto.importedFrom,
+            });
+        if (dto.importedTo)
+            qb.andWhere('p.createdAt < :catalogImportedTo', {
+                catalogImportedTo: dto.importedTo,
+            });
+        const marketplaces = split(dto.marketplaces);
+        if (marketplaces.length) {
+            if (scope.accessibleStoreIds?.length === 0) {
+                qb.andWhere('1 = 0');
+            }
+            else {
+                const channelSql = this.accessibleChannelSql(scope);
+                qb.andWhere('exists (select 1 from ebay_listing_channels filteredChannel ' +
+                    channelSql.join(' ') +
+                    ' where filteredChannel.catalog_product_id = p.id and filteredChannel.marketplace_id in (:...catalogMarketplaces))', { catalogMarketplaces: marketplaces }).setParameter('catalogAccessibleStores', scope.accessibleStoreIds);
+            }
+        }
+        const attrs = parseAttributes(dto.attributes);
+        for (const [key, values] of Object.entries(attrs)) {
+            const paramKey = `catalogAttr_${key.replace(/[^a-zA-Z0-9]/g, '_')}`;
+            qb.andWhere(`exists (select 1 from jsonb_array_elements_text(case when jsonb_typeof(p.vertical_attributes -> :${paramKey}) = 'array' then p.vertical_attributes -> :${paramKey} else jsonb_build_array(p.vertical_attributes ->> :${paramKey}) end) attrValue where attrValue in (:...${paramKey}_values))`, { [paramKey]: key, [`${paramKey}_values`]: values });
+        }
+        void vertical;
+    }
+    applySort(qb, sort, hasQuery) {
+        const resolved = sort ?? (hasQuery ? 'relevance' : 'newest');
+        if (resolved === 'relevance' && hasQuery)
+            qb.orderBy('"catalogRelevance"', 'DESC');
+        else if (resolved === 'title_asc')
+            qb.orderBy('p.title', 'ASC', 'NULLS LAST');
+        else if (resolved === 'title_desc')
+            qb.orderBy('p.title', 'DESC', 'NULLS LAST');
+        else if (resolved === 'sku_asc')
+            qb.orderBy('p.sku', 'ASC', 'NULLS LAST');
+        else if (resolved === 'price_asc')
+            qb.orderBy('p.price', 'ASC', 'NULLS LAST');
+        else if (resolved === 'price_desc')
+            qb.orderBy('p.price', 'DESC', 'NULLS LAST');
+        else if (resolved === 'newest')
+            qb.orderBy('p.createdAt', 'DESC');
+        else
+            qb.orderBy('p.updatedAt', 'DESC');
+        qb.addOrderBy('p.id', 'ASC');
+    }
+    inFilter(qb, column, raw, parameter) {
+        const values = split(raw);
+        if (values.length)
+            qb.andWhere(`${column} IN (:...${parameter})`, { [parameter]: values });
+    }
+    async scope(user, organizationId, requestedTeams) {
+        const org = await this.organizations.resolveOrganizationId(user.id, organizationId);
+        const manageAllTeams = await this.rbac.userHasPermission(user.id, 'teams.manage');
+        const teamIds = await this.teams.getUserTeamIds(user.id);
+        const requested = split(requestedTeams);
+        if (requested.length &&
+            !manageAllTeams &&
+            requested.some((id) => !teamIds.includes(id)))
+            throw new common_1.ForbiddenException('You do not have access to one or more selected teams');
+        const accessibleStoreIds = await this.storeAccess.resolveStoreFilter(user);
+        return {
+            organizationId: org.organizationId,
+            teamIds: requested.length ? requested : teamIds,
+            manageAllTeams,
+            accessibleStoreIds,
+        };
+    }
+    async findScopedProduct(vertical, id, scope) {
+        const qb = this.baseQuery(vertical, {}, scope).andWhere('p.id = :productId', { productId: id });
+        const product = await qb.getOne();
+        if (!product)
+            throw new common_1.NotFoundException('Catalog product not found or not authorized');
+        return product;
+    }
+    async hydrateItems(products, scope, vertical) {
+        if (!products.length)
+            return [];
+        const ids = products.map((product) => product.id);
+        const teams = await this.teamRepo.find({
+            where: {
+                id: (0, typeorm_2.In)(products
+                    .map((product) => product.teamId)
+                    .filter((id) => Boolean(id))),
+            },
+        });
+        const teamMap = new Map(teams.map((team) => [team.id, team]));
+        const reviews = vertical === 'fashion'
+            ? await this.fashionReviewRepo.find({
+                where: {
+                    organizationId: scope.organizationId,
+                    catalogProductId: (0, typeorm_2.In)(ids),
+                },
+            })
+            : vertical === 'business_industrial'
+                ? await this.businessReviewRepo.find({
+                    where: {
+                        organizationId: scope.organizationId,
+                        catalogProductId: (0, typeorm_2.In)(ids),
+                    },
+                })
+                : [];
+        const reviewMap = new Map();
+        for (const review of reviews)
+            reviewMap.set(review.catalogProductId, review);
+        const publications = await this.publications(products, scope, vertical);
+        return products.map((product) => {
+            const productPublications = publications.get(product.id) ?? [];
+            const review = reviewMap.get(product.id);
+            const status = resolvePublicationStatus({
+                verticalValidationStatus: product.verticalValidationStatus,
+                manualReview: product.manualReview,
+                ebayItemId: product.ebayItemId,
+                publications: productPublications,
+            });
+            if (status === 'published' &&
+                product.ebayItemId &&
+                !productPublications.some((publication) => isLivePublicationStatus(publication.listingStatus))) {
+                productPublications.push({
+                    id: product.id,
+                    storeName: 'eBay',
+                    marketplaceId: 'EBAY_US',
+                    listingStatus: 'published',
+                    listingUrl: `https://www.ebay.com/itm/${product.ebayItemId}`,
+                    offerId: null,
+                    listingId: product.ebayItemId,
+                    lastErrorMessage: null,
+                    updatedAt: product.updatedAt,
+                });
+            }
+            return {
+                id: product.id,
+                vertical: product.vertical,
+                sku: product.sku,
+                title: product.title,
+                description: product.description,
+                brand: product.brand,
+                mpn: product.mpn,
+                conditionId: product.conditionId,
+                conditionLabel: product.conditionLabel,
+                price: product.price,
+                quantity: product.quantity,
+                imageUrls: (product.imageUrls ?? [])
+                    .map((url) => String(url || '').trim())
+                    .filter((url) => Boolean(url) && (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('/api/'))),
+                categoryId: product.categoryId,
+                categoryName: product.categoryName,
+                partType: product.partType,
+                location: product.location,
+                format: product.format,
+                shippingProfile: product.shippingProfile,
+                paymentProfile: product.paymentProfile,
+                returnProfile: product.returnProfile,
+                sourceFile: product.sourceFile,
+                sourceRow: product.sourceRow,
+                importId: product.importId,
+                pipelineJobId: product.pipelineJobId,
+                teamId: product.teamId,
+                teamName: teamMap.get(product.teamId ?? '')?.name ?? null,
+                teamColor: teamMap.get(product.teamId ?? '')?.color ?? null,
+                verticalAttributes: product.verticalAttributes ?? {},
+                verticalValidationStatus: product.verticalValidationStatus,
+                manualReview: product.manualReview,
+                readinessScore: product.readinessScore == null
+                    ? null
+                    : Number(product.readinessScore) * 100,
+                seoScore: product.seoScore == null ? null : Number(product.seoScore) * 100,
+                reviewStatus: review?.status ?? null,
+                publicationStatus: status,
+                publications: productPublications,
+                createdAt: product.createdAt,
+                updatedAt: product.updatedAt,
+            };
+        });
+    }
+    async publications(products, scope, vertical) {
+        const ids = products.map((product) => product.id);
+        const skus = [
+            ...new Set(products
+                .map((product) => product.sku?.trim())
+                .filter((sku) => Boolean(sku))),
+        ];
+        const ebayItemIds = [
+            ...new Set(products
+                .map((product) => product.ebayItemId?.trim())
+                .filter((id) => Boolean(id))),
+        ];
+        const rows = ids.length
+            ? await this.channelRepo.find({
+                where: [
+                    {
+                        organizationId: scope.organizationId,
+                        catalogProductId: (0, typeorm_2.In)(ids),
+                        vertical,
+                    },
+                    ...(vertical === 'automotive'
+                        ? [
+                            {
+                                organizationId: scope.organizationId,
+                                catalogProductId: (0, typeorm_2.In)(ids),
+                                vertical: (0, typeorm_2.IsNull)(),
+                            },
+                        ]
+                        : []),
+                ],
+                order: { updatedAt: 'DESC' },
+            })
+            : [];
+        const legacyRows = ids.length
+            ? await this.publishedListingRepo.find({
+                where: [
+                    {
+                        organizationId: scope.organizationId,
+                        catalogProductId: (0, typeorm_2.In)(ids),
+                    },
+                    ...(ebayItemIds.length
+                        ? [
+                            {
+                                organizationId: scope.organizationId,
+                                ebayItemId: (0, typeorm_2.In)(ebayItemIds),
+                            },
+                        ]
+                        : []),
+                ],
+                order: { updatedAt: 'DESC' },
+            })
+            : [];
+        const listingRows = skus.length
+            ? await this.listingRepo.find({
+                where: [
+                    {
+                        organizationId: scope.organizationId,
+                        customLabelSku: (0, typeorm_2.In)(skus),
+                        vertical,
+                    },
+                    ...(vertical === 'automotive'
+                        ? [
+                            {
+                                organizationId: scope.organizationId,
+                                customLabelSku: (0, typeorm_2.In)(skus),
+                                vertical: (0, typeorm_2.IsNull)(),
+                            },
+                        ]
+                        : []),
+                ],
+                order: { updatedAt: 'DESC' },
+            })
+            : [];
+        const skuToProductId = new Map();
+        const ebayItemToProductId = new Map();
+        for (const product of products) {
+            if (product.sku?.trim())
+                skuToProductId.set(product.sku.trim(), product.id);
+            if (product.ebayItemId?.trim())
+                ebayItemToProductId.set(product.ebayItemId.trim(), product.id);
+        }
+        const accountIds = [
+            ...new Set([
+                ...rows.map((row) => row.ebayAccountId),
+                ...legacyRows.map((row) => row.ebayAccountId),
+            ]),
+        ];
+        const accounts = accountIds.length
+            ? await this.accountRepo.find({
+                where: { organizationId: scope.organizationId, id: (0, typeorm_2.In)(accountIds) },
+                relations: ['primaryStore'],
+            })
+            : [];
+        const accountMap = new Map(accounts.map((account) => [account.id, account]));
+        const byKey = new Map();
+        const add = (productId, accountId, summary) => {
+            const key = `${productId}:${accountId}:${summary.marketplaceId}`;
+            const existing = byKey.get(key);
+            if (!existing ||
+                (!isLivePublicationStatus(existing.listingStatus) &&
+                    isLivePublicationStatus(summary.listingStatus)) ||
+                (!existing.listingUrl && summary.listingUrl)) {
+                byKey.set(key, summary);
+            }
+        };
+        const storeAllowed = (storeId) => !scope.accessibleStoreIds?.length ||
+            (Boolean(storeId) && scope.accessibleStoreIds.includes(storeId));
+        for (const row of rows) {
+            const account = accountMap.get(row.ebayAccountId);
+            if (!storeAllowed(account?.primaryStoreId))
+                continue;
+            add(row.catalogProductId, row.ebayAccountId, {
+                id: row.id,
+                storeName: account?.primaryStore?.storeName ??
+                    account?.accountDisplayName ??
+                    'eBay',
+                marketplaceId: row.marketplaceId,
+                listingStatus: row.listingStatus,
+                listingUrl: row.listingUrl ||
+                    (row.listingId ? `https://www.ebay.com/itm/${row.listingId}` : null),
+                offerId: row.offerId,
+                listingId: row.listingId,
+                lastErrorMessage: row.lastErrorMessage,
+                updatedAt: row.updatedAt,
+            });
+        }
+        for (const row of legacyRows) {
+            const productId = row.catalogProductId ||
+                (row.ebayItemId ? ebayItemToProductId.get(row.ebayItemId) : undefined);
+            if (!productId)
+                continue;
+            const account = accountMap.get(row.ebayAccountId);
+            if (!storeAllowed(account?.primaryStoreId ?? row.storeId))
+                continue;
+            add(productId, row.ebayAccountId, {
+                id: row.id,
+                storeName: account?.primaryStore?.storeName ??
+                    account?.accountDisplayName ??
+                    'eBay',
+                marketplaceId: row.marketplaceId,
+                listingStatus: row.listingStatus,
+                listingUrl: row.listingUrl ||
+                    (row.ebayItemId
+                        ? `https://www.ebay.com/itm/${row.ebayItemId}`
+                        : null),
+                offerId: row.offerId,
+                listingId: row.ebayItemId,
+                lastErrorMessage: null,
+                updatedAt: row.updatedAt,
+            });
+        }
+        for (const row of listingRows) {
+            const sku = row.customLabelSku?.trim();
+            const productId = sku ? skuToProductId.get(sku) : undefined;
+            const listingId = row.ebayListingId?.trim();
+            if (!productId || !listingId)
+                continue;
+            if (row.status === 'delisted' || row.status === 'archived')
+                continue;
+            add(productId, `listing:${row.id}`, {
+                id: row.id,
+                storeName: 'eBay',
+                marketplaceId: row.marketplace ?? 'EBAY_US',
+                listingStatus: row.status === 'published' || listingId ? 'published' : row.status,
+                listingUrl: `https://www.ebay.com/itm/${listingId}`,
+                offerId: null,
+                listingId,
+                lastErrorMessage: null,
+                updatedAt: row.updatedAt,
+            });
+        }
+        const output = new Map();
+        for (const [key, summary] of byKey) {
+            const productId = key.split(':', 1)[0];
+            const list = output.get(productId) ?? [];
+            list.push(summary);
+            output.set(productId, list);
+        }
+        return output;
+    }
+    accessibleChannelSql(scope) {
+        const sql = [
+            'join connected_ebay_accounts filteredAccount on filteredAccount.id = filteredChannel.ebay_account_id and filteredAccount.organization_id = filteredChannel.organization_id',
+            'join stores filteredStore on filteredStore.id = filteredAccount.primary_store_id',
+        ];
+        if (scope.accessibleStoreIds)
+            sql.push('and filteredStore.id in (:...catalogAccessibleStores)');
+        sql.push('and filteredChannel.organization_id = :organizationId', 'and filteredChannel.vertical = :vertical');
+        return sql;
+    }
+    async marketplaceFacets(base, scope, vertical) {
+        if (scope.accessibleStoreIds?.length === 0)
+            return [];
+        const qb = base
+            .clone()
+            .innerJoin(ebay_listing_channel_entity_js_1.EbayListingChannel, 'facetChannel', 'facetChannel.catalogProductId = p.id AND facetChannel.organizationId = :facetOrg AND facetChannel.vertical = :facetVertical')
+            .innerJoin(connected_ebay_account_entity_js_1.ConnectedEbayAccount, 'facetAccount', 'facetAccount.id = facetChannel.ebayAccountId AND facetAccount.organizationId = :facetOrg')
+            .select('facetChannel.marketplaceId', 'value')
+            .addSelect('COUNT(DISTINCT p.id)', 'count')
+            .groupBy('facetChannel.marketplaceId')
+            .orderBy('count', 'DESC')
+            .setParameters({
+            facetOrg: scope.organizationId,
+            facetVertical: vertical,
+        });
+        if (scope.accessibleStoreIds)
+            qb.andWhere('facetAccount.primaryStoreId IN (:...facetStores)', {
+                facetStores: scope.accessibleStoreIds,
+            });
+        const rows = await qb.getRawMany();
+        return rows.map((row) => ({
+            value: row.value,
+            label: row.value,
+            count: Number(row.count) || 0,
+        }));
+    }
+    async attributeFacets(base, vertical) {
+        const keys = ATTRIBUTE_KEYS[vertical]
+            .map((key) => `'${key.replace(/'/g, "''")}'`)
+            .join(', ');
+        const source = typeof base === 'function' ? base() : base.clone();
+        const [sql, params] = source
+            .select('p.verticalAttributes', 'vertical_attributes')
+            .getQueryAndParameters();
+        const rawRows = await this.productRepo.query(`select attrs.key as "key", values.value as "value", count(*)::int as "count" from (${sql}) filtered cross join lateral jsonb_each(coalesce(filtered.vertical_attributes, '{}'::jsonb)) attrs cross join lateral jsonb_array_elements_text(case when jsonb_typeof(attrs.value) = 'array' then attrs.value else jsonb_build_array(attrs.value #>> '{}') end) values where attrs.key in (${keys}) group by attrs.key, values.value order by attrs.key, count(*) desc`, params);
+        const rows = (Array.isArray(rawRows) ? rawRows : []);
+        const result = {};
+        for (const row of rows) {
+            (result[row.key] ??= []).push({
+                value: row.value,
+                label: row.value,
+                count: Number(row.count) || 0,
+            });
+        }
+        return result;
+    }
+    async countStockLevels(base) {
+        const source = () => (typeof base === 'function' ? base() : base.clone());
+        const rows = await Promise.all([
+            source().andWhere(`${SAFE_QTY} > 0`).getCount(),
+            source().andWhere(`${SAFE_QTY} > 0 AND ${SAFE_QTY} <= 2`).getCount(),
+            source().andWhere(`${SAFE_QTY} <= 0`).getCount(),
+        ]);
+        return { in_stock: rows[0], low_stock: rows[1], out_of_stock: rows[2] };
+    }
+    async countCatalogStatuses(base, vertical, scope) {
+        const source = () => (typeof base === 'function' ? base() : base.clone());
+        const publishedSql = this.publishedSql(scope);
+        const blockedSql = "(p.manual_review = true OR p.vertical_validation_status IN ('quarantined', 'blocked', 'rejected'))";
+        const notBlocked = 'NOT ' + blockedSql;
+        const [publishedCount, unpublishedCount, blockedCount, readyCount, missingCount] = await Promise.all([
+            source()
+                .andWhere(`(${publishedSql} AND ${notBlocked})`)
+                .setParameters(this.publishedParameters(scope, vertical))
+                .getCount(),
+            source()
+                .andWhere(`(NOT ${publishedSql} AND ${notBlocked})`)
+                .setParameters(this.publishedParameters(scope, vertical))
+                .getCount(),
+            source().andWhere(blockedSql).getCount(),
+            source()
+                .andWhere(`(NOT ${publishedSql} AND ${notBlocked})`)
+                .setParameters(this.publishedParameters(scope, vertical))
+                .andWhere('array_length(p.imageUrls, 1) > 0')
+                .getCount(),
+            source()
+                .andWhere(`(NOT ${publishedSql} AND ${notBlocked})`)
+                .setParameters(this.publishedParameters(scope, vertical))
+                .andWhere('array_length(p.imageUrls, 1) IS NULL')
+                .getCount(),
+        ]);
+        return {
+            published: publishedCount,
+            unpublished: unpublishedCount,
+            blocked: blockedCount,
+            ready_to_publish: readyCount,
+            need_images: missingCount,
+        };
+    }
+    publishedSql(scope) {
+        const storePredicate = scope.accessibleStoreIds?.length
+            ? 'and pubAccount.primary_store_id in (:...publishedStoreIds)'
+            : '';
+        const legacyStorePredicate = scope.accessibleStoreIds?.length
+            ? 'and legacy.store_id in (:...publishedStoreIds)'
+            : '';
+        return ("(p.vertical_validation_status = 'published' OR p.ebay_item_id IS NOT NULL OR exists (select 1 from ebay_listing_channels pub join connected_ebay_accounts pubAccount on pubAccount.id = pub.ebay_account_id and pubAccount.organization_id = pub.organization_id where pub.catalog_product_id = p.id and pub.organization_id = p.organization_id and (pub.vertical = :publishedVertical or (:includeLegacyNullVertical = true and pub.vertical is null)) and lower(pub.listing_status) in ('published', 'active', 'out_of_stock') " +
+            storePredicate +
+            ") OR exists (select 1 from ebay_published_listings legacy where (legacy.catalog_product_id = p.id or (p.ebay_item_id is not null and legacy.ebay_item_id = p.ebay_item_id)) and legacy.organization_id = p.organization_id and lower(legacy.listing_status) in ('active', 'out_of_stock', 'published') " +
+            legacyStorePredicate +
+            ") OR exists (select 1 from listing_records lr where lr.\"customLabelSku\" = p.sku and (lr.organization_id = p.organization_id or (:includeLegacyNullVertical = true and lr.organization_id is null)) and (lr.vertical = :publishedVertical or (:includeLegacyNullVertical = true and lr.vertical is null)) and lr.\"ebayListingId\" is not null and lr.status not in ('delisted', 'archived')))");
+    }
+    publishedParameters(scope, vertical) {
+        return {
+            publishedVertical: vertical,
+            includeLegacyNullVertical: vertical === 'automotive',
+            ...(scope.accessibleStoreIds?.length
+                ? { publishedStoreIds: scope.accessibleStoreIds }
+                : {}),
+        };
+    }
+    async assertTeamTarget(user, teamId, scope) {
+        if (!teamId)
+            return;
+        const team = await this.teamRepo.findOne({
+            where: { id: teamId, active: true },
+        });
+        if (!team)
+            throw new common_1.NotFoundException('Team not found');
+        if (!scope.manageAllTeams)
+            await this.teams.assertUserCanAccessTeam(user.id, teamId, false);
+    }
+    assertNotQuarantined(product) {
+        if (product.manualReview ||
+            product.verticalValidationStatus === 'quarantined')
+            throw new common_1.ForbiddenException('Quarantined products require the vertical incident workflow');
+    }
+    allowBusinessIndustrialOperatorBypass(vertical) {
+        return (vertical === 'business_industrial' &&
+            process.env.BUSINESS_INDUSTRIAL_ALLOW_UNAPPROVED_PUBLISH === 'true');
+    }
+    async bulkEach(ids, action) {
+        const results = [];
+        for (const id of [...new Set(ids)]) {
+            try {
+                results.push({ ...(await action(id)), success: true });
+            }
+            catch (error) {
+                results.push({
+                    id,
+                    success: false,
+                    error: error instanceof Error ? error.message : 'Operation failed',
+                });
+            }
+        }
+        return {
+            results,
+            succeeded: results.filter((result) => result.success).length,
+            failed: results.filter((result) => !result.success).length,
+        };
+    }
+    escapeLike(value) {
+        return value
+            .replace(/\\/g, '\\\\')
+            .replace(/%/g, '\\%')
+            .replace(/_/g, '\\_');
+    }
+    auditLog() {
+        return this.auditRepo;
+    }
+};
+exports.CatalogWorkspaceService = CatalogWorkspaceService;
+exports.CatalogWorkspaceService = CatalogWorkspaceService = __decorate([
+    (0, common_1.Injectable)(),
+    __param(0, (0, typeorm_1.InjectRepository)(catalog_product_entity_js_1.CatalogProduct)),
+    __param(1, (0, typeorm_1.InjectRepository)(ebay_listing_channel_entity_js_1.EbayListingChannel)),
+    __param(2, (0, typeorm_1.InjectRepository)(connected_ebay_account_entity_js_1.ConnectedEbayAccount)),
+    __param(3, (0, typeorm_1.InjectRepository)(team_entity_js_1.Team)),
+    __param(4, (0, typeorm_1.InjectRepository)(listing_action_log_entity_js_1.ListingActionLog)),
+    __param(5, (0, typeorm_1.InjectRepository)(fashion_review_entity_js_1.FashionReview)),
+    __param(6, (0, typeorm_1.InjectRepository)(business_industrial_review_entity_js_1.BusinessIndustrialReview)),
+    __param(13, (0, typeorm_1.InjectRepository)(ebay_published_listing_entity_js_1.EbayPublishedListing)),
+    __param(14, (0, typeorm_1.InjectRepository)(listing_record_entity_js_1.ListingRecord)),
+    __metadata("design:paramtypes", [typeorm_2.Repository,
+        typeorm_2.Repository,
+        typeorm_2.Repository,
+        typeorm_2.Repository,
+        typeorm_2.Repository,
+        typeorm_2.Repository,
+        typeorm_2.Repository,
+        user_organization_service_js_1.UserOrganizationService,
+        store_access_service_js_1.StoreAccessService,
+        teams_service_js_1.TeamsService,
+        rbac_service_js_1.RbacService,
+        fashion_listings_service_js_1.FashionListingsService,
+        business_industrial_service_js_1.BusinessIndustrialService,
+        typeorm_2.Repository,
+        typeorm_2.Repository])
+], CatalogWorkspaceService);
+//# sourceMappingURL=catalog-workspace.service.js.map

@@ -1,0 +1,203 @@
+import { DataSource } from 'typeorm';
+import { User } from '../auth/entities/user.entity.js';
+import { UserOrganizationService } from '../auth/user-organization.service.js';
+import { CatalogProduct } from '../catalog-import/entities/catalog-product.entity.js';
+import { StoreAccessService } from '../channels/store-access.service.js';
+import { EbayInventoryApiService } from '../channels/ebay/ebay-inventory-api.service.js';
+import { ConnectedEbayAccount } from '../integrations/ebay/entities/connected-ebay-account.entity.js';
+import { EbayListingChannel } from '../integrations/ebay/entities/ebay-listing-channel.entity.js';
+import { FashionReview } from './entities/fashion-review.entity.js';
+import { VerticalsService } from './verticals.service.js';
+import { CreateFashionDraftDto, FashionReviewDto, UpdateFashionDraftDto } from './fashion.dto.js';
+export declare class FashionListingsService {
+    private readonly db;
+    private readonly organizations;
+    private readonly stores;
+    private readonly verticals;
+    private readonly inventory;
+    constructor(db: DataSource, organizations: UserOrganizationService, stores: StoreAccessService, verticals: VerticalsService, inventory: EbayInventoryApiService);
+    detail(user: User, id: string, organizationId?: string): Promise<{
+        id: string;
+        sku: string | null;
+        title: string;
+        description: string | null;
+        brand: string | null;
+        conditionId: string | null;
+        price: number | null;
+        quantity: number | null;
+        imageUrls: string[];
+        categoryId: string | null;
+        categoryName: string | null;
+        vertical: "fashion" | "business_industrial" | "automotive" | null;
+        verticalAttributes: import("./vertical.types.js").VerticalAttributes;
+        verticalValidationStatus: string;
+        manualReview: boolean;
+        updatedAt: Date;
+    }>;
+    create(user: User, dto: CreateFashionDraftDto, organizationId?: string): Promise<{
+        id: string;
+        sku: string | null;
+        title: string;
+        description: string | null;
+        brand: string | null;
+        conditionId: string | null;
+        price: number | null;
+        quantity: number | null;
+        imageUrls: string[];
+        categoryId: string | null;
+        categoryName: string | null;
+        vertical: "fashion" | "business_industrial" | "automotive" | null;
+        verticalAttributes: import("./vertical.types.js").VerticalAttributes;
+        verticalValidationStatus: string;
+        manualReview: boolean;
+        updatedAt: Date;
+    }>;
+    update(user: User, id: string, dto: UpdateFashionDraftDto, organizationId?: string): Promise<{
+        id: string;
+        sku: string | null;
+        title: string;
+        description: string | null;
+        brand: string | null;
+        conditionId: string | null;
+        price: number | null;
+        quantity: number | null;
+        imageUrls: string[];
+        categoryId: string | null;
+        categoryName: string | null;
+        vertical: "fashion" | "business_industrial" | "automotive" | null;
+        verticalAttributes: import("./vertical.types.js").VerticalAttributes;
+        verticalValidationStatus: string;
+        manualReview: boolean;
+        updatedAt: Date;
+    }>;
+    review(user: User, id: string, dto: FashionReviewDto, organizationId?: string): Promise<{
+        listing: {
+            id: string;
+            sku: string | null;
+            title: string;
+            description: string | null;
+            brand: string | null;
+            conditionId: string | null;
+            price: number | null;
+            quantity: number | null;
+            imageUrls: string[];
+            categoryId: string | null;
+            categoryName: string | null;
+            vertical: "fashion" | "business_industrial" | "automotive" | null;
+            verticalAttributes: import("./vertical.types.js").VerticalAttributes;
+            verticalValidationStatus: string;
+            manualReview: boolean;
+            updatedAt: Date;
+        };
+        review: {
+            id: string;
+            status: import("./entities/fashion-review.entity.js").FashionReviewStatus;
+            authenticityConfirmed: boolean;
+            reviewedByUserId: string | null;
+            reviewedAt: Date | null;
+            notes: string | null;
+            evidenceCount: number;
+        };
+    }>;
+    getReview(user: User, id: string, organizationId?: string): Promise<FashionReview | {
+        catalogProductId: string;
+        organizationId: string;
+        status: "pending";
+        authenticityConfirmed: false;
+        evidenceKeys: never[];
+        notes: null;
+        reviewedByUserId: null;
+        reviewedAt: null;
+    }>;
+    quarantine(user: User, id: string, organizationId?: string): Promise<{
+        id: string;
+        status: string;
+        remoteTakedown: string;
+        targets: ({
+            id: string;
+            status: string;
+            remoteRemovalVerified: boolean;
+            message?: undefined;
+        } | {
+            id: string;
+            status: string;
+            remoteRemovalVerified: boolean;
+            message: string;
+        })[];
+    }>;
+    incidents(user: User, organizationId?: string): Promise<{
+        targets: {
+            id: string;
+            ebayAccountId: string;
+            marketplaceId: string;
+            status: import("../integrations/ebay/entities/ebay-listing-channel.entity.js").EbayListingChannelStatus;
+            lastErrorMessage: string | null;
+            remoteRemovalVerified: boolean;
+        }[];
+        id: string;
+        sku: string | null;
+        title: string;
+        description: string | null;
+        brand: string | null;
+        conditionId: string | null;
+        price: number | null;
+        quantity: number | null;
+        imageUrls: string[];
+        categoryId: string | null;
+        categoryName: string | null;
+        vertical: "fashion" | "business_industrial" | "automotive" | null;
+        verticalAttributes: import("./vertical.types.js").VerticalAttributes;
+        verticalValidationStatus: string;
+        manualReview: boolean;
+        updatedAt: Date;
+    }[]>;
+    end(user: User, channelId: string, organizationId?: string): Promise<{
+        id: string;
+        status: string;
+        remoteRemovalVerified: boolean;
+        message?: undefined;
+    } | {
+        id: string;
+        status: string;
+        remoteRemovalVerified: boolean;
+        message: string;
+    }>;
+    account(id: string, organizationId: string): Promise<ConnectedEbayAccount>;
+    containIfBlocked(channel: EbayListingChannel, userId: string | null): Promise<{
+        id: string;
+        status: string;
+        remoteRemovalVerified: boolean;
+        message?: undefined;
+    } | {
+        id: string;
+        status: string;
+        remoteRemovalVerified: boolean;
+        message: string;
+    } | null>;
+    private withdraw;
+    assertApproved(id: string, organizationId: string): Promise<CatalogProduct>;
+    private product;
+    private assertMutable;
+    private attributes;
+    private saveReview;
+    private audit;
+    publicProduct(product: CatalogProduct): {
+        id: string;
+        sku: string | null;
+        title: string;
+        description: string | null;
+        brand: string | null;
+        conditionId: string | null;
+        price: number | null;
+        quantity: number | null;
+        imageUrls: string[];
+        categoryId: string | null;
+        categoryName: string | null;
+        vertical: "fashion" | "business_industrial" | "automotive" | null;
+        verticalAttributes: import("./vertical.types.js").VerticalAttributes;
+        verticalValidationStatus: string;
+        manualReview: boolean;
+        updatedAt: Date;
+    };
+    private reviewSummary;
+}

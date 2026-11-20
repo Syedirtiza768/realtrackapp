@@ -1,0 +1,388 @@
+export interface EbayInventoryItem {
+    sku?: string;
+    locale?: string;
+    product: {
+        title: string;
+        description?: string;
+        imageUrls?: string[];
+        aspects?: Record<string, string[]>;
+        brand?: string;
+        mpn?: string;
+        upc?: string[];
+        ean?: string[];
+        epid?: string;
+    };
+    condition: EbayConditionEnum;
+    conditionDescription?: string;
+    availability: {
+        shipToLocationAvailability: {
+            quantity: number;
+        };
+    };
+    packageWeightAndSize?: {
+        weight?: {
+            value: number;
+            unit: 'POUND' | 'KILOGRAM' | 'OUNCE' | 'GRAM';
+        };
+        dimensions?: {
+            length: {
+                value: number;
+                unit: 'INCH' | 'CENTIMETER';
+            };
+            width: {
+                value: number;
+                unit: 'INCH' | 'CENTIMETER';
+            };
+            height: {
+                value: number;
+                unit: 'INCH' | 'CENTIMETER';
+            };
+        };
+    };
+}
+export interface EbayInventoryItemGroup {
+    inventoryItemGroupKey?: string;
+    variantSKUs: string[];
+    title: string;
+    description: string;
+    imageUrls?: string[];
+    variesBy: {
+        specifications: Array<{
+            name: string;
+            values: string[];
+        }>;
+        aspectsImageVariesBy?: string;
+    };
+}
+export type EbayConditionEnum = 'NEW' | 'LIKE_NEW' | 'NEW_OTHER' | 'NEW_WITH_DEFECTS' | 'MANUFACTURER_REFURBISHED' | 'CERTIFIED_REFURBISHED' | 'EXCELLENT_REFURBISHED' | 'VERY_GOOD_REFURBISHED' | 'GOOD_REFURBISHED' | 'SELLER_REFURBISHED' | 'USED_EXCELLENT' | 'USED_VERY_GOOD' | 'USED_GOOD' | 'USED_ACCEPTABLE' | 'FOR_PARTS_OR_NOT_WORKING';
+export interface EbayInventoryItemPage {
+    href?: string;
+    limit: number;
+    next?: string;
+    offset: number;
+    prev?: string;
+    size: number;
+    total: number;
+    inventoryItems: EbayInventoryItem[];
+}
+export interface EbayOffer {
+    offerId?: string;
+    sku: string;
+    marketplaceId: string;
+    listingId?: string;
+    listing?: {
+        listingId?: string;
+        listingStatus?: string;
+    };
+    status?: string;
+    format: 'FIXED_PRICE' | 'AUCTION';
+    listingDescription?: string;
+    availableQuantity?: number;
+    categoryId: string;
+    merchantLocationKey?: string;
+    pricingSummary: {
+        price: {
+            value: string;
+            currency: string;
+        };
+        minimumAdvertisedPrice?: {
+            value: string;
+            currency: string;
+        };
+    };
+    listingPolicies?: {
+        fulfillmentPolicyId?: string;
+        paymentPolicyId?: string;
+        returnPolicyId?: string;
+    };
+    tax?: {
+        applyTax: boolean;
+    };
+    listingDuration?: string;
+    includeCatalogProductDetails?: boolean;
+    compatibility?: EbayCompatibilityPayload;
+}
+export interface EbayCompatibilityPayload {
+    compatibleProducts: EbayCompatibleProduct[];
+}
+export interface EbayCompatibleProduct {
+    compatibilityProperties: Array<{
+        name: string;
+        value: string;
+    }>;
+    notes?: string;
+}
+export interface EbayOfferResponse {
+    offerId: string;
+    sku: string;
+    marketplaceId: string;
+    format: string;
+    listingId?: string;
+}
+export interface EbayPublishResponse {
+    listingId: string;
+    warnings?: EbayError[];
+}
+export interface EbayPriceQuantityUpdate {
+    offers: Array<{
+        offerId: string;
+        availableQuantity?: number;
+        price?: {
+            value: string;
+            currency: string;
+        };
+    }>;
+}
+export interface EbayBulkResponse {
+    responses: Array<{
+        statusCode: number;
+        offerId?: string;
+        sku?: string;
+        listingId?: string;
+        errors?: EbayError[];
+        warnings?: EbayError[];
+    }>;
+}
+export interface EbayLocation {
+    merchantLocationKey: string;
+    location: {
+        address: {
+            addressLine1?: string;
+            city?: string;
+            stateOrProvince?: string;
+            postalCode?: string;
+            country: string;
+        };
+    };
+    locationTypes: string[];
+    name?: string;
+    merchantLocationStatus: 'ENABLED' | 'DISABLED';
+}
+export interface EbayCategoryTree {
+    categoryTreeId: string;
+    categoryTreeVersion: string;
+    rootCategoryNode: EbayCategoryNode;
+}
+export interface EbayCategoryNode {
+    category: {
+        categoryId: string;
+        categoryName: string;
+    };
+    categoryTreeNodeLevel: number;
+    leafCategoryTreeNode: boolean;
+    childCategoryTreeNodes?: EbayCategoryNode[];
+}
+export interface EbayCategorySubtree {
+    categoryId: string;
+    categoryName: string;
+    categorySubtreeNode: EbayCategoryNode;
+}
+export interface EbayCategorySuggestion {
+    category: {
+        categoryId: string;
+        categoryName: string;
+    };
+    categoryTreeNodeAncestors: Array<{
+        categoryId: string;
+        categoryName: string;
+    }>;
+    categoryTreeNodeLevel: number;
+    relevancy: string;
+}
+export interface EbayAspect {
+    localizedAspectName: string;
+    aspectConstraint: {
+        aspectDataType: string;
+        aspectMode: 'FREE_TEXT' | 'SELECTION_ONLY';
+        aspectRequired: boolean;
+        aspectUsage: 'RECOMMENDED' | 'OPTIONAL';
+    };
+    aspectValues?: Array<{
+        localizedValue: string;
+        valueConstraints?: Array<{
+            applicableForLocalizedAspectName: string;
+            applicableForLocalizedAspectValues: string[];
+        }>;
+    }>;
+}
+export interface EbayCompatibilityProperty {
+    propertyName: string;
+    localizedPropertyName: string;
+}
+export interface EbayCompatibilityValue {
+    value: string;
+    displayName?: string;
+}
+export interface EbayOrderPage {
+    href?: string;
+    limit: number;
+    next?: string;
+    offset: number;
+    prev?: string;
+    total: number;
+    orders: EbayOrder[];
+}
+export interface EbayOrder {
+    orderId: string;
+    legacyOrderId?: string;
+    creationDate: string;
+    lastModifiedDate: string;
+    orderFulfillmentStatus: string;
+    orderPaymentStatus: string;
+    buyer: {
+        username: string;
+    };
+    pricingSummary: {
+        total: {
+            value: string;
+            currency: string;
+        };
+        subtotal?: {
+            value: string;
+            currency: string;
+        };
+        deliveryCost?: {
+            value: string;
+            currency: string;
+        };
+    };
+    lineItems: EbayLineItem[];
+    fulfillmentStartInstructions?: Array<{
+        shippingStep?: {
+            shipTo?: Record<string, unknown>;
+            shippingCarrierCode?: string;
+            shippingServiceCode?: string;
+        };
+    }>;
+}
+export interface EbayLineItem {
+    lineItemId: string;
+    legacyItemId?: string;
+    sku?: string;
+    title: string;
+    quantity: number;
+    lineItemCost: {
+        value: string;
+        currency: string;
+    };
+    deliveryCost?: {
+        value: string;
+        currency: string;
+    };
+}
+export interface EbayFulfillment {
+    fulfillmentId: string;
+    shipmentTrackingNumber: string;
+    shippingCarrierCode: string;
+    shippedDate: string;
+    lineItems: Array<{
+        lineItemId: string;
+        quantity: number;
+    }>;
+}
+export interface EbayShippingFulfillmentRequest {
+    lineItems: Array<{
+        lineItemId: string;
+        quantity: number;
+    }>;
+    shippingCarrierCode: string;
+    trackingNumber: string;
+}
+export interface EbaySearchResult {
+    href?: string;
+    total: number;
+    next?: string;
+    offset: number;
+    limit: number;
+    itemSummaries?: EbayItemSummary[];
+}
+export interface EbayItemSummary {
+    itemId: string;
+    title: string;
+    price: {
+        value: string;
+        currency: string;
+    };
+    condition: string;
+    conditionId: string;
+    itemWebUrl: string;
+    seller: {
+        username: string;
+        feedbackPercentage: string;
+        feedbackScore: number;
+    };
+    shippingOptions?: Array<{
+        shippingCost?: {
+            value: string;
+            currency: string;
+        };
+        type: string;
+    }>;
+    image?: {
+        imageUrl: string;
+    };
+    categories?: Array<{
+        categoryId: string;
+        categoryName: string;
+    }>;
+}
+export interface EbayItem extends EbayItemSummary {
+    description: string;
+    shortDescription?: string;
+    brand?: string;
+    mpn?: string;
+    gtin?: string;
+    epid?: string;
+    localizedAspects?: Array<{
+        name: string;
+        value: string;
+    }>;
+    additionalImages?: Array<{
+        imageUrl: string;
+    }>;
+    compatibleProducts?: EbayCompatibleProduct[];
+    quantityLimitPerBuyer?: number;
+    estimatedAvailabilities?: Array<{
+        estimatedAvailableQuantity: number;
+        estimatedSoldQuantity: number;
+    }>;
+}
+export interface EbayCatalogLookupResult {
+    found: boolean;
+    items: Array<{
+        itemId: string;
+        title: string;
+        itemWebUrl?: string | null;
+        brand: string | null;
+        mpn: string | null;
+        epid: string | null;
+        categoryId: string | null;
+        categoryName: string | null;
+        aspects: Record<string, string[]>;
+        fitmentHints: Array<{
+            year?: string;
+            make?: string;
+            model?: string;
+        }>;
+    }>;
+}
+export interface EbayError {
+    errorId: number;
+    domain: string;
+    subdomain?: string;
+    category: string;
+    message: string;
+    longMessage?: string;
+    parameters?: Array<{
+        name: string;
+        value: string;
+    }>;
+}
+export interface EbayApiConfig {
+    clientId: string;
+    clientSecret: string;
+    redirectUri: string;
+    sandbox: boolean;
+    baseUrl: string;
+    authUrl: string;
+}

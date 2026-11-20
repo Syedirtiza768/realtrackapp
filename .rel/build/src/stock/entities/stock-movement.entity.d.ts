@@ -1,0 +1,72 @@
+export type StockMovementType = 'opening_balance' | 'receipt' | 'putaway' | 'transfer_out' | 'transfer_in' | 'adjustment' | 'count_variance' | 'reserve' | 'release' | 'pick' | 'ship' | 'return_receipt' | 'damage' | 'write_off' | 'po_ordered' | 'po_cancelled' | 'dropship';
+export declare class StockMovement {
+    id: string;
+    organizationId: string;
+    inventoryItemId: string;
+    warehouseId: string;
+    locationId: string | null;
+    unitId: string | null;
+    movementType: StockMovementType;
+    qtyOnHand: number;
+    qtyReserved: number;
+    qtyDamaged: number;
+    qtyInbound: number;
+    onHandAfter: number;
+    reservedAfter: number;
+    unitCost: string | null;
+    reasonCode: string | null;
+    note: string | null;
+    documentId: string | null;
+    sourceChannel: string | null;
+    storeId: string | null;
+    orderId: string | null;
+    orderItemId: string | null;
+    operationKey: string | null;
+    idempotencyKey: string | null;
+    actorUserId: string | null;
+    createdAt: Date;
+}
+export type StockReservationStatus = 'active' | 'picked' | 'shipped' | 'released';
+export declare class StockReservation {
+    id: string;
+    organizationId: string;
+    inventoryItemId: string;
+    warehouseId: string;
+    locationId: string | null;
+    unitId: string | null;
+    orderId: string | null;
+    orderItemId: string | null;
+    storeId: string | null;
+    quantity: number;
+    status: StockReservationStatus;
+    expiresAt: Date | null;
+    createdAt: Date;
+    updatedAt: Date;
+}
+export type ProcurementStatus = 'open' | 'ordered' | 'received' | 'dropshipped' | 'fulfilled' | 'cancelled';
+export type ProcurementReason = 'order' | 'reorder' | 'manual';
+export declare class ProcurementRequest {
+    id: string;
+    organizationId: string;
+    inventoryItemId: string;
+    quantity: number;
+    receivedQty: number;
+    status: ProcurementStatus;
+    reason: ProcurementReason;
+    fulfillmentMode: 'ship_to_warehouse' | 'dropship';
+    supplierId: string | null;
+    sourceId: string | null;
+    warehouseId: string | null;
+    purchaseOrderId: string | null;
+    purchaseOrderLineId: string | null;
+    orderId: string | null;
+    orderItemId: string | null;
+    storeId: string | null;
+    estimatedUnitCost: string | null;
+    neededBy: Date | null;
+    supplierTracking: string | null;
+    note: string | null;
+    createdBy: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+}

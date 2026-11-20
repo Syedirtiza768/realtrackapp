@@ -1,0 +1,847 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.FASHION_ATTRIBUTE_FIELDS = exports.FASHION_FIELD_GROUPS = exports.FASHION_META_KEYS = exports.FASHION_CATEGORY_FAMILIES = exports.FASHION_VERTICAL = void 0;
+exports.isFashionCategoryFamily = isFashionCategoryFamily;
+exports.normalizeFashionCategoryFamily = normalizeFashionCategoryFamily;
+exports.normalizeFashionDepartment = normalizeFashionDepartment;
+exports.fashionFieldsForFamily = fashionFieldsForFamily;
+exports.isFashionMetaKey = isFashionMetaKey;
+exports.compatibleFashionAttributes = compatibleFashionAttributes;
+exports.validateFashionAttributes = validateFashionAttributes;
+exports.fashionImportAttributeKeys = fashionImportAttributeKeys;
+exports.mergeFashionSuggestions = mergeFashionSuggestions;
+exports.buildFashionListingContent = buildFashionListingContent;
+exports.suggestFashionSku = suggestFashionSku;
+exports.fashionAttributeKeyForAspect = fashionAttributeKeyForAspect;
+exports.fashionAspectsFromAttributes = fashionAspectsFromAttributes;
+exports.applyFashionAnalysisMeta = applyFashionAnalysisMeta;
+const vertical_config_js_1 = require("./vertical.config.js");
+const ebay_listing_text_util_js_1 = require("../channels/ebay/ebay-listing-text.util.js");
+const fashion_measurements_js_1 = require("./fashion-measurements.js");
+exports.FASHION_VERTICAL = 'fashion';
+exports.FASHION_CATEGORY_FAMILIES = [
+    { id: 'clothing', label: 'Clothing' },
+    { id: 'footwear', label: 'Footwear' },
+    { id: 'accessories', label: 'Accessories' },
+];
+exports.FASHION_META_KEYS = [
+    '_suggestedKeys',
+    '_confirmedKeys',
+    '_conflictKeys',
+    '_conflictNotes',
+    '_warnings',
+    '_multipleItems',
+    '_lastAnalyzedAt',
+    '_analysisStatus',
+    '_titleConfirmed',
+    '_descriptionConfirmed',
+    '_intakeSource',
+    '_intakeBatch',
+    '_warehouseCode',
+    '_warehouseName',
+    '_intakeAccountId',
+    '_intakeMarketplaceId',
+    '_intakeCreatedBy',
+    '_captureId',
+    '_photoRoles',
+    '_sizeChartImageUrl',
+    '_analysisQueuedAt',
+];
+const AUTOMOTIVE_KEYS = new Set([
+    'fitment',
+    'vin',
+    'oemPartNumber',
+    'vehicleMake',
+    'vehicleModel',
+    'vehicleYear',
+    'engine',
+    'compatibility',
+    'ymm',
+    'ymmt',
+    'make',
+    'modelYear',
+    'placement',
+]);
+const INDUSTRIAL_KEYS = new Set([
+    'voltage',
+    'power',
+    'capacity',
+    'testingStatus',
+    'includedAccessories',
+    'mpn',
+    'manufacturer',
+    'inputVoltage',
+    'ratedVoltage',
+    'enclosureRating',
+]);
+const MEASUREMENT_VALUE_FIELDS = fashion_measurements_js_1.FASHION_MEASUREMENT_VALUE_KEYS.map((key) => ({
+    key,
+    label: fashion_measurements_js_1.FASHION_MEASUREMENT_TEMPLATES.flatMap((template) => template.points).find((point) => point.key === key)?.label ?? key,
+    input: 'text',
+    families: (0, fashion_measurements_js_1.fashionMeasurementKeyFamilies)(key),
+}));
+exports.FASHION_FIELD_GROUPS = [
+    {
+        id: 'general',
+        label: 'General',
+        fields: [
+            {
+                key: 'categoryFamily',
+                label: 'Fashion category',
+                input: 'text',
+                families: ['clothing', 'footwear', 'accessories'],
+            },
+            {
+                key: 'itemType',
+                label: 'Item type',
+                input: 'text',
+                families: ['clothing', 'footwear', 'accessories'],
+            },
+            {
+                key: 'productType',
+                label: 'Product type',
+                input: 'text',
+                families: ['clothing', 'footwear', 'accessories'],
+            },
+            {
+                key: 'department',
+                label: 'Department',
+                input: 'text',
+                families: ['clothing', 'footwear', 'accessories'],
+                help: 'Intended audience printed or clearly labeled, such as Women, Men, or Unisex.',
+            },
+            {
+                key: 'style',
+                label: 'Style',
+                input: 'text',
+                families: ['clothing', 'footwear', 'accessories'],
+            },
+        ],
+    },
+    {
+        id: 'size',
+        label: 'Size',
+        fields: [
+            {
+                key: 'size',
+                label: 'Label size',
+                input: 'text',
+                families: ['clothing', 'footwear'],
+                help: 'Size as printed on the label. Keep this separate from measured dimensions.',
+            },
+            {
+                key: 'sizeSystem',
+                label: 'Sizing system',
+                input: 'text',
+                families: ['clothing', 'footwear'],
+            },
+            {
+                key: 'sizeType',
+                label: 'Size type',
+                input: 'text',
+                families: ['clothing'],
+            },
+        ],
+    },
+    {
+        id: 'appearance',
+        label: 'Appearance',
+        fields: [
+            {
+                key: 'color',
+                label: 'Primary color',
+                input: 'text',
+                families: ['clothing', 'footwear', 'accessories'],
+            },
+            {
+                key: 'secondaryColor',
+                label: 'Secondary color',
+                input: 'text',
+                families: ['clothing', 'footwear', 'accessories'],
+            },
+            {
+                key: 'pattern',
+                label: 'Pattern',
+                input: 'text',
+                families: ['clothing', 'footwear', 'accessories'],
+            },
+        ],
+    },
+    {
+        id: 'fabric',
+        label: 'Fabric',
+        fields: [
+            {
+                key: 'material',
+                label: 'Material',
+                input: 'text',
+                families: ['clothing', 'footwear', 'accessories'],
+            },
+            {
+                key: 'composition',
+                label: 'Composition',
+                input: 'text',
+                families: ['clothing', 'footwear', 'accessories'],
+                help: 'Prefer readable care-label composition. Do not guess percentages.',
+            },
+            {
+                key: 'fabricType',
+                label: 'Fabric type',
+                input: 'text',
+                families: ['clothing'],
+            },
+        ],
+    },
+    {
+        id: 'construction',
+        label: 'Construction',
+        fields: [
+            {
+                key: 'sleeveLength',
+                label: 'Sleeve length',
+                input: 'text',
+                families: ['clothing'],
+            },
+            {
+                key: 'neckline',
+                label: 'Neckline',
+                input: 'text',
+                families: ['clothing'],
+            },
+            {
+                key: 'closure',
+                label: 'Closure',
+                input: 'text',
+                families: ['clothing', 'footwear', 'accessories'],
+            },
+            {
+                key: 'length',
+                label: 'Garment length',
+                input: 'text',
+                families: ['clothing'],
+            },
+            {
+                key: 'fit',
+                label: 'Fit',
+                input: 'text',
+                families: ['clothing'],
+            },
+        ],
+    },
+    {
+        id: 'details',
+        label: 'Listing details',
+        fields: [
+            {
+                key: 'countryOfManufacture',
+                label: 'Country of manufacture',
+                input: 'text',
+                families: ['clothing', 'footwear', 'accessories'],
+                help: 'Only from a "Made in" label.',
+            },
+            {
+                key: 'features',
+                label: 'Features',
+                input: 'text',
+                families: ['clothing', 'footwear', 'accessories'],
+                help: 'Visible features such as Pockets, Logo, Hooded.',
+            },
+            {
+                key: 'season',
+                label: 'Season',
+                input: 'text',
+                families: ['clothing', 'footwear', 'accessories'],
+            },
+            {
+                key: 'occasion',
+                label: 'Occasion',
+                input: 'text',
+                families: ['clothing', 'footwear', 'accessories'],
+            },
+            {
+                key: 'theme',
+                label: 'Theme',
+                input: 'text',
+                families: ['clothing', 'footwear', 'accessories'],
+            },
+            {
+                key: 'vintage',
+                label: 'Vintage',
+                input: 'text',
+                families: ['clothing', 'footwear', 'accessories'],
+                help: 'Yes or No.',
+            },
+            {
+                key: 'garmentCare',
+                label: 'Garment care',
+                input: 'text',
+                families: ['clothing'],
+                help: 'Only from a readable care label.',
+            },
+        ],
+    },
+    {
+        id: 'measurements',
+        label: 'Measurements',
+        fields: [
+            {
+                key: 'sizeChartTemplate',
+                label: 'Measurement chart',
+                input: 'text',
+                families: ['clothing', 'footwear', 'accessories'],
+            },
+            ...MEASUREMENT_VALUE_FIELDS,
+            {
+                key: 'measurementsUnit',
+                label: 'Measurement unit',
+                input: 'text',
+                families: ['clothing', 'footwear', 'accessories'],
+                help: 'Set the unit used by the measurement chart.',
+            },
+            {
+                key: 'measurements',
+                label: 'Original measurement notes',
+                input: 'textarea',
+                families: ['clothing', 'footwear', 'accessories'],
+                help: 'Preserve anything the chart does not cover.',
+            },
+        ],
+    },
+    {
+        id: 'condition',
+        label: 'Condition details',
+        fields: [
+            {
+                key: 'wear',
+                label: 'Wear',
+                input: 'text',
+                families: ['clothing', 'footwear', 'accessories'],
+            },
+            {
+                key: 'stains',
+                label: 'Stains',
+                input: 'text',
+                families: ['clothing', 'footwear', 'accessories'],
+            },
+            {
+                key: 'holes',
+                label: 'Holes',
+                input: 'text',
+                families: ['clothing', 'footwear', 'accessories'],
+            },
+            {
+                key: 'pilling',
+                label: 'Pilling',
+                input: 'text',
+                families: ['clothing'],
+            },
+            {
+                key: 'fading',
+                label: 'Fading',
+                input: 'text',
+                families: ['clothing', 'footwear'],
+            },
+            {
+                key: 'repairs',
+                label: 'Repairs',
+                input: 'text',
+                families: ['clothing', 'footwear', 'accessories'],
+            },
+            {
+                key: 'missingComponents',
+                label: 'Missing components',
+                input: 'text',
+                families: ['clothing', 'footwear', 'accessories'],
+            },
+            {
+                key: 'otherDefects',
+                label: 'Other defects',
+                input: 'textarea',
+                families: ['clothing', 'footwear', 'accessories'],
+            },
+            {
+                key: 'conditionDetails',
+                label: 'Condition summary',
+                input: 'textarea',
+                families: ['clothing', 'footwear', 'accessories'],
+            },
+        ],
+    },
+    {
+        id: 'footwear',
+        label: 'Footwear',
+        fields: [
+            {
+                key: 'shoeSize',
+                label: 'Shoe size',
+                input: 'text',
+                families: ['footwear'],
+            },
+            {
+                key: 'shoeSizeSystem',
+                label: 'Shoe sizing system',
+                input: 'text',
+                families: ['footwear'],
+            },
+            {
+                key: 'width',
+                label: 'Width',
+                input: 'text',
+                families: ['footwear'],
+            },
+            {
+                key: 'footwearType',
+                label: 'Footwear type',
+                input: 'text',
+                families: ['footwear'],
+            },
+        ],
+    },
+    {
+        id: 'accessories',
+        label: 'Accessories',
+        fields: [
+            {
+                key: 'accessoryType',
+                label: 'Accessory type',
+                input: 'text',
+                families: ['accessories'],
+            },
+            {
+                key: 'accessoryDimensions',
+                label: 'Accessory dimensions',
+                input: 'text',
+                families: ['accessories'],
+            },
+            {
+                key: 'accessoryMaterial',
+                label: 'Accessory material',
+                input: 'text',
+                families: ['accessories'],
+            },
+        ],
+    },
+];
+exports.FASHION_ATTRIBUTE_FIELDS = exports.FASHION_FIELD_GROUPS.flatMap((group) => group.fields);
+const MEASUREMENT_VALUE_KEYS = fashion_measurements_js_1.FASHION_MEASUREMENT_VALUE_KEYS;
+const MEASUREMENT_UNITS = new Set(['cm', 'in', 'mm', 'inch', 'inches']);
+function isFashionCategoryFamily(value) {
+    return exports.FASHION_CATEGORY_FAMILIES.some((family) => family.id === value);
+}
+function normalizeFashionCategoryFamily(value) {
+    if (typeof value !== 'string')
+        return 'clothing';
+    const normalized = value.trim().toLowerCase().replace(/[\s-]+/g, '_');
+    if (normalized === 'shoes' || normalized === 'shoe' || normalized === 'footwear')
+        return 'footwear';
+    if (normalized === 'accessory' ||
+        normalized === 'accessories' ||
+        normalized === 'bag' ||
+        normalized === 'jewelry')
+        return 'accessories';
+    if (isFashionCategoryFamily(normalized))
+        return normalized;
+    return 'clothing';
+}
+const FASHION_DEPARTMENTS = [
+    [/^(men|mens|male|man)$/, 'Men'],
+    [/^(women|womens|female|woman|ladies|lady)$/, 'Women'],
+    [/^unisex( adults?)?$/, 'Unisex Adults'],
+    [/^(boys|boy)$/, 'Boys'],
+    [/^(girls|girl)$/, 'Girls'],
+    [/^unisex (kids|children)$/, 'Unisex Kids'],
+    [/^(baby|babies|infant|infants)$/, 'Baby'],
+];
+function normalizeFashionDepartment(value) {
+    if (typeof value !== 'string' || !value.trim())
+        return null;
+    const key = value
+        .trim()
+        .toLowerCase()
+        .replace(/['’]/g, '')
+        .replace(/\s+/g, ' ');
+    const match = FASHION_DEPARTMENTS.find(([re]) => re.test(key));
+    return match ? match[1] : value.trim();
+}
+function fashionFieldsForFamily(family) {
+    return exports.FASHION_ATTRIBUTE_FIELDS.filter((field) => field.families.includes(family));
+}
+function isFashionMetaKey(key) {
+    return key.startsWith('_');
+}
+function textValue(value) {
+    if (Array.isArray(value))
+        return value.map((item) => item.trim()).filter(Boolean).join(' | ');
+    if (typeof value === 'string')
+        return value.trim();
+    if (typeof value === 'number' || typeof value === 'boolean')
+        return String(value);
+    return '';
+}
+function hasValue(value) {
+    return textValue(value).length > 0;
+}
+function compatibleFashionAttributes(family, attributes) {
+    const allowed = new Set(fashionFieldsForFamily(family).map((field) => field.key));
+    const next = {};
+    for (const [key, value] of Object.entries(attributes)) {
+        if (isFashionMetaKey(key) ||
+            allowed.has(key) ||
+            key === 'brand' ||
+            key === 'customAspectNames' ||
+            key === 'customAspectValues') {
+            next[key] = value;
+        }
+    }
+    next.categoryFamily = family;
+    return next;
+}
+function validateFashionAttributes(value) {
+    const base = (0, vertical_config_js_1.validateVerticalAttributes)('fashion', value);
+    const errors = [...base.errors];
+    const warnings = [];
+    const attributes = { ...base.attributes };
+    for (const key of Object.keys(attributes)) {
+        if (AUTOMOTIVE_KEYS.has(key) || INDUSTRIAL_KEYS.has(key)) {
+            errors.push(`${key} is not a Fashion attribute. Use garment, footwear, or accessory details instead of automotive or industrial specifications.`);
+            delete attributes[key];
+        }
+    }
+    const family = normalizeFashionCategoryFamily(attributes.categoryFamily);
+    attributes.categoryFamily = family;
+    const compatible = compatibleFashionAttributes(family, attributes);
+    for (const key of Object.keys(attributes)) {
+        if (!(key in compatible) && !isFashionMetaKey(key)) {
+            warnings.push(`${key} does not apply to the ${family} category and was not stored as a valid Fashion attribute`);
+        }
+    }
+    const cleaned = compatible;
+    const unit = textValue(cleaned.measurementsUnit).toLowerCase();
+    const hasMeasurement = MEASUREMENT_VALUE_KEYS.some((key) => hasValue(cleaned[key]));
+    if (hasMeasurement && !unit) {
+        warnings.push('measurementsUnit is required when a named measurement is present. Named measurements were kept for review and are not treated as complete.');
+    }
+    if (unit && !MEASUREMENT_UNITS.has(unit) && hasMeasurement) {
+        warnings.push('Use an explicit measurement unit such as cm or in. The original notes field preserves un-normalized wording.');
+    }
+    if (hasMeasurement && unit && (0, fashion_measurements_js_1.normalizeFashionMeasurementUnit)(unit))
+        cleaned.measurementsUnit = (0, fashion_measurements_js_1.normalizeFashionMeasurementUnit)(unit);
+    for (const key of MEASUREMENT_VALUE_KEYS) {
+        if (hasValue(cleaned[key]) && (0, fashion_measurements_js_1.parseFashionMeasurement)(cleaned[key]) === null)
+            warnings.push(key + ' should be a positive number measured with a tape or ruler (for example 19 or 19.5).');
+    }
+    if (hasValue(cleaned.sizeChartTemplate)) {
+        const template = (0, fashion_measurements_js_1.fashionMeasurementTemplate)(textValue(cleaned.sizeChartTemplate));
+        if (!template) {
+            warnings.push('Unknown measurement chart "' + textValue(cleaned.sizeChartTemplate) + '". Choose a chart from the list.');
+        }
+        else if (template.family !== family) {
+            warnings.push('The ' + template.label + ' measurement chart belongs to ' + template.family + ', not ' + family + '.');
+        }
+    }
+    if (hasValue(cleaned.size) && hasMeasurement && !hasValue(cleaned.sizeChartTemplate)) {
+        warnings.push('Label size and measured dimensions are stored separately. Do not treat a tape measurement as the size label.');
+    }
+    return { attributes: cleaned, errors, warnings };
+}
+function fashionImportAttributeKeys() {
+    return [
+        'brand',
+        'department',
+        'itemType',
+        'productType',
+        'categoryFamily',
+        'size',
+        'sizeSystem',
+        'sizeType',
+        'color',
+        'secondaryColor',
+        'pattern',
+        'style',
+        'material',
+        'composition',
+        'fabricType',
+        'sleeveLength',
+        'neckline',
+        'closure',
+        'length',
+        'fit',
+        'chestMeasurement',
+        'waistMeasurement',
+        'hipMeasurement',
+        'lengthMeasurement',
+        'inseamMeasurement',
+        'measurementsUnit',
+        'measurements',
+        'wear',
+        'stains',
+        'holes',
+        'pilling',
+        'fading',
+        'repairs',
+        'missingComponents',
+        'otherDefects',
+        'conditionDetails',
+        'shoeSize',
+        'shoeSizeSystem',
+        'width',
+        'footwearType',
+        'accessoryType',
+        'accessoryDimensions',
+        'accessoryMaterial',
+        'countryOfManufacture',
+        'features',
+        'season',
+        'occasion',
+        'theme',
+        'vintage',
+        'garmentCare',
+    ];
+}
+function mergeFashionSuggestions(params) {
+    const confirmed = new Set((params.confirmedKeys ?? []).map((key) => key.trim()).filter(Boolean));
+    const attributes = { ...params.current };
+    const suggestedKeys = [];
+    const conflicts = [];
+    for (const [key, rawSuggested] of Object.entries(params.suggested)) {
+        if (isFashionMetaKey(key) || AUTOMOTIVE_KEYS.has(key) || INDUSTRIAL_KEYS.has(key))
+            continue;
+        const suggestedText = textValue(rawSuggested);
+        if (!suggestedText)
+            continue;
+        const currentText = textValue(attributes[key]);
+        if (confirmed.has(key) && currentText) {
+            if (currentText !== suggestedText) {
+                conflicts.push({ key, current: currentText, suggested: suggestedText });
+            }
+            continue;
+        }
+        if (!currentText) {
+            attributes[key] = rawSuggested;
+            suggestedKeys.push(key);
+            continue;
+        }
+        if (currentText !== suggestedText) {
+            conflicts.push({ key, current: currentText, suggested: suggestedText });
+            continue;
+        }
+    }
+    return { attributes, suggestedKeys, conflicts };
+}
+function joinFacts(parts) {
+    return parts.map((part) => part?.trim()).filter(Boolean).join(' ');
+}
+function buildFashionListingContent(params) {
+    const attrs = params.attributes;
+    const brand = (params.brand ?? textValue(attrs.brand)).trim();
+    const itemType = textValue(attrs.itemType) || textValue(attrs.productType);
+    const department = textValue(attrs.department);
+    const color = textValue(attrs.color);
+    const size = textValue(attrs.size) || textValue(attrs.shoeSize);
+    const material = textValue(attrs.material) || textValue(attrs.accessoryMaterial);
+    const style = textValue(attrs.style);
+    const generatedTitle = (0, ebay_listing_text_util_js_1.truncateEbayTitle)(joinFacts([
+        brand,
+        department,
+        color,
+        itemType,
+        style,
+        size ? `Size ${size}` : '',
+        material,
+    ]));
+    const facts = [];
+    const pushFact = (label, value) => {
+        if (value)
+            facts.push(`${label}: ${value}`);
+    };
+    pushFact('Item type', itemType);
+    pushFact('Brand', brand);
+    pushFact('Department', department);
+    pushFact('Label size', textValue(attrs.size));
+    pushFact('Sizing system', textValue(attrs.sizeSystem));
+    pushFact('Primary color', color);
+    pushFact('Secondary color', textValue(attrs.secondaryColor));
+    pushFact('Pattern', textValue(attrs.pattern));
+    pushFact('Material', material);
+    pushFact('Composition', textValue(attrs.composition));
+    pushFact('Style', style);
+    pushFact('Sleeve length', textValue(attrs.sleeveLength));
+    pushFact('Neckline', textValue(attrs.neckline));
+    pushFact('Closure', textValue(attrs.closure));
+    pushFact('Fit', textValue(attrs.fit));
+    pushFact('Shoe size', textValue(attrs.shoeSize));
+    pushFact('Footwear type', textValue(attrs.footwearType));
+    pushFact('Accessory type', textValue(attrs.accessoryType));
+    pushFact('Features', textValue(attrs.features));
+    pushFact('Country of manufacture', textValue(attrs.countryOfManufacture));
+    pushFact('Garment care', textValue(attrs.garmentCare));
+    pushFact('Season', textValue(attrs.season));
+    pushFact('Occasion', textValue(attrs.occasion));
+    pushFact('Theme', textValue(attrs.theme));
+    pushFact('Vintage', textValue(attrs.vintage));
+    if (textValue(attrs.measurements))
+        pushFact('Measurement notes', textValue(attrs.measurements));
+    const defects = [
+        textValue(attrs.wear) && `Wear: ${textValue(attrs.wear)}`,
+        textValue(attrs.stains) && `Stains: ${textValue(attrs.stains)}`,
+        textValue(attrs.holes) && `Holes: ${textValue(attrs.holes)}`,
+        textValue(attrs.pilling) && `Pilling: ${textValue(attrs.pilling)}`,
+        textValue(attrs.fading) && `Fading: ${textValue(attrs.fading)}`,
+        textValue(attrs.repairs) && `Repairs: ${textValue(attrs.repairs)}`,
+        textValue(attrs.missingComponents) &&
+            `Missing components: ${textValue(attrs.missingComponents)}`,
+        textValue(attrs.otherDefects),
+        textValue(attrs.conditionDetails),
+    ].filter(Boolean);
+    const measurementTemplate = (0, fashion_measurements_js_1.fashionMeasurementTemplate)(textValue(attrs.sizeChartTemplate));
+    const measurementUnit = (0, fashion_measurements_js_1.normalizeFashionMeasurementUnit)(textValue(attrs.measurementsUnit));
+    const measurementLines = measurementTemplate && measurementUnit
+        ? (0, fashion_measurements_js_1.fashionMeasurementRows)(measurementTemplate, attrs).map((row) => row.letter + '. ' + row.label + ': ' + row.value + ' ' + measurementUnit)
+        : [];
+    const descriptionParts = [
+        facts.length ? facts.join('\n') : '',
+        measurementLines.length ? 'Measurements (taken flat, ' + (measurementUnit === 'in' ? 'inches' : 'centimetres') + '):\n' + measurementLines.join('\n') : '',
+        params.conditionLabel ? `Condition: ${params.conditionLabel}` : '',
+        defects.length
+            ? `Reported defects and wear:\n${defects.join('\n')}`
+            : '',
+        'Details not listed were not confirmed from the photos or seller notes and are omitted.',
+    ].filter(Boolean);
+    const title = (params.title?.trim() || generatedTitle || 'Fashion item').slice(0, 200);
+    return { title, description: descriptionParts.join('\n\n') };
+}
+function suggestFashionSku(itemType) {
+    const slug = (itemType || 'item')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 18) || 'item';
+    const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
+    return `FSH-${slug}-${stamp}-${suffix}`.slice(0, 160);
+}
+const EBAY_ASPECT_VALUE_MAX = 65;
+const FASHION_ASPECT_NAMES = [
+    ['Department', ['department']],
+    ['Type', ['itemType', 'productType', 'footwearType', 'accessoryType']],
+    ['Size', ['size', 'shoeSize']],
+    ['Size Type', ['sizeType']],
+    ['Color', ['color']],
+    ['Style', ['style']],
+    ['Pattern', ['pattern']],
+    ['Material', ['material', 'accessoryMaterial']],
+    ['Fabric Type', ['fabricType']],
+    ['Sleeve Length', ['sleeveLength']],
+    ['Neckline', ['neckline']],
+    ['Closure', ['closure']],
+    ['Fit', ['fit']],
+    ['Shoe Width', ['width']],
+    ['Country/Region of Manufacture', ['countryOfManufacture']],
+    ['Features', ['features']],
+    ['Season', ['season']],
+    ['Occasion', ['occasion']],
+    ['Theme', ['theme']],
+    ['Vintage', ['vintage']],
+    ['Garment Care', ['garmentCare']],
+];
+function fashionAttributeKeyForAspect(name) {
+    const normalized = name.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    const aliases = {
+        brand: 'brand',
+        department: 'department',
+        type: 'itemType',
+        size: 'size',
+        sizetype: 'sizeType',
+        color: 'color',
+        colour: 'color',
+        style: 'style',
+        pattern: 'pattern',
+        material: 'material',
+        fabrictype: 'fabricType',
+        sleevelength: 'sleeveLength',
+        neckline: 'neckline',
+        closure: 'closure',
+        fit: 'fit',
+        shoewidth: 'width',
+        countryregionofmanufacture: 'countryOfManufacture',
+        countryofmanufacture: 'countryOfManufacture',
+        countryoforigin: 'countryOfManufacture',
+        features: 'features',
+        season: 'season',
+        occasion: 'occasion',
+        theme: 'theme',
+        vintage: 'vintage',
+        garmentcare: 'garmentCare',
+    };
+    return aliases[normalized] ?? null;
+}
+function aspectValues(value) {
+    const items = Array.isArray(value)
+        ? value
+        : typeof value === 'string'
+            ? value.split(/\s*[,|]\s*/)
+            : [textValue(value)];
+    return [
+        ...new Set(items
+            .map((item) => item.trim())
+            .filter(Boolean)
+            .map((item) => item.slice(0, EBAY_ASPECT_VALUE_MAX).trim())),
+    ];
+}
+function fashionAspectsFromAttributes(attributes, brand) {
+    const result = {};
+    const brandValue = (brand ?? textValue(attributes.brand)).trim();
+    if (brandValue)
+        result.Brand = [brandValue.slice(0, EBAY_ASPECT_VALUE_MAX).trim()];
+    for (const [name, keys] of FASHION_ASPECT_NAMES) {
+        const key = keys.find((candidate) => hasValue(attributes[candidate]));
+        if (!key)
+            continue;
+        const values = name === 'Features' || name === 'Season'
+            ? aspectValues(attributes[key])
+            : [textValue(attributes[key]).slice(0, EBAY_ASPECT_VALUE_MAX).trim()];
+        if (values.length && values[0])
+            result[name] = values;
+    }
+    const customNames = stringArray(attributes.customAspectNames);
+    const customValues = stringArray(attributes.customAspectValues);
+    const normalizeAspect = (value) => value.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    const emittedNames = new Set(Object.keys(result).map(normalizeAspect));
+    for (let index = 0; index < customNames.length; index++) {
+        const name = customNames[index]?.trim();
+        const rawValue = customValues[index]?.trim();
+        if (!name || !rawValue || isFashionMetaKey(name))
+            continue;
+        const normalized = normalizeAspect(name);
+        if (!normalized || emittedNames.has(normalized))
+            continue;
+        const values = aspectValues(rawValue);
+        if (!values.length)
+            continue;
+        result[name.slice(0, EBAY_ASPECT_VALUE_MAX)] = values;
+        emittedNames.add(normalized);
+    }
+    return result;
+}
+function applyFashionAnalysisMeta(attributes, meta) {
+    return {
+        ...attributes,
+        _suggestedKeys: [...new Set(meta.suggestedKeys)],
+        _confirmedKeys: [...new Set(meta.confirmedKeys ?? stringArray(attributes._confirmedKeys))],
+        _conflictKeys: meta.conflicts.map((item) => item.key),
+        _conflictNotes: meta.conflicts
+            .map((item) => `${item.key}: current "${item.current}" vs suggested "${item.suggested}"`)
+            .join('; '),
+        _warnings: [...new Set(meta.warnings)],
+        _multipleItems: meta.multipleItems,
+        _lastAnalyzedAt: new Date().toISOString(),
+        _analysisStatus: meta.analysisStatus,
+    };
+}
+function stringArray(value) {
+    if (Array.isArray(value))
+        return value.map((item) => item.trim()).filter(Boolean);
+    const text = textValue(value);
+    return text ? [text] : [];
+}
+//# sourceMappingURL=fashion.config.js.map
