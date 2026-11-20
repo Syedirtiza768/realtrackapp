@@ -25,6 +25,14 @@ needs that level of ceremony.
 - **Decision:** A listing eBay no longer knows ("deleted or you are not the seller") is skipped as `listing_not_found`, not failed. The production dry run hit 20 such stale mirror rows in one week; as failures they would make the order job retry 4 times and then send a "gave up" notification for listings that are already gone. The mirror row is left as it is, because "not the seller" can also mean the row is filed under the wrong store.
 - **Rollout (2026-11-20):** deployed with the flag off, then a read-only dry run over the last 7 days (76 orders, 434 pairs: 39 to end, 10 to lower, 171 already at 0, 118 already ended, 55 on disconnected accounts, 17 refused by the title check, 20 stale). The flag is turned on only with the operator's go-ahead, and past sales are applied (`POST /api/inventory-sync/ebay/sales/run` with `since`) only on a separate go-ahead, because that ends live listings. Both were approved and done on 2026-11-20 (40 ended, 9 lowered, 0 failed). Queue a backfill at least 60 s after switching the flag on: the flag cache otherwise makes the worker complete the jobs as no-ops, and their job ids then block re-queueing.
 
+## 2026-11-21 — Cross-store sale sync is driven by eBay sale notifications
+
+- **Why:** the user wants a sold part off the other stores the moment it sells. Through the 5-minute poll it took up to ~5 minutes.
+- **Decision:** subscribe every active native eBay account to the sale notifications built on 2026-11-18, instead of polling faster (a 1-minute poll is 12 accounts × `getOrders` every minute and is still slower).
+- **Decision:** treat `GetNotificationPreferences` error 12209 as "nothing set yet". It is eBay's normal answer for a new app or seller, and the subscribe pre-check (which protects another deployment's delivery URL) could not run past it.
+- **Decision:** a notification queues two import passes (end of window + 3 s, and 30 s later). eBay may notify before `getOrders` shows the order; the second pass bounds that case at about a minute instead of the next poll.
+- **Not done:** the cross-store sync still waits for the order import; it does not act on the notification payload (item id, quantity) directly. That would save ~10 s more but needs a second, order-less sync path.
+
 ## 2026-11-18 — eBay sale notifications trigger the existing import instead of becoming orders
 
 - **Why:** Sales only reached Omni through the order poll (every 5 minutes). eBay can push a SOAP notification per sale once a seller is subscribed through Trading `SetNotificationPreferences`.

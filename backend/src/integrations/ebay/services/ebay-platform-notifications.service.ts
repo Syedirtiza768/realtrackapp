@@ -23,6 +23,7 @@ import {
   buildGetNotificationPreferencesRequest,
   buildGetUserRequest,
   buildSetNotificationPreferencesRequest,
+  isNoPreferencesError,
   isOrderNotificationEvent,
   parseApplicationPreferences,
   parseGetUserLogin,
@@ -41,6 +42,8 @@ import {
  */
 const COALESCE_WINDOW_MS = 10_000;
 const SETTLE_DELAY_MS = 3_000;
+/** Second import pass, after the first, for orders eBay had not published yet. */
+const RECHECK_DELAY_MS = 30_000;
 
 export interface OrderNotificationStatus {
   ebayAccountId: string;
@@ -213,23 +216,32 @@ export class EbayPlatformNotificationsService {
     const now = Date.now();
     const window = Math.floor(now / COALESCE_WINDOW_MS);
     const runAt = (window + 1) * COALESCE_WINDOW_MS + SETTLE_DELAY_MS;
-    await this.orderSyncQueue.add(
-      'sync-orders',
-      {
-        ebayAccountId: account.id,
-        organizationId: account.organizationId,
-        userId: null,
-      },
-      {
-        // Same id inside one window → BullMQ keeps the first job only.
-        jobId: `ebay-notify-orders-${account.id}-${window}`,
-        delay: runAt - now,
-        attempts: 3,
-        backoff: { type: 'exponential', delay: 15_000 },
-        removeOnComplete: 100,
-        removeOnFail: 200,
-      },
-    );
+    const payload = {
+      ebayAccountId: account.id,
+      organizationId: account.organizationId,
+      userId: null,
+    };
+    const options = {
+      attempts: 3,
+      backoff: { type: 'exponential' as const, delay: 15_000 },
+      removeOnComplete: 100,
+      removeOnFail: 200,
+    };
+    // Same id inside one window → BullMQ keeps the first job only.
+    await this.orderSyncQueue.add('sync-orders', payload, {
+      ...options,
+      jobId: `ebay-notify-orders-${account.id}-${window}`,
+      delay: runAt - now,
+    });
+    // eBay can notify before getOrders shows the order. A second pass picks it
+    // up then, instead of leaving it to the next scheduled poll (5 minutes),
+    // so the cross-store sale sync still runs within a minute of the sale.
+    // The import is idempotent, so a pass that finds nothing new is harmless.
+    await this.orderSyncQueue.add('sync-orders', payload, {
+      ...options,
+      jobId: `ebay-notify-orders-${account.id}-${window}-recheck`,
+      delay: runAt - now + RECHECK_DELAY_MS,
+    });
   }
 
   // ─── Subscription management (admin) ───
@@ -302,6 +314,29 @@ export class EbayPlatformNotificationsService {
     return xml;
   }
 
+  /**
+   * GetNotificationPreferences. eBay answers error 12209 ("There is no valid
+   * preference found for your request") when nothing was ever set at that
+   * level — for a new eBay app, or a seller never subscribed. That means "no
+   * preferences", so it reads as an empty response instead of a failure;
+   * otherwise the first subscribe could never get past its pre-check.
+   */
+  private async getPreferences(
+    account: ConnectedEbayAccount,
+    level: 'Application' | 'User',
+  ): Promise<string> {
+    try {
+      return await this.postTrading(
+        account,
+        'GetNotificationPreferences',
+        buildGetNotificationPreferencesRequest(level),
+      );
+    } catch (err) {
+      if (isNoPreferencesError(err)) return '';
+      throw err;
+    }
+  }
+
   async getStatus(
     ebayAccountId: string,
     organizationId: string,
@@ -313,16 +348,8 @@ export class EbayPlatformNotificationsService {
   private async readStatus(
     account: ConnectedEbayAccount,
   ): Promise<OrderNotificationStatus> {
-    const appXml = await this.postTrading(
-      account,
-      'GetNotificationPreferences',
-      buildGetNotificationPreferencesRequest('Application'),
-    );
-    const userXml = await this.postTrading(
-      account,
-      'GetNotificationPreferences',
-      buildGetNotificationPreferencesRequest('User'),
-    );
+    const appXml = await this.getPreferences(account, 'Application');
+    const userXml = await this.getPreferences(account, 'User');
     const app = parseApplicationPreferences(appXml);
     const userEvents = parseUserEventPreferences(userXml);
     const events = Object.fromEntries(
@@ -372,11 +399,7 @@ export class EbayPlatformNotificationsService {
     await this.recordSellerLogin(account);
 
     const current = parseApplicationPreferences(
-      await this.postTrading(
-        account,
-        'GetNotificationPreferences',
-        buildGetNotificationPreferencesRequest('Application'),
-      ),
+      await this.getPreferences(account, 'Application'),
     );
     if (
       current.applicationUrl &&

@@ -180,7 +180,8 @@ describe('EbayPlatformNotificationsService', () => {
         eventName: 'FixedPriceTransaction',
         ebayAccountIds: ['acct-1'],
       });
-      expect(queue.add).toHaveBeenCalledTimes(1);
+      // One import when the window closes, one recheck 30 s later.
+      expect(queue.add).toHaveBeenCalledTimes(2);
       const [name, data, opts] = addCalls()[0];
       expect(name).toBe('sync-orders');
       expect(data).toEqual({
@@ -192,6 +193,11 @@ describe('EbayPlatformNotificationsService', () => {
       expect(opts.jobId).not.toContain(':');
       expect(opts.delay).toBeGreaterThan(0);
       expect(opts.delay).toBeLessThanOrEqual(13_000);
+      const [recheckName, recheckData, recheck] = addCalls()[1];
+      expect(recheckName).toBe('sync-orders');
+      expect(recheckData).toEqual(data);
+      expect(recheck.jobId).toBe(`${opts.jobId}-recheck`);
+      expect(recheck.delay).toBe(opts.delay + 30_000);
     });
 
     it('gives notifications in the same window the same job id', async () => {
@@ -206,7 +212,9 @@ describe('EbayPlatformNotificationsService', () => {
             eventName: 'ItemSold',
           }),
         );
-        expect(addCalls()[0][2].jobId).toBe(addCalls()[1][2].jobId);
+        // [first import, recheck] per notification, same ids in one window.
+        expect(addCalls()[0][2].jobId).toBe(addCalls()[2][2].jobId);
+        expect(addCalls()[1][2].jobId).toBe(addCalls()[3][2].jobId);
       } finally {
         jest.useRealTimers();
       }
@@ -327,6 +335,34 @@ describe('EbayPlatformNotificationsService', () => {
         applicationUrl: ours,
         ebayUsername: 'acme_parts',
       });
+    });
+
+    it('subscribes when eBay has no preferences yet (error 12209)', async () => {
+      // A new eBay app answers GetNotificationPreferences with 12209 until
+      // something was set; seen on every production account 2026-11-21.
+      const none =
+        '<GetNotificationPreferencesResponse><Ack>Failure</Ack><Errors><ShortMessage>No valid preference found.</ShortMessage><LongMessage>There is no valid preference found for your request.</LongMessage><ErrorCode>12209</ErrorCode></Errors></GetNotificationPreferencesResponse>';
+      reply([getUser('acme_parts'), none, setOk, appPrefs(ours), userPrefs]);
+      const status = await service.subscribe('acct-1', 'org-1', {});
+      expect(callNames()).toEqual([
+        'GetUser',
+        'GetNotificationPreferences',
+        'SetNotificationPreferences',
+        'GetNotificationPreferences',
+        'GetNotificationPreferences',
+      ]);
+      expect(status).toMatchObject({ subscribed: true, applicationUrl: ours });
+    });
+
+    it('still fails on other GetNotificationPreferences errors', async () => {
+      reply([
+        getUser('acme_parts'),
+        '<GetNotificationPreferencesResponse><Ack>Failure</Ack><Errors><LongMessage>Invalid token.</LongMessage><ErrorCode>931</ErrorCode></Errors></GetNotificationPreferencesResponse>',
+      ]);
+      await expect(service.subscribe('acct-1', 'org-1', {})).rejects.toThrow(
+        /931/,
+      );
+      expect(callNames()).not.toContain('SetNotificationPreferences');
     });
 
     it('records the seller login from GetUser when the account has none', async () => {

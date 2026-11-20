@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-21 — Sales reach Omni seconds after they happen (eBay sale notifications switched on)
+
+- Why: the cross-store sale sync ran only after the 5-minute order poll imported the sale, so a sold part stayed live on the other stores for up to ~5 minutes. eBay can push a notification per sale (built 2026-11-18), but no account had been subscribed.
+- Fixed: subscribing could never succeed. eBay answers `GetNotificationPreferences` with error 12209 ("There is no valid preference found for your request") until something has been set, and subscribe read that as a failure before setting anything — every production account returned it on 2026-11-21. 12209 now reads as "no preferences" (`isNoPreferencesError`), for both the status read and the subscribe pre-check; other errors still fail.
+- Added: each sale notification now queues a second order-import pass 30 s after the first (job id `…-recheck`), so an order eBay had not yet published to `getOrders` when the first pass ran is picked up within a minute instead of at the next poll. Imports are idempotent.
+- Path after a sale: eBay notification → order import at the end of the 10 s coalescing window + 3 s → `order.new` → cross-store sale sync job (5 s delay) → other listings ended or lowered. Typically under 30 s; the 5-minute poll stays as the safety net.
+- Backend only: `integrations/ebay/services/ebay-platform-notifications.service.ts`, `ebay-platform-notification.util.ts` (+ spec).
+
 ## 2026-11-20 — A part sold on one eBay store is removed from the other stores
 
 - Fixed: nothing took a sold part off the other eBay stores. On production (checked 2026-11-20) 75 of 79 eBay order lines from the last 7 days had the same SKU still live on other stores (459 listings on connected accounts, 55 more on disconnected ones), e.g. BU2-6529 sold on BLACKLINEAUTOPARTS and stayed live on Heritage uk, outbackprecisionspecialists AUS and Primemotive. The warehouse stock push did not cover it: `stock_channel_push` is off, only 1,860 SKUs have stock items, and every recent order line was `unmatched`.

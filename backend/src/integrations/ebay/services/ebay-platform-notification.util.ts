@@ -272,6 +272,17 @@ export function parseGetUserLogin(xml: string): string | null {
   return user ? firstTagText(user, 'UserID') : null;
 }
 
+/**
+ * Trading error 12209 ("There is no valid preference found for your
+ * request"): no notification preferences were ever set at that level.
+ * Matches the "(12209)" code that tradingFailure puts in the message.
+ */
+export function isNoPreferencesError(err: unknown): boolean {
+  const message =
+    err instanceof Error ? err.message : typeof err === 'string' ? err : '';
+  return /\(12209\)/.test(message);
+}
+
 /** Error text when a Trading response has Ack=Failure, else null. */
 export function tradingFailure(xml: string): string | null {
   const ack = firstTagText(xml, 'Ack');
