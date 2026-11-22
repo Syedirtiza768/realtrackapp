@@ -30,8 +30,10 @@ whole compiled application rather than overlaying single files.
 - Frontend: the live bundle `index-DFsxB-xW.js` and a build of `main` were compared by string
   literals. The live bundle has no UI text or API or route path that `main` lacks. `main` adds
   sorting hints, the manual-review hold messages, the save-timeout warning and Auto Parts catalog
-  routes. `main`'s `nginx.conf` adds the cached `/api/storage/napa-image/` proxy (served by
-  `main`'s backend).
+  routes. `main`'s `nginx.conf` repeated the `/api/storage/napa-image/` location, so `nginx -t`
+  failed (`duplicate location`) when the release image was tested on the compose network. The
+  duplicate was removed in a follow-up commit; `main`'s config is now byte-identical to
+  production's.
 
 Behaviour that changes in production because it is already on `main` (not new in this release):
 catalog publication rules also count an eBay item ID, an active mirror row or an eBay-linked
