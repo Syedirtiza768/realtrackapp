@@ -147,6 +147,8 @@ Grouped by module:
 
 #### `catalog_products` (CatalogProduct)
 
+Index `idx_catalog_products_org_vertical_created` on `(organization_id, vertical, "createdAt" DESC, id)` (migration `1792000000000-CatalogProductsOrgVerticalCreatedIndex`, created on production with `CONCURRENTLY` on 2026-11-22). It serves the catalog list's default sort, counts, facets and summary. See [CATALOG_WORKSPACE.md](CATALOG_WORKSPACE.md).
+
 | Column | Type | Notes |
 |--------|------|-------|
 | `id` | uuid | PK |
@@ -179,6 +181,8 @@ tracks eBay's unused-image expiration response so stale cache entries can be
 replaced.
 
 #### `ebay_published_listings` and `ebay_published_listing_changes`
+Partial index `idx_epl_catalog_product_id` on `(catalog_product_id) WHERE catalog_product_id IS NOT NULL` (migration `1792000000001-EbayPublishedListingsCatalogProductIndex`; created on production with `CONCURRENTLY` on 2026-11-22). Only about 38k of the table's 1.39M rows carry a catalog product, so the index is about 1 MB. It serves the catalog publication check and the foreign key to `catalog_products`, so catalog deletes no longer scan the whole table. The migration opts out of its transaction (`CONCURRENTLY`), and on a large table it should be provisioned out of band first.
+
 The published-listing mirror includes `is_test_listing` (default `false`) to
 identify synthetic integration fixtures. Migration
 `1791400000000-PrimemotiveListingChangeFeed` adds the append-only change/outbox

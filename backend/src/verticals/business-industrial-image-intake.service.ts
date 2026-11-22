@@ -238,14 +238,14 @@ export class BusinessIndustrialImageIntakeService {
       take: 50,
     });
     return {
-      jobs: await Promise.all(
-        jobs.map((job) => this.jobSummary(job)),
-      ),
+      jobs: await Promise.all(jobs.map((job) => this.jobSummaryWithCost(job))),
     };
   }
 
   async getJob(user: User, id: string, organizationId?: string) {
-    return this.jobSummary(await this.findJob(user, id, organizationId));
+    return this.jobSummaryWithCost(
+      await this.findJob(user, id, organizationId),
+    );
   }
 
   /**
@@ -2197,6 +2197,25 @@ export class BusinessIndustrialImageIntakeService {
       createdAt: job.createdAt,
       updatedAt: job.updatedAt,
       webpStorage: true,
+      aiModel:
+        this.config.get<string>('BUSINESS_INDUSTRIAL_AI_MODEL', LUNA_MODEL) ||
+        LUNA_MODEL,
+    };
+  }
+
+  /**
+   * Job summary plus the run's AI usage (tokens, cost, run count) summed from
+   * ai_run_logs rows whose batch_id is the job id. Production served these
+   * fields; the 2026-11-11 workspace reconcile (cffc56d2) dropped them by mistake.
+   */
+  private async jobSummaryWithCost(job: BusinessIndustrialImageIntakeJob) {
+    const totals = await this.aiRunLogs.getBatchTotals(job.id);
+    return {
+      ...this.jobSummary(job),
+      aiInputTokens: totals.inputTokens,
+      aiOutputTokens: totals.outputTokens,
+      aiCostUsd: totals.costUsd,
+      aiRuns: totals.runs,
     };
   }
   private groupSummary(group: BusinessIndustrialImageIntakeGroup) {

@@ -27,6 +27,22 @@ Search and export operate on the full server-side `catalog_products` dataset. Qu
 
 Publication status is derived from live `ebay_listing_channels` rows (matching or null vertical), `catalog_products.ebay_item_id`, linked `ebay_published_listings`, and `listing_records."ebayListingId"`. Successful eBay publishes stamp `ebay_item_id`. Historical mismatches are repaired by `scripts/backfill-catalog-publication-status.sql`.
 
+The published-state predicate (`publishedSql`) is written as uncorrelated `IN` subqueries over those sources: live channel rows, legacy mirror rows, and eBay-linked listing records, scoped by organisation, vertical and the caller's stores. PostgreSQL hashes each subquery once per statement instead of re-checking per catalog row. The `ebay_item_id` match against the mirror is not repeated, because `p.ebay_item_id IS NOT NULL` already counts as published. Every subquery drops NULL keys, so the predicate is never NULL.
+
+The partial index `idx_epl_catalog_product_id` on `ebay_published_listings (catalog_product_id) WHERE catalog_product_id IS NOT NULL` (migration `1792000000001`) keeps the mirror subquery small. Before the index, the earlier per-row `EXISTS` form ran for over 120 s on a Fashion count.
+
+### Facets and summary (one statement each, 2026-11-22)
+
+`facets()` builds the filtered query once (`baseQuery` + `applySearchAndFilters`) and runs a single statement. `with filtered as materialized (...)` holds the matching rows, including the wide `vertical_attributes` column, which only the attribute facets read. `narrow as materialized (...)` holds the small columns that every other facet reads. Each facet is one `UNION ALL` branch that returns `(facet, facet_key, value, label, color, count, num)`, and the rows are mapped back to the unchanged response shape. Bucket facets keep the top 100 by count, with the value as tie-breaker so equal counts have a stable order. Marketplace facets join the caller's accessible stores and are omitted when that list is empty. `summary()` counts total, with-images and published rows in one scan with `COUNT(*) FILTER`.
+
+Before this change, facets ran about 25 statements and the summary 3, each scanning `catalog_products`. On the Fashion organisation (22k rows) that was about 25 s of database time per facets request and about 9.5 s per summary.
+
+The facet cache is per process. Entries live 30 seconds, expired entries are dropped on each write, and the cache holds at most 200 entries.
+
+`idx_catalog_products_org_vertical_created` (migration `1792000000000`) on `catalog_products (organization_id, vertical, "createdAt" DESC, id)` matches the default `newest` sort. The first search page reads through the index (Fashion: about 630 ms → 14 ms).
+
+Known remaining cost: a typed search (`q`) ranks every matching row with trigram `similarity()` over long text, about 12 s on the Fashion organisation. Fixing that needs a trigram index or a narrower match field, which is a product decision.
+
 ## Authorization and safety
 
 Every request resolves organization membership, the requested product vertical, team visibility, and accessible stores on the backend. Publication summaries are limited to authorized stores; private review evidence and serialized-unit secrets are never returned.

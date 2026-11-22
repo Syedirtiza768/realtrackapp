@@ -110,6 +110,7 @@ Source of truth: `.env.example` (copy to `.env`). Docker passes these via
 | `EBAY_DEFAULT_INVENTORY_STATE` | _(empty)_ | Ship-from state/province (optional; unused for AE) |
 | `EBAY_DEFAULT_INVENTORY_POSTAL_CODE` | _(empty)_ | Ship-from postal code (optional; unused for AE) |
 | `EBAY_DEFAULT_INVENTORY_COUNTRY` | `AE` | Ship-from country (ISO) |
+| `EBAY_FX_USD_GBP` | _(unset)_ | USD→GBP rate applied to catalogue prices (stored in USD) when building a listing for a GBP marketplace (`EBAY_GB`), for example `0.79`. No default: when unset or not a positive number, GBP listings are blocked with a build error instead of being listed at the USD number. A per-store `priceOverride` is taken as already in GBP. The pattern is `EBAY_FX_USD_<CURRENCY>` (`backend/src/integrations/ebay/services/ebay-fx-rate.util.ts`). Set in production through the backend Compose override since 2026-11-17. |
 | `EBAY_DAILY_PUBLISH_TARGET_LIMIT` | `5000` | Organization-wide UTC-day quota for listing/store publish targets; hard-capped at 5,000 |
 | `PUBLISHED_LISTINGS_SYNC_CRON` | `*/15 * * * *` | Cron for scheduled published-listings mirror refresh; defaults to every 15 minutes for near-real-time API consumers |
 | `PUBLISHED_LISTINGS_DEFAULT_STORE_SLUGS` | `salvagea,blackline` | Default `storeSlug` scope for `GET /published-listings` when neither `storeId` nor `storeSlug` is provided. Set to `all` (or empty) to disable. |

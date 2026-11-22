@@ -13,6 +13,27 @@ and the narrative log in [docs/context/DECISION_LOG.md](context/DECISION_LOG.md)
 this file for quick day-to-day entries; promote something to a full ADR only if it
 needs that level of ceremony.
 
+## 2026-11-22 — Production is rebuilt from `main`; overlay-only hotfixes are ported first
+
+Production had become a stack of overlay images (each release `FROM` the previous live image
+plus a few compiled files), several built from uncommitted code. A compiled-file comparison of
+the live backend with a build of `main` 550ababd found 623 identical files, 8 that differ only in
+compile noise, 68 where `main` is the newer version of the same code, and 2 behaviours that
+existed only in production: the USD→GBP price conversion for UK listings (`EBAY_FX_USD_GBP`,
+hotfix `fx-rate-20261117`, never committed) and the per-run AI usage fields on Business &
+Industrial image-intake jobs (dropped from `main` by the 2026-11-11 workspace reconcile
+`cffc56d2`). Both were ported into `main`; the live frontend had no UI text or route that `main`
+lacks. From this release on, production images are built from a `main` commit: the whole
+compiled backend `dist/` and the whole frontend `dist/` are replaced, not single files. Why: an
+overlay that copies a few files from a newer tree silently keeps or drops other behaviour, and
+drift made every later release harder to reason about.
+
+Consequence to know: deploying `main` brings `main`'s newer catalog publication rules to
+production. A catalog product now also counts as published when it has an eBay item ID, an
+active `ebay_published_listings` row, or an eBay-linked `listing_records` row (automotive
+example on 2026-11-22: 831 published instead of 622). The rule needs the partial index
+`idx_epl_catalog_product_id`, without which its per-row check ran for over two minutes.
+
 ## 2026-11-20 — Cross-store sale sync works on listings, not on warehouse stock
 
 - **Why:** A part sold on one eBay store stayed live on the others. The StockModule's channel push could only fix that for SKUs that have a warehouse stock item, linked warehouses and push enabled per store: 1,860 SKUs against ~1.36 M mirrored listings, push off, and every recent order line `unmatched`.

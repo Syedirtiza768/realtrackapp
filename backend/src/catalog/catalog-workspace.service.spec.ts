@@ -11,6 +11,7 @@ describe('CatalogWorkspaceService', () => {
   function makeService(options?: {
     manageAllTeams?: boolean;
     teamIds?: string[];
+    storeIds?: string[];
   }) {
     const queryBuilder = {
       where: jest.fn().mockReturnThis(),
@@ -18,11 +19,14 @@ describe('CatalogWorkspaceService', () => {
       setParameter: jest.fn().mockReturnThis(),
       setParameters: jest.fn().mockReturnThis(),
       select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
       getOne: jest.fn().mockResolvedValue(undefined),
+      getQueryAndParameters: jest.fn(() => ['select 1', [] as unknown[]]),
     };
     const productRepo = {
       createQueryBuilder: jest.fn(() => queryBuilder),
       save: jest.fn(),
+      query: jest.fn().mockResolvedValue([]),
     };
     const channelRepo = { exists: jest.fn().mockResolvedValue(false) };
     const service = new CatalogWorkspaceService(
@@ -41,7 +45,9 @@ describe('CatalogWorkspaceService', () => {
           .fn()
           .mockResolvedValue({ organizationId: 'org-2' }),
       } as never,
-      { resolveStoreFilter: jest.fn().mockResolvedValue(undefined) } as never,
+      {
+        resolveStoreFilter: jest.fn().mockResolvedValue(options?.storeIds),
+      } as never,
       {
         getUserTeamIds: jest.fn().mockResolvedValue(options?.teamIds ?? []),
       } as never,
@@ -80,18 +86,64 @@ describe('CatalogWorkspaceService', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('returns empty marketplace facets without querying an empty store list', async () => {
-    const { service, queryBuilder } = makeService();
-    const result = await (service as unknown as {
-      marketplaceFacets: (base: unknown, scope: unknown, vertical: string) => Promise<unknown[]>;
-    }).marketplaceFacets(queryBuilder, {
-      organizationId: 'org-2',
-      teamIds: [],
-      manageAllTeams: true,
-      accessibleStoreIds: [],
-    }, 'business_industrial');
-    expect(result).toEqual([]);
-    expect(queryBuilder.getRawMany).toBeUndefined();
+  it('omits marketplace facets when the caller has no accessible stores', async () => {
+    const { service, productRepo } = makeService({ storeIds: [] });
+    const result = await service.facets(user, 'business_industrial', {});
+    expect(result.marketplaces).toEqual([]);
+    const [facetSql] = productRepo.query.mock.calls[0] as [string, unknown[]];
+    expect(facetSql).not.toContain('ebay_listing_channels facet_channel');
+  });
+
+  it('derives every facet from one filtered query and maps the rows', async () => {
+    const { service, productRepo } = makeService({ manageAllTeams: true });
+    const row = (
+      facet: string,
+      fields: Partial<{
+        facet_key: string | null;
+        value: string | null;
+        count: string | null;
+        num: string | null;
+      }> = {},
+    ) => ({
+      facet,
+      facet_key: null,
+      value: null,
+      label: null,
+      color: null,
+      count: null,
+      num: null,
+      ...fields,
+    });
+    productRepo.query.mockResolvedValueOnce([
+      row('total', { facet_key: 'all', count: '7' }),
+      row('stockLevels', { facet_key: 'in_stock', count: '5' }),
+      row('catalogStatuses', { facet_key: 'published', count: '3' }),
+      row('price', { facet_key: 'min', num: '1.50' }),
+      row('price', { facet_key: 'max' }),
+      row('brands', { value: 'Nike', count: '4' }),
+      row('attribute', { facet_key: 'size', value: 'M', count: '2' }),
+    ]);
+    const result = await service.facets(user, 'fashion', {});
+    expect(result.totalFiltered).toBe(7);
+    expect(
+      result.stockLevels.find((bucket) => bucket.value === 'in_stock')?.count,
+    ).toBe(5);
+    expect(
+      result.catalogStatuses.find((bucket) => bucket.value === 'published')
+        ?.count,
+    ).toBe(3);
+    expect(
+      result.catalogStatuses.find((bucket) => bucket.value === 'blocked')
+        ?.count,
+    ).toBe(0);
+    expect(result.priceRange).toEqual({ min: 1.5, max: null });
+    expect(result.brands).toEqual([{ value: 'Nike', label: 'Nike', count: 4 }]);
+    expect(result.attributeFacets).toEqual({
+      size: [{ value: 'M', label: 'M', count: 2 }],
+    });
+    expect(productRepo.query).toHaveBeenCalledTimes(1);
+    const [facetSql] = productRepo.query.mock.calls[0] as [string, unknown[]];
+    expect(facetSql.startsWith('with filtered as materialized (')).toBe(true);
   });
 
   it('sorts newest by creation date and updated by last update', () => {
@@ -210,6 +262,10 @@ describe('CatalogWorkspaceService', () => {
     expect(sql).toContain('p.ebay_item_id IS NOT NULL');
     expect(sql).toContain('pub.vertical is null');
     expect(sql).toContain('lr."ebayListingId" is not null');
+    // A per-row correlated EXISTS made facets re-check the publication tables
+    // for every catalog row; keep the predicate uncorrelated (hashed once).
+    expect(sql).not.toMatch(/exists\s*\(/i);
+    expect(sql).toContain(':publishedOrganizationId');
     const emptyStoreSql = (
       service as unknown as {
         publishedSql: (scope: {

@@ -405,188 +405,217 @@ export class CatalogWorkspaceService {
     const cacheKey = `${user.id}:${scope.organizationId}:${vertical}:${JSON.stringify(dto)}`;
     const cached = this.facetCache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) return cached.value;
-    // Build a fresh query per facet. TypeORM clones share mutable state, so
-    // concurrent Promise.all(base.clone()...) can drop org/vertical predicates.
-    const scopedBase = () => {
-      const qb = this.baseQuery(vertical, dto, scope);
-      this.applySearchAndFilters(qb, vertical, dto, scope);
-      return qb;
+
+    // Every facet is derived from one filtered pass. The filtered rows are
+    // materialized once in a CTE and each facet aggregates that set. The former
+    // implementation ran about twenty separate scans of catalog_products, and
+    // five of them repeated a correlated publication check per row. On the
+    // fashion org that exceeded the pool's 30s statement_timeout and failed the
+    // whole facets request.
+    const filtered = this.baseQuery(vertical, dto, scope);
+    this.applySearchAndFilters(filtered, vertical, dto, scope);
+    filtered
+      .select('p.id', 'id')
+      .addSelect('p.brand', 'brand')
+      .addSelect('p.categoryId', 'category_id')
+      .addSelect('p.categoryName', 'category_name')
+      .addSelect(
+        "coalesce(nullif(p.condition_label, ''), nullif(p.condition_id, ''))",
+        'condition_value',
+      )
+      .addSelect('p.partType', 'part_type')
+      .addSelect('p.sourceFile', 'source_file')
+      .addSelect('p.format', 'format')
+      .addSelect('p.location', 'location')
+      .addSelect('p.mpn', 'mpn')
+      .addSelect('p.teamId', 'team_id')
+      .addSelect('p.shippingProfile', 'shipping_profile')
+      .addSelect('p.verticalValidationStatus', 'validation_status')
+      .addSelect(SAFE_PRICE, 'price')
+      .addSelect(SAFE_QTY, 'qty')
+      .addSelect('array_length(p.image_urls, 1)', 'image_count')
+      .addSelect(`(${this.publishedSql(scope)})`, 'is_published')
+      .addSelect(
+        "(p.manual_review = true OR p.vertical_validation_status IN ('quarantined', 'blocked', 'rejected'))",
+        'is_blocked',
+      )
+      .addSelect('p.verticalAttributes', 'vertical_attributes')
+      .setParameters(this.publishedParameters(scope, vertical));
+    const [innerSql, innerParams] = filtered.getQueryAndParameters();
+    const params: unknown[] = [...(innerParams as unknown[])];
+    const bind = (value: unknown) => {
+      params.push(value);
+      return `$${params.length}`;
     };
-    const run = async (column: string, extra = ''): Promise<FacetBucket[]> => {
-      const facet = scopedBase()
-        .select(column, 'value')
-        .addSelect('COUNT(*)', 'count')
-        .andWhere(extra || `${column} IS NOT NULL AND ${column} != ''`)
-        .groupBy(column)
-        .orderBy('count', 'DESC')
-        .limit(100);
-      const rows = await facet.getRawMany<{ value: string; count: string }>();
-      return rows
+    const attributeKeys = ATTRIBUTE_KEYS[vertical]
+      .map((key) => `'${key.replace(/'/g, "''")}'`)
+      .join(', ');
+    const bucket = (facet: string, column: string) =>
+      `(select '${facet}' as facet, null::text as facet_key, ${column} as value, null::text as label, null::text as color, count(*) as count, null::numeric as num from narrow where ${column} is not null and ${column} <> '' group by ${column} order by count desc limit 100)`;
+    const scalar = (facet: string, key: string, where: string) =>
+      `(select '${facet}' as facet, '${key}' as facet_key, null::text as value, null::text as label, null::text as color, count(*) filter (where ${where}) as count, null::numeric as num from narrow)`;
+    const unions = [
+      bucket('brands', 'brand'),
+      "(select 'categories' as facet, null::text as facet_key, category_id as value, category_name as label, null::text as color, count(*) as count, null::numeric as num from narrow where (category_name is not null and category_name <> '') or (category_id is not null and category_id <> '') group by category_id, category_name order by count desc limit 100)",
+      bucket('conditions', 'condition_value'),
+      bucket('types', 'part_type'),
+      bucket('sourceFiles', 'source_file'),
+      bucket('formats', 'format'),
+      bucket('locations', 'location'),
+      bucket('mpns', 'mpn'),
+      "(select 'teams' as facet, null::text as facet_key, f.team_id::text as value, t.name as label, t.color as color, count(*) as count, null::numeric as num from narrow f join teams t on t.id = f.team_id group by f.team_id, t.name, t.color order by count desc limit 100)",
+      bucket('shippingProfiles', 'shipping_profile'),
+      bucket('validationStatuses', 'validation_status'),
+      scalar('stockLevels', 'in_stock', 'qty > 0'),
+      scalar('stockLevels', 'low_stock', 'qty > 0 and qty <= 2'),
+      scalar('stockLevels', 'out_of_stock', 'qty <= 0'),
+      scalar('catalogStatuses', 'published', 'is_published and not is_blocked'),
+      scalar(
+        'catalogStatuses',
+        'unpublished',
+        'not is_published and not is_blocked',
+      ),
+      scalar('catalogStatuses', 'blocked', 'is_blocked'),
+      scalar(
+        'catalogStatuses',
+        'ready_to_publish',
+        'not is_published and not is_blocked and image_count > 0',
+      ),
+      scalar(
+        'catalogStatuses',
+        'need_images',
+        'not is_published and not is_blocked and image_count is null',
+      ),
+      scalar('total', 'all', 'true'),
+      "(select 'price' as facet, 'min' as facet_key, null::text as value, null::text as label, null::text as color, null::bigint as count, min(price) as num from narrow)",
+      "(select 'price' as facet, 'max' as facet_key, null::text as value, null::text as label, null::text as color, null::bigint as count, max(price) as num from narrow)",
+      `(select 'attribute' as facet, attrs.key as facet_key, attr_values.value as value, null::text as label, null::text as color, count(*) as count, null::numeric as num from filtered cross join lateral jsonb_each(coalesce(filtered.vertical_attributes, '{}'::jsonb)) attrs cross join lateral jsonb_array_elements_text(case when jsonb_typeof(attrs.value) = 'array' then attrs.value else jsonb_build_array(attrs.value #>> '{}') end) attr_values where attrs.key in (${attributeKeys}) group by attrs.key, attr_values.value order by attrs.key, count(*) desc)`,
+    ];
+    // Marketplace facets join through the caller's accessible stores. A caller
+    // with no accessible stores still gets the product facets, just no
+    // marketplace buckets.
+    if (scope.accessibleStoreIds?.length !== 0) {
+      const organizationRef = bind(scope.organizationId);
+      const verticalRef = bind(vertical);
+      const storeFilter = scope.accessibleStoreIds?.length
+        ? ` and facet_account.primary_store_id = any(${bind(scope.accessibleStoreIds)})`
+        : '';
+      unions.push(
+        `(select 'marketplaces' as facet, null::text as facet_key, facet_channel.marketplace_id as value, facet_channel.marketplace_id as label, null::text as color, count(distinct f.id) as count, null::numeric as num from narrow f join ebay_listing_channels facet_channel on facet_channel.catalog_product_id = f.id and facet_channel.organization_id = ${organizationRef} and facet_channel.vertical = ${verticalRef} join connected_ebay_accounts facet_account on facet_account.id = facet_channel.ebay_account_id and facet_account.organization_id = ${organizationRef}${storeFilter} group by facet_channel.marketplace_id order by count desc)`,
+      );
+    }
+    type FacetSqlRow = {
+      facet: string;
+      facet_key: string | null;
+      value: string | null;
+      label: string | null;
+      color: string | null;
+      count: string | number | null;
+      num: string | number | null;
+    };
+    const rows = await this.productRepo.query<FacetSqlRow[]>(
+      `with filtered as materialized (${innerSql}), narrow as materialized (select id, brand, category_id, category_name, condition_value, part_type, source_file, format, location, mpn, team_id, shipping_profile, validation_status, price, qty, image_count, is_published, is_blocked from filtered) ${unions.join(' union all ')}`,
+      params,
+    );
+    const rowsFor = (facet: string) =>
+      rows.filter((row) => row.facet === facet);
+    const countFor = (facet: string, key: string) =>
+      Number(
+        rows.find((row) => row.facet === facet && row.facet_key === key)?.count,
+      ) || 0;
+    const bucketsFor = (facet: string): FacetBucket[] =>
+      rowsFor(facet)
         .filter((row) => row.value != null && String(row.value).trim())
         .map((row) => ({
           value: String(row.value),
           label: label(String(row.value)),
           count: Number(row.count) || 0,
         }));
+    const priceBound = (key: 'min' | 'max') => {
+      const raw = rows.find(
+        (row) => row.facet === 'price' && row.facet_key === key,
+      )?.num;
+      return raw == null ? null : Number(raw);
     };
-    const [
-      brands,
-      categoriesRaw,
-      conditions,
-      types,
-      sourceFiles,
-      formats,
-      locations,
-      mpns,
+    const attributeFacets: Record<string, FacetBucket[]> = {};
+    for (const row of rowsFor('attribute')) {
+      (attributeFacets[String(row.facet_key)] ??= []).push({
+        value: row.value as string,
+        label: row.value as string,
+        count: Number(row.count) || 0,
+      });
+    }
+    const categories = rowsFor('categories').map((row) => ({
+      // Filter by the stable category ID while keeping the human name visible.
+      value: String(row.value || row.label || ''),
+      label: String(row.label || row.value || ''),
+      count: Number(row.count) || 0,
+    }));
+    const teams = rowsFor('teams').map((row) => ({
+      value: row.value as string,
+      label: row.label as string,
+      count: Number(row.count) || 0,
+      color: row.color as string,
+    }));
+    const marketplaces = rowsFor('marketplaces').map((row) => ({
+      value: String(row.value),
+      label: String(row.value),
+      count: Number(row.count) || 0,
+    }));
+    const stockLevels = ['in_stock', 'low_stock', 'out_of_stock'].map(
+      (key) => ({
+        value: key,
+        label: label(key),
+        count: countFor('stockLevels', key),
+      }),
+    );
+    const catalogStatuses = [
+      'published',
+      'unpublished',
+      'blocked',
+      'ready_to_publish',
+      'need_images',
+    ].map((key) => ({
+      value: key,
+      label: label(key),
+      count: countFor('catalogStatuses', key),
+    }));
+    const response: CatalogFacetsResponse = {
+      vertical,
+      totalFiltered: countFor('total', 'all'),
+      queryTimeMs: Date.now() - started,
+      brands: bucketsFor('brands'),
+      categories,
+      conditions: bucketsFor('conditions'),
+      types: bucketsFor('types'),
+      sourceFiles: bucketsFor('sourceFiles'),
+      formats: bucketsFor('formats'),
+      locations: bucketsFor('locations'),
+      mpns: bucketsFor('mpns'),
       teams,
-      shippingProfiles,
+      marketplaces,
+      shippingProfiles: bucketsFor('shippingProfiles'),
       stockLevels,
       catalogStatuses,
-      validationStatuses,
-      priceRaw,
-      totalFiltered,
-    ] = await Promise.all([
-      run('p.brand'),
-      scopedBase()
-        .select('p.categoryId', 'id')
-        .addSelect('p.categoryName', 'value')
-        .addSelect('COUNT(*)', 'count')
-        .andWhere(
-          "((p.categoryName IS NOT NULL AND p.categoryName != '') OR (p.categoryId IS NOT NULL AND p.categoryId != ''))",
-        )
-        .groupBy('p.categoryId')
-        .addGroupBy('p.categoryName')
-        .orderBy('count', 'DESC')
-        .limit(100)
-        .getRawMany<{ id: string; value: string; count: string }>(),
-      // B&I (and some imports) store human labels with null condition IDs.
-      // Facet on the coalesced display value so filters stay populated.
-      scopedBase()
-        .select(
-          "coalesce(nullif(p.condition_label, ''), nullif(p.condition_id, ''))",
-          'value',
-        )
-        .addSelect('COUNT(*)', 'count')
-        .andWhere(
-          "((p.condition_label IS NOT NULL AND p.condition_label != '') OR (p.condition_id IS NOT NULL AND p.condition_id != ''))",
-        )
-        .groupBy(
-          "coalesce(nullif(p.condition_label, ''), nullif(p.condition_id, ''))",
-        )
-        .orderBy('count', 'DESC')
-        .limit(100)
-        .getRawMany<{ value: string; count: string }>()
-        .then((rows) =>
-          rows
-            .filter((row) => row.value != null && String(row.value).trim())
-            .map((row) => ({
-              value: String(row.value),
-              label: label(String(row.value)),
-              count: Number(row.count) || 0,
-            })),
-        ),
-      run('p.partType'),
-      run('p.sourceFile'),
-      run('p.format'),
-      run('p.location'),
-      run('p.mpn'),
-      scopedBase()
-        .innerJoin(Team, 'facetTeam', 'facetTeam.id = p.teamId')
-        .select('p.teamId', 'value')
-        .addSelect('facetTeam.name', 'label')
-        .addSelect('facetTeam.color', 'color')
-        .addSelect('COUNT(*)', 'count')
-        .groupBy('p.teamId')
-        .addGroupBy('facetTeam.name')
-        .addGroupBy('facetTeam.color')
-        .orderBy('count', 'DESC')
-        .limit(100)
-        .getRawMany<{
-          value: string;
-          label: string;
-          color: string;
-          count: string;
-        }>()
-        .then((rows) =>
-          rows.map((row) => ({
-            value: row.value,
-            label: row.label,
-            count: Number(row.count) || 0,
-            color: row.color,
-          })),
-        ),
-      run('p.shippingProfile'),
-      Promise.resolve(
-        ['in_stock', 'low_stock', 'out_of_stock'].map((value) => ({
-          value,
-          label: label(value),
-          count: 0,
-        })),
-      ),
-      Promise.resolve(
-        [
-          'published',
-          'unpublished',
-          'blocked',
-          'ready_to_publish',
-          'need_images',
-        ].map((value) => ({
-          value,
-          label: label(value),
-          count: 0,
-        })),
-      ),
-      run('p.verticalValidationStatus'),
-      scopedBase()
-        .select(`MIN(${SAFE_PRICE})`, 'min')
-        .addSelect(`MAX(${SAFE_PRICE})`, 'max')
-        .getRawOne<{ min: string | null; max: string | null }>(),
-      scopedBase().getCount(),
-    ]);
-    const [stockCounts, statusCounts, attributeFacets] = await Promise.all([
-      this.countStockLevels(scopedBase),
-      this.countCatalogStatuses(scopedBase, vertical, scope),
-      this.attributeFacets(scopedBase, vertical),
-    ]);
-    const safeStockCounts = stockCounts as Record<string, number>;
-    const safeStatusCounts = statusCounts as Record<string, number>;
-    const value: CatalogFacetsResponse = {
-      vertical,
-      totalFiltered,
-      queryTimeMs: Date.now() - started,
-      brands,
-      categories: categoriesRaw.map((row) => ({
-        // Filter by the stable category ID while keeping the human name visible.
-        value: row.id || row.value,
-        label: row.value || row.id,
-        count: Number(row.count) || 0,
-      })),
-      conditions,
-      types,
-      sourceFiles,
-      formats,
-      locations,
-      mpns,
-      teams,
-      marketplaces: await this.marketplaceFacets(scopedBase(), scope, vertical),
-      shippingProfiles,
-      stockLevels: stockLevels.map((entry) => ({
-        ...entry,
-        count: safeStockCounts[entry.value] ?? 0,
-      })),
-      catalogStatuses: catalogStatuses.map((entry) => ({
-        ...entry,
-        count: safeStatusCounts[entry.value] ?? 0,
-      })),
-      validationStatuses,
+      validationStatuses: bucketsFor('validationStatuses'),
       attributeFacets,
-      priceRange: {
-        min: priceRaw?.min == null ? null : Number(priceRaw.min),
-        max: priceRaw?.max == null ? null : Number(priceRaw.max),
-      },
+      priceRange: { min: priceBound('min'), max: priceBound('max') },
     };
-    this.facetCache.set(cacheKey, { expiresAt: Date.now() + 30_000, value });
-    return value;
+    // Bound the per-process cache: drop expired entries, then the oldest entry
+    // once 200 are held (keys include every filter combination, so an
+    // unbounded Map grows with each distinct request).
+    const now = Date.now();
+    for (const [key, entry] of this.facetCache)
+      if (entry.expiresAt <= now) this.facetCache.delete(key);
+    if (this.facetCache.size >= 200) {
+      const oldest = this.facetCache.keys().next().value;
+      if (oldest !== undefined) this.facetCache.delete(oldest);
+    }
+    this.facetCache.set(cacheKey, {
+      expiresAt: now + 30_000,
+      value: response,
+    });
+    return response;
   }
 
   async summary(
@@ -595,23 +624,29 @@ export class CatalogWorkspaceService {
     organizationId?: string,
   ) {
     const scope = await this.scope(user, organizationId);
-    const qb = this.baseQuery(vertical, {}, scope);
-    const [total, withImages, published] = await Promise.all([
-      qb.clone().getCount(),
-      qb.clone().andWhere('array_length(p.imageUrls, 1) > 0').getCount(),
-      qb
-        .clone()
-        .andWhere(this.publishedSql(scope))
-        .setParameters(this.publishedParameters(scope, vertical))
-        .getCount(),
-    ]);
+    // One scan for all three counts. The published count uses the uncorrelated
+    // publishedSql, so it no longer re-reads publication tables per row.
+    const row = await this.baseQuery(vertical, {}, scope)
+      .select('COUNT(*)', 'total')
+      .addSelect(
+        'COUNT(*) FILTER (WHERE array_length(p.image_urls, 1) > 0)',
+        'withImages',
+      )
+      .addSelect(
+        `COUNT(*) FILTER (WHERE ${this.publishedSql(scope)})`,
+        'published',
+      )
+      .setParameters(this.publishedParameters(scope, vertical))
+      .getRawOne<{ total: string; withImages: string; published: string }>();
+    const total = Number(row?.total) || 0;
+    const withImages = Number(row?.withImages) || 0;
     return {
       vertical,
       organizationId: scope.organizationId,
       total,
       withImages,
       missingImages: Math.max(0, total - withImages),
-      published,
+      published: Number(row?.published) || 0,
     };
   }
 
@@ -1452,162 +1487,34 @@ export class CatalogWorkspaceService {
     return sql;
   }
 
-  private async marketplaceFacets(
-    base: SelectQueryBuilder<CatalogProduct>,
-    scope: Scope,
-    vertical: ProductVertical,
-  ): Promise<FacetBucket[]> {
-    // TypeORM expands `:...values` to an empty `IN ()` clause when the
-    // caller has no accessible stores. A user with no publication-store
-    // access should still receive the catalog's product/vertical facets;
-    // marketplace facets are simply empty in that scope.
-    if (scope.accessibleStoreIds?.length === 0) return [];
-    const qb = base
-      .clone()
-      .innerJoin(
-        EbayListingChannel,
-        'facetChannel',
-        'facetChannel.catalogProductId = p.id AND facetChannel.organizationId = :facetOrg AND facetChannel.vertical = :facetVertical',
-      )
-      .innerJoin(
-        ConnectedEbayAccount,
-        'facetAccount',
-        'facetAccount.id = facetChannel.ebayAccountId AND facetAccount.organizationId = :facetOrg',
-      )
-      .select('facetChannel.marketplaceId', 'value')
-      .addSelect('COUNT(DISTINCT p.id)', 'count')
-      .groupBy('facetChannel.marketplaceId')
-      .orderBy('count', 'DESC')
-      .setParameters({
-        facetOrg: scope.organizationId,
-        facetVertical: vertical,
-      });
-    if (scope.accessibleStoreIds)
-      qb.andWhere('facetAccount.primaryStoreId IN (:...facetStores)', {
-        facetStores: scope.accessibleStoreIds,
-      });
-    const rows = await qb.getRawMany<{ value: string; count: string }>();
-    return rows.map((row) => ({
-      value: row.value,
-      label: row.value,
-      count: Number(row.count) || 0,
-    }));
-  }
-
-  private async attributeFacets(
-    base:
-      | SelectQueryBuilder<CatalogProduct>
-      | (() => SelectQueryBuilder<CatalogProduct>),
-    vertical: ProductVertical,
-  ): Promise<Record<string, FacetBucket[]>> {
-    const keys = ATTRIBUTE_KEYS[vertical]
-      .map((key) => `'${key.replace(/'/g, "''")}'`)
-      .join(', ');
-    // Select the JSON column explicitly so the derived table has a stable alias.
-    // Selecting the full entity gives TypeORM a generated p_vertical_attributes alias.
-    const source = typeof base === 'function' ? base() : base.clone();
-    const [sql, params] = source
-      .select('p.verticalAttributes', 'vertical_attributes')
-      .getQueryAndParameters();
-    const rawRows: unknown = await this.productRepo.query(
-      `select attrs.key as "key", values.value as "value", count(*)::int as "count" from (${sql}) filtered cross join lateral jsonb_each(coalesce(filtered.vertical_attributes, '{}'::jsonb)) attrs cross join lateral jsonb_array_elements_text(case when jsonb_typeof(attrs.value) = 'array' then attrs.value else jsonb_build_array(attrs.value #>> '{}') end) values where attrs.key in (${keys}) group by attrs.key, values.value order by attrs.key, count(*) desc`,
-      params,
-    );
-    const rows = (Array.isArray(rawRows) ? rawRows : []) as Array<{
-      key: string;
-      value: string;
-      count: number | string;
-    }>;
-    const result: Record<string, FacetBucket[]> = {};
-    for (const row of rows as Array<{
-      key: string;
-      value: string;
-      count: number | string;
-    }>) {
-      (result[row.key] ??= []).push({
-        value: row.value,
-        label: row.value,
-        count: Number(row.count) || 0,
-      });
-    }
-    return result;
-  }
-
-  private async countStockLevels(
-    base:
-      | SelectQueryBuilder<CatalogProduct>
-      | (() => SelectQueryBuilder<CatalogProduct>),
-  ) {
-    const source = () => (typeof base === 'function' ? base() : base.clone());
-    const rows = await Promise.all([
-      source().andWhere(`${SAFE_QTY} > 0`).getCount(),
-      source().andWhere(`${SAFE_QTY} > 0 AND ${SAFE_QTY} <= 2`).getCount(),
-      source().andWhere(`${SAFE_QTY} <= 0`).getCount(),
-    ]);
-    return { in_stock: rows[0], low_stock: rows[1], out_of_stock: rows[2] };
-  }
-
-  private async countCatalogStatuses(
-    base:
-      | SelectQueryBuilder<CatalogProduct>
-      | (() => SelectQueryBuilder<CatalogProduct>),
-    vertical: ProductVertical,
-    scope: Scope,
-  ) {
-    const source = () => (typeof base === 'function' ? base() : base.clone());
-    const publishedSql = this.publishedSql(scope);
-    const blockedSql =
-      "(p.manual_review = true OR p.vertical_validation_status IN ('quarantined', 'blocked', 'rejected'))";
-    const notBlocked = 'NOT ' + blockedSql;
-    const [publishedCount, unpublishedCount, blockedCount, readyCount, missingCount] =
-      await Promise.all([
-        source()
-          .andWhere(`(${publishedSql} AND ${notBlocked})`)
-          .setParameters(this.publishedParameters(scope, vertical))
-          .getCount(),
-        source()
-          .andWhere(`(NOT ${publishedSql} AND ${notBlocked})`)
-          .setParameters(this.publishedParameters(scope, vertical))
-          .getCount(),
-        source().andWhere(blockedSql).getCount(),
-        source()
-          .andWhere(`(NOT ${publishedSql} AND ${notBlocked})`)
-          .setParameters(this.publishedParameters(scope, vertical))
-          .andWhere('array_length(p.imageUrls, 1) > 0')
-          .getCount(),
-        source()
-          .andWhere(`(NOT ${publishedSql} AND ${notBlocked})`)
-          .setParameters(this.publishedParameters(scope, vertical))
-          .andWhere('array_length(p.imageUrls, 1) IS NULL')
-          .getCount(),
-      ]);
-    return {
-      published: publishedCount,
-      unpublished: unpublishedCount,
-      blocked: blockedCount,
-      ready_to_publish: readyCount,
-      need_images: missingCount,
-    };
-  }
-
   private publishedSql(scope: Scope) {
     const storePredicate = scope.accessibleStoreIds?.length
-      ? 'and pubAccount.primary_store_id in (:...publishedStoreIds)'
+      ? ' and pubAccount.primary_store_id in (:...publishedStoreIds)'
       : '';
     const legacyStorePredicate = scope.accessibleStoreIds?.length
-      ? 'and legacy.store_id in (:...publishedStoreIds)'
+      ? ' and legacy.store_id in (:...publishedStoreIds)'
       : '';
+    // Uncorrelated IN-subqueries. PostgreSQL evaluates each one once per
+    // statement as a hash lookup. The former correlated EXISTS form re-read
+    // ebay_published_listings for every catalog row, which ran past 120s for a
+    // single fashion org on 2026-11-22. The ebay_item_id branch is covered by
+    // `p.ebay_item_id IS NOT NULL`, so it is not repeated. Each subquery filters
+    // out NULL keys so the predicate can never evaluate to NULL.
     return (
-      "(p.vertical_validation_status = 'published' OR p.ebay_item_id IS NOT NULL OR exists (select 1 from ebay_listing_channels pub join connected_ebay_accounts pubAccount on pubAccount.id = pub.ebay_account_id and pubAccount.organization_id = pub.organization_id where pub.catalog_product_id = p.id and pub.organization_id = p.organization_id and (pub.vertical = :publishedVertical or (:includeLegacyNullVertical = true and pub.vertical is null)) and lower(pub.listing_status) in ('published', 'active', 'out_of_stock') " +
+      "(p.vertical_validation_status = 'published' OR p.ebay_item_id IS NOT NULL" +
+      " OR p.id IN (select pub.catalog_product_id from ebay_listing_channels pub join connected_ebay_accounts pubAccount on pubAccount.id = pub.ebay_account_id and pubAccount.organization_id = pub.organization_id where pub.organization_id = :publishedOrganizationId and (pub.vertical = :publishedVertical or (:includeLegacyNullVertical = true and pub.vertical is null)) and pub.catalog_product_id is not null and lower(pub.listing_status) in ('published', 'active', 'out_of_stock')" +
       storePredicate +
-      ") OR exists (select 1 from ebay_published_listings legacy where (legacy.catalog_product_id = p.id or (p.ebay_item_id is not null and legacy.ebay_item_id = p.ebay_item_id)) and legacy.organization_id = p.organization_id and lower(legacy.listing_status) in ('active', 'out_of_stock', 'published') " +
+      ')' +
+      " OR p.id IN (select legacy.catalog_product_id from ebay_published_listings legacy where legacy.organization_id = :publishedOrganizationId and legacy.catalog_product_id is not null and lower(legacy.listing_status) in ('active', 'out_of_stock', 'published')" +
       legacyStorePredicate +
-      ") OR exists (select 1 from listing_records lr where lr.\"customLabelSku\" = p.sku and (lr.organization_id = p.organization_id or (:includeLegacyNullVertical = true and lr.organization_id is null)) and (lr.vertical = :publishedVertical or (:includeLegacyNullVertical = true and lr.vertical is null)) and lr.\"ebayListingId\" is not null and lr.status not in ('delisted', 'archived')))"
+      ')' +
+      ' OR (p.sku IS NOT NULL AND p.sku IN (select lr."customLabelSku" from listing_records lr where (lr.organization_id = :publishedOrganizationId or (:includeLegacyNullVertical = true and lr.organization_id is null)) and (lr.vertical = :publishedVertical or (:includeLegacyNullVertical = true and lr.vertical is null)) and lr."customLabelSku" is not null and lr."ebayListingId" is not null and lr.status not in (\'delisted\', \'archived\'))))'
     );
   }
 
   private publishedParameters(scope: Scope, vertical: ProductVertical) {
     return {
+      publishedOrganizationId: scope.organizationId,
       publishedVertical: vertical,
       includeLegacyNullVertical: vertical === 'automotive',
       ...(scope.accessibleStoreIds?.length

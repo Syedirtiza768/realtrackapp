@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-11-22 — Production rebuilt from `main`; Fashion catalog loads in seconds
+
+- Why: the Fashion catalog was slow. On the live code, one Fashion facets request was about 25 s of database time and the summary about 9.5 s. Production had also drifted from `main` through overlay-only hotfixes.
+- Catalog: `facets()` and `summary()` each run one statement instead of about 25 and 3, and the publication predicate is an uncorrelated subquery hashed once per statement (`backend/src/catalog/catalog-workspace.service.ts`). Measured on production data through the real driver, `main` before and after this change, Fashion organisation with 22k rows: default facets 8.4 s → 2.5 s, summary 1.8 s → 0.75 s, published filter 30 s → 1.9 s, text search facets 146 s → 17 s. Output was identical in all 18 variants (Fashion and B&I; store-restricted, non-admin, attribute, status, marketplace and search filters). The only exception is which equal-count value fills the last slot of a 100-row list, which is now ordered by value.
+- Facet cache: bounded to 200 entries, and expired entries are dropped on write. It had no eviction before.
+- Indexes, created on production with `CONCURRENTLY` (both valid), plus `IF NOT EXISTS` migrations: `1792000000000` `idx_catalog_products_org_vertical_created` on `catalog_products (organization_id, vertical, "createdAt" DESC, id)` (first search page 630 ms → 14 ms), and `1792000000001` partial `idx_epl_catalog_product_id` on `ebay_published_listings (catalog_product_id) WHERE catalog_product_id IS NOT NULL`. The second migration opts out of its transaction.
+- Ported from production into `main` (they were never committed, or were lost): USD→GBP conversion of catalogue prices for GBP listings with `EBAY_FX_USD_GBP` (`ebay-fx-rate.util.ts`, `listing-builder.service.ts`; hotfix `fx-rate-20261117`), and the per-run AI usage fields `aiModel`, `aiInputTokens`, `aiOutputTokens`, `aiCostUsd` and `aiRuns` on Business & Industrial image-intake jobs (dropped by `cffc56d2`).
+- Reconciliation: a compiled-file comparison of the live backend with a build of `main` 550ababd found no other production-only behaviour. The live frontend had no UI text or route that `main` lacks. See `docs/decisions.md` (2026-11-22) and `docs/operations/MAIN_RECONCILE_RELEASE_2026-11-22.md`.
+
 ## 2026-11-21 — Sales reach Omni seconds after they happen (eBay sale notifications switched on)
 
 - Why: the cross-store sale sync ran only after the 5-minute order poll imported the sale, so a sold part stayed live on the other stores for up to ~5 minutes. eBay can push a notification per sale (built 2026-11-18), but no account had been subscribed.

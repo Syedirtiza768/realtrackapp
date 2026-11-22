@@ -15,6 +15,7 @@ import { EbayBusinessPolicy } from '../entities/ebay-business-policy.entity.js';
 import type { PublishRequest } from '../../../channels/ebay/ebay-publish.service.js';
 
 import { EbayMarketplaceConfigService } from './ebay-marketplace-config.service.js';
+import { convertUsdToCurrency } from './ebay-fx-rate.util.js';
 
 import { ConnectedEbayAccount } from '../entities/connected-ebay-account.entity.js';
 
@@ -543,6 +544,18 @@ export class ListingBuilderService {
       );
     }
 
+    // Catalogue prices are USD. GBP listings (EBAY_GB) need the configured USD to GBP rate;
+    // an explicit price override is taken as entered in GBP. Other currencies are unchanged.
+    // Ported from production hotfix fx-rate-20261117, which was never committed.
+    let offerPrice = price;
+    if (currency === 'GBP' && ov?.priceOverride == null) {
+      try {
+        offerPrice = convertUsdToCurrency(price, currency);
+      } catch (error) {
+        blockingErrors.push((error as Error).message);
+      }
+    }
+
     const account = await this.accountRepo.findOne({
       where: { id: params.ebayAccountId },
     });
@@ -688,7 +701,7 @@ export class ListingBuilderService {
             undefined,
       listingDuration: 'GTC',
 
-      price,
+      price: offerPrice,
 
       currency,
 
