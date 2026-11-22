@@ -1,6 +1,6 @@
 # Changelog
 
-## 2026-11-22 — Production rebuilt from `main`; Fashion catalog loads in seconds
+## 2026-11-22 — Production rebuilt from `main` (deployed, f33bbcdf); Fashion catalog loads in seconds
 
 - Why: the Fashion catalog was slow. On the live code, one Fashion facets request was about 25 s of database time and the summary about 9.5 s. Production had also drifted from `main` through overlay-only hotfixes.
 - Catalog: `facets()` and `summary()` each run one statement instead of about 25 and 3, and the publication predicate is an uncorrelated subquery hashed once per statement (`backend/src/catalog/catalog-workspace.service.ts`). Measured on production data through the real driver, `main` before and after this change, Fashion organisation with 22k rows: default facets 8.4 s → 2.5 s, summary 1.8 s → 0.75 s, published filter 30 s → 1.9 s, text search facets 146 s → 17 s. Output was identical in all 18 variants (Fashion and B&I; store-restricted, non-admin, attribute, status, marketplace and search filters). The only exception is which equal-count value fills the last slot of a 100-row list, which is now ordered by value.

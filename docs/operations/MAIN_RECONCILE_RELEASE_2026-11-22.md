@@ -1,6 +1,6 @@
 # Production rebuilt from `main` — 2026-11-22
 
-**State:** see "Deployment" below. Built from `main`; backend and frontend images replace the
+**State:** deployed to production on 2026-11-22 (main `f33bbcdf`). Built from `main`; backend and frontend images replace the
 whole compiled application rather than overlaying single files.
 
 ## Why
@@ -70,4 +70,45 @@ Pre-existing test failures (also on `main` 550ababd): 32 tests in 6 suites (`sto
 
 ## Deployment
 
-_Filled in after the rollout._
+Deployed 2026-11-22. The backend was recreated at 17:58:53 UTC and was healthy within about 20 s
+(0 restarts). The frontend was recreated about a minute later. Built from `main` `f33bbcdf`
+(`fd0d767b` plus the nginx fix).
+
+- Backend `realtrackapp-backend:main-reconcile-20261122-f33bbcdf` (image `90a2facd7367`):
+  `FROM sale-push-subscribe-20261121-0befd9ad`, which keeps only its `node_modules` and OS
+  packages (runtime dependencies are identical to `main`). It replaces `/app/dist`, `/app/assets`,
+  `/app/shared` and the package manifests with `main`'s build.
+- Frontend `realtrackapp-frontend:main-reconcile-20261122-f33bbcdf` (image `afc7cfe5aa28`):
+  `FROM publish-all-stores-20261119-b5dc7649` with the whole `dist/` (`index-BuVE5kBp.js`) and
+  `main`'s `docker/nginx.conf`. `nginx -t` passed on the `realtrackapp_default` network. The test
+  cannot run during the build, because `backend` does not resolve without the network.
+- Release directory `/home/ubuntu/realtrackapp-main-reconcile-20261122-fd0d767b/`: build contexts,
+  Dockerfiles, `compose-{backend,frontend}-main-reconcile.yml`, and `compose-args-{backend,frontend}.txt`.
+  Each args file is that container's own `config_files` list plus the image override.
+- Migrations `1792000000000` and `1792000000001` were run by hand with the new image
+  (`migration:run`, `DB_HOST=$DB_MIGRATION_HOST`). Both are recorded, and both indexes are still
+  valid (they already existed, so the runs were no-ops).
+- Before recreating, the running images were checked again
+  (`sale-push-subscribe-20261121-0befd9ad`, `publish-all-stores-20261119-b5dc7649`).
+
+Verification: `/api/health` returned 200 locally and publicly. The homepage, `/fashion/catalog`
+and the bundle returned 200. The Fashion catalog search, facets and summary and the B&I intake jobs
+route returned 401 without a login. The sha256 of the running compiled catalog service, the
+listing builder and the frontend bundle matched the local build. Nothing new appeared in the
+backend log after startup (only the usual seed-password warnings). No query ran longer than 5 s.
+The registry sync created 0 new permission keys.
+
+Rollback (both are recreates, not restarts):
+
+```bash
+cd /home/ubuntu/realtrackapp
+D=/home/ubuntu/realtrackapp-main-reconcile-20261122-fd0d767b
+sudo docker compose -p realtrackapp $(cat $D/compose-args-backend.rollback.txt) up -d --no-deps --no-build --pull never backend
+sudo docker compose -p realtrackapp $(cat $D/compose-args-frontend.rollback.txt) up -d --no-deps --no-build --pull never frontend
+```
+
+The rollback args resolve to the previous images, which are also tagged
+`realtrackapp-backend:rollback-main-reconcile-20261122` and
+`realtrackapp-frontend:rollback-main-reconcile-20261122`. The two indexes and the migration
+rows can stay; the previous code ignores them. Note that rolling back the backend brings back
+the previous publication rules and the slow facets.

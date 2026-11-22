@@ -1,5 +1,23 @@
 > ⚠️ MOVED → [/docs/architecture/DEPLOYMENT.md](DEPLOYMENT.md) (2026-06-06)
 
+## Production rebuilt from `main` (2026-11-22, main f33bbcdf) — current
+
+Production backend `realtrackapp-backend:main-reconcile-20261122-f33bbcdf` and frontend
+`realtrackapp-frontend:main-reconcile-20261122-f33bbcdf` carry the whole compiled application from
+`main`, not single-file overlays. Each image keeps only the base layers (backend `node_modules`,
+whose runtime dependencies are identical to `main`'s, and the nginx base) of the previous live
+image. Before the release, every production-only behaviour found by a compiled-file comparison was
+ported into `main` (USD→GBP conversion for GBP listings, and B&I intake AI usage fields). Production
+and `main` now match for everything shipped; future releases should be built from a `main` commit
+the same way.
+
+The release also makes Fashion catalog facets and summary one statement each, and adds the
+indexes `idx_catalog_products_org_vertical_created` and `idx_epl_catalog_product_id`. Compose
+args, rollback args and Dockerfiles are in
+`/home/ubuntu/realtrackapp-main-reconcile-20261122-fd0d767b/`. Rollback tags:
+`rollback-main-reconcile-20261122` (backend and frontend). See the
+[release record](../operations/MAIN_RECONCILE_RELEASE_2026-11-22.md).
+
 ## Auto Parts publish dialog lists stores from every workspace (2026-11-19, main b5dc7649)
 
 Deployed to production on 2026-11-19 as frontend overlay `realtrackapp-frontend:publish-all-stores-20261119-b5dc7649` (bundle `index-DFsxB-xW.js`, CSS unchanged) = `FROM ebay-store-reuse-20261118-8611a1ac` + a new `dist/`. Built from the live frontend recipe (which reproduced the live `index-Dl7uTV6z.js` byte for byte) plus `PublishModal.tsx` and `PublishProgressPanel.tsx` from main `b5dc7649` and only the one added `storeOrganizationIds` line in `CatalogManager.tsx` (live `CatalogManager.tsx` is older than main's). Only the frontend container was recreated; the backend stayed on `order-import-20261119-71fe0d42`. Checked live: the site serves the new bundle, the bundle contains the new strings, `/api/health` returns 200. A signed-in browser check of the dialog was not done. Rollback tag `realtrackapp-frontend:rollback-publish-all-stores-20261119`; release files and `compose-args-frontend.txt` in `/home/ubuntu/realtrackapp-publish-all-stores-20261119-b5dc7649/`.
