@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-11-24 — Cross-store sale sync finds listings Omni has not synced yet
+
+- Fixed: a sold part could stay live on another store when Omni's listing mirror did not know that listing yet. Example: SKU `AV17-4437` (L.L.Bean denim pants) sold on Primewardrobeusa on 2026-11-21 (order 14-15451-61105). The sync ran within 5 s and ended the Artistic Haul copy, but The Fashion Story's copy 206652901264 (listed 2026-10-25) stayed live with quantity 1. That listing reached `ebay_published_listings` only at 03:18 on 2026-11-22.
+- Cause: the mirror is refreshed weekly in production. `PUBLISHED_LISTINGS_SYNC_CRON=0 3 * * 0` replaces the 15-minute delta refresh, so it runs on Sunday at 03:00 like the full refresh. In the 20 days before, The Fashion Story had one refresh (2026-11-22), and it added 4,893 listings the mirror did not have. All 12 active accounts showed the same weekly pattern. The sync searched only the mirror, so anything listed since the last Sunday was invisible to it.
+- Fix: at sale time, every active connected eBay store is also asked on eBay for its live listings of the sold SKU (Trading `GetSellerList` with `SKUArray`, EndTime window now to +119 days, which covers GTC; new `EbayTradingApiService.findLiveItemsBySku`). Results are filtered to exact SKU matches and `Active` listings, and exclude the item that sold and items the mirror already returned. Each one goes through the same checks and actions as a mirror listing: same-part title check, live `GetItem` quantity, then end or lower.
+- Recording: a live-only listing is recorded with `target_key` `item:<itemId>` and no `target_published_listing_id`. Finished pairs are also matched by item number, so a listing first handled live is not lowered again once the mirror picks it up. A store whose lookup fails is recorded as `lookup:<storeId>` with status `failed`. The other stores still go ahead, and the job fails so it retries; a later successful lookup marks that row `done`.
+- Off switch for the lookup alone: `CROSS_STORE_SALE_SYNC_LIVE_LOOKUP=0`. Cost: one `GetSellerList` call per active store per sold order line (12 stores today).
+- Backend only: `orders/cross-store-sale-sync.{service,util}.ts`, `channels/ebay/ebay-trading-api.service.ts`, spec (+7 tests). The mirror refresh schedule is unchanged.
+
 ## 2026-11-22 — Production rebuilt from `main` (deployed, f33bbcdf); Fashion catalog loads in seconds
 
 - Why: the Fashion catalog was slow. On the live code, one Fashion facets request was about 25 s of database time and the summary about 9.5 s. Production had also drifted from `main` through overlay-only hotfixes.

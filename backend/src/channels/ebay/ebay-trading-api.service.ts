@@ -97,6 +97,16 @@ function tagValue(block: string, tag: string): string | null {
  * ErrorParameters value, as HTML. Surface it so operators don't see only
  * "title and/or description may contain improper words".
  */
+function decodeXmlEntities(value: string | null): string | null {
+  if (value == null) return null;
+  return value
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, '&');
+}
+
 function tradingPolicyReason(xml: string): string | null {
   const parameters = xml.match(
     /<ErrorParameters\b[^>]*>([\s\S]*?)<\/ErrorParameters>/i,
@@ -578,6 +588,84 @@ export class EbayTradingApiService {
       page,
       hasMore: page < totalPages,
     };
+  }
+
+  /**
+   * The seller's live listings that carry `sku`, read from eBay itself
+   * (GetSellerList + SKUArray), so it finds listings Omni's mirror has not
+   * synced yet. eBay returns listings from every site of the seller. The
+   * EndTime window (now .. +119 days) covers GTC listings, whose EndTime is
+   * at most 30 days ahead.
+   */
+  async findLiveItemsBySku(
+    storeId: string,
+    sku: string,
+    marketplaceId?: string | null,
+  ): Promise<
+    Array<{
+      itemId: string;
+      title: string | null;
+      sku: string | null;
+      listingStatus: string;
+      site: string | null;
+    }>
+  > {
+    const now = new Date();
+    const endFrom = this.formatTradingDate(now);
+    const endTo = this.formatTradingDate(
+      new Date(now.getTime() + 119 * 24 * 60 * 60 * 1000),
+    );
+    const escaped = sku
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;');
+    const found: Array<{
+      itemId: string;
+      title: string | null;
+      sku: string | null;
+      listingStatus: string;
+      site: string | null;
+    }> = [];
+    for (let page = 1; page <= 3; page++) {
+      const body = `<?xml version="1.0" encoding="utf-8"?>
+<GetSellerListRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <ErrorLanguage>en_US</ErrorLanguage>
+  <WarningLevel>High</WarningLevel>
+  <EndTimeFrom>${endFrom}</EndTimeFrom>
+  <EndTimeTo>${endTo}</EndTimeTo>
+  <SKUArray><SKU>${escaped}</SKU></SKUArray>
+  <GranularityLevel>Coarse</GranularityLevel>
+  <Pagination>
+    <EntriesPerPage>200</EntriesPerPage>
+    <PageNumber>${page}</PageNumber>
+  </Pagination>
+</GetSellerListRequest>`;
+      const xml = await this.postTradingRequest(
+        storeId,
+        'GetSellerList',
+        body,
+        marketplaceId,
+      );
+      if (/<Ack>\s*Failure\s*<\/Ack>/i.test(xml)) {
+        throw new Error(
+          tagValue(xml, 'LongMessage') ?? 'GetSellerList by SKU failed',
+        );
+      }
+      for (const block of xml.match(/<Item>[\s\S]*?<\/Item>/gi) ?? []) {
+        const itemId = tagValue(block, 'ItemID');
+        if (!itemId) continue;
+        found.push({
+          itemId,
+          title: decodeXmlEntities(tagValue(block, 'Title')),
+          sku: decodeXmlEntities(tagValue(block, 'SKU')),
+          listingStatus: tagValue(block, 'ListingStatus') ?? 'Active',
+          site: tagValue(block, 'Site'),
+        });
+      }
+      const totalPages = Number(tagValue(xml, 'TotalNumberOfPages') ?? '1');
+      if (!Number.isFinite(totalPages) || page >= totalPages) break;
+    }
+    return found;
   }
 
   /**

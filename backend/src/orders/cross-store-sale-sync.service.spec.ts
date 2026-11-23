@@ -1,6 +1,7 @@
 import { CrossStoreSaleSyncService } from './cross-store-sale-sync.service';
 import {
   isSamePart,
+  marketplaceForTradingSite,
   samePartVerdict,
   MAX_TARGETS_PER_SKU,
   planTarget,
@@ -88,6 +89,22 @@ function setup(opts: {
     { quantity: number; quantitySold: number; listingStatus?: string }
   >;
   alreadyDone?: string[];
+  /** Earlier finished pairs as [target_key, target_item_id]. */
+  alreadyDoneItems?: Array<[string, string]>;
+  /** Active connected stores asked live by SKU (none by default). */
+  liveStores?: Array<{ store_id: string; store_name: string }>;
+  /** findLiveItemsBySku answer per store id; an Error makes it throw. */
+  liveSku?: Record<
+    string,
+    | Error
+    | Array<{
+        itemId: string;
+        title?: string | null;
+        sku: string | null;
+        listingStatus?: string;
+        site?: string | null;
+      }>
+  >;
   flags?: Record<string, boolean>;
   pushManagedStores?: string[];
 }) {
@@ -124,8 +141,24 @@ function setup(opts: {
         return [{ sku: 'FROM-MIRROR' }];
       if (sql.includes('FROM ebay_published_listings p'))
         return opts.targets ?? [];
-      if (sql.includes('SELECT target_key FROM ebay_cross_store_sale_syncs')) {
-        return (opts.alreadyDone ?? []).map((k) => ({ target_key: k }));
+      if (sql.includes('SELECT target_key, target_item_id FROM')) {
+        return [
+          ...(opts.alreadyDone ?? []).map((k) => ({
+            target_key: k,
+            target_item_id: null,
+          })),
+          ...(opts.alreadyDoneItems ?? []).map(([k, item]) => ({
+            target_key: k,
+            target_item_id: item,
+          })),
+        ];
+      }
+      if (sql.includes('FROM connected_ebay_accounts a')) {
+        return (opts.liveStores ?? []).map((st) => ({
+          ...st,
+          ebay_account_id: `acct-${st.store_id}`,
+          marketplace_id: 'EBAY_US',
+        }));
       }
       if (sql.includes('FROM store_stock_policies')) {
         return (opts.pushManagedStores ?? []).map((s) => ({ store_id: s }));
@@ -148,6 +181,16 @@ function setup(opts: {
         quantitySold: l.quantitySold,
         listingStatus: l.listingStatus ?? 'Active',
       };
+    }),
+    findLiveItemsBySku: jest.fn(async (storeId: string) => {
+      const answer = opts.liveSku?.[storeId] ?? [];
+      if (answer instanceof Error) throw answer;
+      return answer.map((a) => ({
+        title: '1999-2002 Audi A4 Radio Cage 8D0858005Q',
+        listingStatus: 'Active',
+        site: 'US',
+        ...a,
+      }));
     }),
     endFixedPriceItem: jest.fn(async () => undefined),
     reviseFixedPriceItem: jest.fn(
@@ -183,6 +226,15 @@ function setup(opts: {
         action: q.params[9],
         reason: q.params[11],
       }));
+  const recordedIds = () =>
+    queries
+      .filter((q) => q.sql.includes('INSERT INTO ebay_cross_store_sale_syncs'))
+      .map((q) => ({
+        targetKey: q.params[2],
+        targetListingId: q.params[3],
+        targetStoreId: q.params[4],
+        targetItemId: q.params[5],
+      }));
   const mirrorUpdates = () =>
     queries
       .filter((q) => q.sql.includes('UPDATE ebay_published_listings'))
@@ -195,6 +247,8 @@ function setup(opts: {
     notifications,
     queue,
     recorded,
+    recordedIds,
+    queries,
     mirrorUpdates,
     live,
   };
@@ -556,5 +610,155 @@ describe('CrossStoreSaleSyncService same-part guard', () => {
     );
     expect(t.trading.getItemDetails).not.toHaveBeenCalled();
     expect(t.trading.endFixedPriceItem).not.toHaveBeenCalled();
+  });
+});
+
+describe('CrossStoreSaleSyncService live SKU lookup', () => {
+  const stores = [
+    { store_id: 'store-a', store_name: 'Store A' },
+    { store_id: 'store-c', store_name: 'Store C' },
+  ];
+
+  it('ends a live listing the mirror has not synced yet', async () => {
+    const t = setup({
+      targets: [],
+      liveStores: stores,
+      liveSku: {
+        // The sold listing itself comes back too; it is left alone.
+        'store-a': [{ itemId: '100', sku: 'BU2-6529' }],
+        'store-c': [{ itemId: '206', sku: 'BU2-6529' }],
+      },
+      live: { '206': { quantity: 1, quantitySold: 0 } },
+    });
+    const results = await t.service.syncOrder('order-1');
+    expect(t.trading.findLiveItemsBySku).toHaveBeenCalledWith(
+      'store-c',
+      'BU2-6529',
+      'EBAY_US',
+    );
+    expect(t.trading.endFixedPriceItem).toHaveBeenCalledTimes(1);
+    expect(t.trading.endFixedPriceItem).toHaveBeenCalledWith(
+      'store-c',
+      '206',
+      'EBAY_US',
+    );
+    expect(results).toEqual([
+      expect.objectContaining({
+        targetListingId: null,
+        targetStoreName: 'Store C',
+        targetItemId: '206',
+        action: 'end',
+        status: 'done',
+      }),
+    ]);
+    expect(t.recordedIds()).toEqual([
+      {
+        targetKey: 'item:206',
+        targetListingId: null,
+        targetStoreId: 'store-c',
+        targetItemId: '206',
+      },
+    ]);
+    // Mirror row by item number only: no mirror id for a live-only find.
+    expect(t.mirrorUpdates()).toEqual([[null, 'ended', 0, '206']]);
+  });
+
+  it('does not act twice on a listing the mirror already has', async () => {
+    const t = setup({
+      targets: [
+        target({ id: 'pl-b', store_id: 'store-c', ebay_item_id: '206' }),
+      ],
+      liveStores: stores,
+      liveSku: { 'store-c': [{ itemId: '206', sku: 'BU2-6529' }] },
+      live: { '206': { quantity: 1, quantitySold: 0 } },
+    });
+    await t.service.syncOrder('order-1');
+    expect(t.trading.endFixedPriceItem).toHaveBeenCalledTimes(1);
+    expect(t.recorded().map((r) => r.targetKey)).toEqual(['pl-b']);
+  });
+
+  it('ignores other SKUs and listings that are not live', async () => {
+    const t = setup({
+      targets: [],
+      liveStores: stores,
+      liveSku: {
+        'store-c': [
+          { itemId: '301', sku: 'BU2-6529-B' },
+          { itemId: '302', sku: 'BU2-6529', listingStatus: 'Completed' },
+        ],
+      },
+    });
+    const results = await t.service.syncOrder('order-1');
+    expect(results).toEqual([
+      expect.objectContaining({
+        status: 'skipped',
+        reason: 'no_other_listings',
+      }),
+    ]);
+    expect(t.trading.getItemDetails).not.toHaveBeenCalled();
+  });
+
+  it('skips a listing already handled for this sale under another key', async () => {
+    const t = setup({
+      targets: [
+        target({ id: 'pl-new', store_id: 'store-c', ebay_item_id: '206' }),
+      ],
+      alreadyDoneItems: [['item:206', '206']],
+      live: { '206': { quantity: 1, quantitySold: 0 } },
+    });
+    const results = await t.service.syncOrder('order-1');
+    expect(results).toEqual([]);
+    expect(t.trading.getItemDetails).not.toHaveBeenCalled();
+  });
+
+  it('still syncs the other stores when one lookup fails, then retries', async () => {
+    const t = setup({
+      targets: [],
+      liveStores: stores,
+      liveSku: {
+        'store-a': new Error('eBay timeout'),
+        'store-c': [{ itemId: '206', sku: 'BU2-6529' }],
+      },
+      live: { '206': { quantity: 1, quantitySold: 0 } },
+    });
+    await expect(t.service.syncOrder('order-1')).rejects.toThrow(
+      /failed for 1 listing/,
+    );
+    expect(t.trading.endFixedPriceItem).toHaveBeenCalledWith(
+      'store-c',
+      '206',
+      'EBAY_US',
+    );
+    expect(t.recorded()).toEqual([
+      {
+        targetKey: 'lookup:store-a',
+        status: 'failed',
+        action: 'none',
+        reason: 'live_lookup_failed',
+      },
+      { targetKey: 'item:206', status: 'done', action: 'end', reason: null },
+    ]);
+  });
+
+  it('can be switched off with CROSS_STORE_SALE_SYNC_LIVE_LOOKUP=0', async () => {
+    process.env.CROSS_STORE_SALE_SYNC_LIVE_LOOKUP = '0';
+    try {
+      const t = setup({
+        targets: [],
+        liveStores: stores,
+        liveSku: { 'store-c': [{ itemId: '206', sku: 'BU2-6529' }] },
+      });
+      await t.service.syncOrder('order-1');
+      expect(t.trading.findLiveItemsBySku).not.toHaveBeenCalled();
+    } finally {
+      delete process.env.CROSS_STORE_SALE_SYNC_LIVE_LOOKUP;
+    }
+  });
+
+  it('maps Trading sites to marketplaces', () => {
+    expect(marketplaceForTradingSite('US')).toBe('EBAY_US');
+    expect(marketplaceForTradingSite('Germany')).toBe('EBAY_DE');
+    expect(marketplaceForTradingSite('UK')).toBe('EBAY_GB');
+    expect(marketplaceForTradingSite(null)).toBeNull();
   });
 });

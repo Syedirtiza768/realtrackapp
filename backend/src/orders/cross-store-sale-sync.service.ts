@@ -11,9 +11,14 @@ import {
   CROSS_STORE_SALE_SYNC_FLAG,
   CROSS_STORE_SALE_SYNC_QUEUE,
   MAX_TARGETS_PER_SKU,
+  LIVE_TARGET_PREFIX,
+  LOOKUP_TARGET_PREFIX,
   isListingNotFoundError,
+  isLiveOnlyTarget,
   isLiveTradingStatus,
   isSamePart,
+  liveLookupEnabled,
+  marketplaceForTradingSite,
   samePartVerdict,
   normalizeSku,
   planTarget,
@@ -329,8 +334,8 @@ export class CrossStoreSaleSyncService {
     });
 
     const rejected = rejectSku(sku);
-    if (rejected) {
-      const r = lineOutcome(rejected);
+    if (rejected || !sku) {
+      const r = lineOutcome(rejected ?? 'no_sku');
       if (!ctx.dryRun) await this.record(r, LINE_TARGET_KEY);
       return [r];
     }
@@ -338,7 +343,7 @@ export class CrossStoreSaleSyncService {
     // Other live copies of this SKU in every non-archived eBay store, one row
     // per eBay listing (the mirror can hold one item under two marketplaces);
     // the listing that just sold is excluded (eBay already lowered it).
-    const targets = await this.db.query<TargetRow[]>(
+    const mirrorTargets = await this.db.query<TargetRow[]>(
       `SELECT DISTINCT ON (COALESCE(p.ebay_item_id, 'offer:' || p.offer_id))
               p.id, p.store_id, s.store_name, p.ebay_account_id, p.marketplace_id, p.ebay_item_id, p.offer_id,
               p.title, a.connection_status AS account_status
@@ -355,7 +360,40 @@ export class CrossStoreSaleSyncService {
       [sku, soldItemId],
     );
 
-    if (!targets.length) return [lineOutcome('no_other_listings')];
+    // The mirror is refreshed on a schedule (weekly in production), so a
+    // listing made since the last refresh is not in it. Ask every connected
+    // store on eBay for its live listings of this SKU as well.
+    const live = await this.findLiveTargets(sku, soldItemId, mirrorTargets);
+    const targets = [...mirrorTargets, ...live.targets];
+    const lookupFailures: CrossStoreSyncResult[] = live.failures.map((f) => ({
+      ...lineOutcome('live_lookup_failed'),
+      targetStoreId: f.store_id,
+      targetStoreName: f.store_name,
+      status: 'failed',
+      error: f.error,
+    }));
+    if (!ctx.dryRun) {
+      for (const r of lookupFailures) {
+        await this.record(r, `${LOOKUP_TARGET_PREFIX}${r.targetStoreId}`);
+      }
+      if (live.okStoreIds.length) {
+        // A retry whose lookup now worked clears the earlier failure.
+        await this.db.query(
+          `UPDATE ebay_cross_store_sale_syncs
+              SET status = 'done', reason = 'live_lookup_ok', error = NULL, updated_at = now()
+            WHERE order_item_id = $1 AND status = 'failed' AND target_key = ANY($2::varchar[])`,
+          [
+            line.id,
+            live.okStoreIds.map((id) => `${LOOKUP_TARGET_PREFIX}${id}`),
+          ],
+        );
+      }
+    }
+
+    if (!targets.length)
+      return lookupFailures.length
+        ? lookupFailures
+        : [lineOutcome('no_other_listings')];
     if (targets.length > MAX_TARGETS_PER_SKU) {
       const r = lineOutcome('sku_too_common');
       if (!ctx.dryRun) {
@@ -375,22 +413,28 @@ export class CrossStoreSaleSyncService {
       return [r];
     }
 
-    const done = new Set(
-      (
-        await this.db.query<Array<{ target_key: string }>>(
-          `SELECT target_key FROM ebay_cross_store_sale_syncs
-            WHERE order_item_id = $1 AND status IN ('done','skipped') AND reason IS DISTINCT FROM 'account_not_connected'`,
-          [line.id],
-        )
-      ).map((r) => r.target_key),
+    // Finished pairs, by mirror row id and by eBay item number: a listing
+    // first handled as a live-only find keeps its item number when the mirror
+    // later picks it up, so the same sale is never taken off it twice.
+    const finished = await this.db.query<
+      Array<{ target_key: string; target_item_id: string | null }>
+    >(
+      `SELECT target_key, target_item_id FROM ebay_cross_store_sale_syncs
+        WHERE order_item_id = $1 AND status IN ('done','skipped') AND reason IS DISTINCT FROM 'account_not_connected'`,
+      [line.id],
+    );
+    const done = new Set(finished.map((r) => r.target_key));
+    const doneItems = new Set(
+      finished.map((r) => r.target_item_id).filter((x): x is string => !!x),
     );
     const pushManaged = ctx.stockPushOn
       ? await this.pushManagedStores(targets.map((t) => t.store_id))
       : new Set<string>();
 
-    const results: CrossStoreSyncResult[] = [];
+    const results: CrossStoreSyncResult[] = [...lookupFailures];
     for (const t of targets) {
       if (done.has(t.id)) continue;
+      if (t.ebay_item_id && doneItems.has(t.ebay_item_id)) continue;
       const r = await this.syncTarget(base, t, {
         ...ctx,
         pushManaged,
@@ -424,7 +468,7 @@ export class CrossStoreSaleSyncService {
   ): Promise<CrossStoreSyncResult> {
     const result: CrossStoreSyncResult = {
       ...base,
-      targetListingId: t.id,
+      targetListingId: isLiveOnlyTarget(t.id) ? null : t.id,
       targetStoreId: t.store_id,
       targetStoreName: t.store_name,
       targetItemId: t.ebay_item_id,
@@ -616,9 +660,106 @@ export class CrossStoreSaleSyncService {
     await this.db.query(
       `UPDATE ebay_published_listings
           SET listing_status = $2, quantity_available = $3, last_synced_at = now(), updated_at = now()
-        WHERE id = $1 OR ($4::varchar IS NOT NULL AND ebay_item_id = $4)`,
-      [t.id, s.status, s.qty, t.ebay_item_id],
+        WHERE ($1::uuid IS NOT NULL AND id = $1::uuid) OR ($4::varchar IS NOT NULL AND ebay_item_id = $4)`,
+      [isLiveOnlyTarget(t.id) ? null : t.id, s.status, s.qty, t.ebay_item_id],
     );
+  }
+
+  /**
+   * Live listings of `sku` on every active connected eBay store that the
+   * mirror rows do not already cover. A store whose lookup fails is returned
+   * in `failures` so the job retries; the others still go ahead.
+   */
+  private async findLiveTargets(
+    sku: string,
+    soldItemId: string | null,
+    mirrorTargets: TargetRow[],
+  ): Promise<{
+    targets: TargetRow[];
+    failures: Array<{ store_id: string; store_name: string; error: string }>;
+    okStoreIds: string[];
+  }> {
+    const none = { targets: [], failures: [], okStoreIds: [] };
+    if (!liveLookupEnabled()) return none;
+    const stores = await this.db.query<
+      Array<{
+        store_id: string;
+        store_name: string;
+        ebay_account_id: string;
+        marketplace_id: string | null;
+      }>
+    >(
+      `SELECT DISTINCT ON (a.primary_store_id)
+              a.primary_store_id AS store_id, s.store_name, a.id AS ebay_account_id,
+              s.ebay_marketplace_id AS marketplace_id
+         FROM connected_ebay_accounts a
+         JOIN stores s ON s.id = a.primary_store_id AND s.channel = 'ebay' AND s.status <> 'archived'
+        WHERE a.connection_status = 'active'
+        ORDER BY a.primary_store_id, a.updated_at DESC`,
+    );
+    if (!stores.length) return none;
+
+    const known = new Set(
+      mirrorTargets.map((t) => t.ebay_item_id).filter((x): x is string => !!x),
+    );
+    if (soldItemId) known.add(soldItemId);
+
+    const settled = await Promise.allSettled(
+      stores.map((s) =>
+        this.trading.findLiveItemsBySku(s.store_id, sku, s.marketplace_id),
+      ),
+    );
+    const targets: TargetRow[] = [];
+    const failures: Array<{
+      store_id: string;
+      store_name: string;
+      error: string;
+    }> = [];
+    const okStoreIds: string[] = [];
+    settled.forEach((res, i) => {
+      const s = stores[i];
+      if (res.status === 'rejected') {
+        const reason: unknown = res.reason;
+        failures.push({
+          store_id: s.store_id,
+          store_name: s.store_name,
+          error: `Live SKU lookup failed: ${
+            reason instanceof Error ? reason.message : String(reason)
+          }`.slice(0, 1000),
+        });
+        return;
+      }
+      okStoreIds.push(s.store_id);
+      for (const item of res.value) {
+        // eBay matches SKUs loosely; act only on an exact match.
+        if (normalizeSku(item.sku) !== sku) continue;
+        if (!isLiveTradingStatus(item.listingStatus)) continue;
+        if (known.has(item.itemId)) continue;
+        known.add(item.itemId);
+        targets.push({
+          id: `${LIVE_TARGET_PREFIX}${item.itemId}`,
+          store_id: s.store_id,
+          store_name: s.store_name,
+          ebay_account_id: s.ebay_account_id,
+          marketplace_id:
+            marketplaceForTradingSite(item.site) ??
+            s.marketplace_id ??
+            'EBAY_US',
+          ebay_item_id: item.itemId,
+          offer_id: null,
+          title: item.title,
+          account_status: 'active',
+        });
+      }
+    });
+    if (targets.length) {
+      this.logger.log(
+        `Live SKU lookup for ${sku} found ${targets.length} listing(s) the mirror does not have: ${targets
+          .map((t) => `${t.store_name}/${t.ebay_item_id}`)
+          .join(', ')}`,
+      );
+    }
+    return { targets, failures, okStoreIds };
   }
 
   private async record(

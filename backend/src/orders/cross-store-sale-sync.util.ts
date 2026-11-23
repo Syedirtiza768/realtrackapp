@@ -84,6 +84,50 @@ export function isListingNotFoundError(
   return /listing has been deleted|you are not the seller/i.test(message ?? '');
 }
 
+/* ── Live SKU lookup ──────────────────────────────────────────────
+ * The listing mirror (ebay_published_listings) is refreshed on a schedule, so
+ * a listing made since the last refresh is missing from it. At sale time every
+ * connected store is also asked on eBay for its live listings of the SKU.
+ */
+
+/** target_key / target id prefix for a listing found on eBay but not in the mirror. */
+export const LIVE_TARGET_PREFIX = 'item:';
+/** target_key prefix recording a failed live lookup on one store. */
+export const LOOKUP_TARGET_PREFIX = 'lookup:';
+
+export function isLiveOnlyTarget(id: string): boolean {
+  return id.startsWith(LIVE_TARGET_PREFIX);
+}
+
+/** Off switch for the live lookup: CROSS_STORE_SALE_SYNC_LIVE_LOOKUP=0. */
+export function liveLookupEnabled(
+  env: Record<string, string | undefined> = process.env,
+): boolean {
+  const v = (env.CROSS_STORE_SALE_SYNC_LIVE_LOOKUP ?? '').trim().toLowerCase();
+  return !['0', 'false', 'off', 'no'].includes(v);
+}
+
+const TRADING_SITE_MARKETPLACE: Record<string, string> = {
+  us: 'EBAY_US',
+  ebaymotors: 'EBAY_MOTORS_US',
+  uk: 'EBAY_GB',
+  germany: 'EBAY_DE',
+  australia: 'EBAY_AU',
+  canada: 'EBAY_CA',
+  france: 'EBAY_FR',
+  italy: 'EBAY_IT',
+  spain: 'EBAY_ES',
+  austria: 'EBAY_AT',
+  ireland: 'EBAY_IE',
+};
+
+/** Trading Item.Site ("US", "UK", "Germany") → marketplace id, or null. */
+export function marketplaceForTradingSite(
+  site: string | null | undefined,
+): string | null {
+  return TRADING_SITE_MARKETPLACE[(site ?? '').trim().toLowerCase()] ?? null;
+}
+
 /* ── Same-part check ──────────────────────────────────────────────
  * One SKU label is sometimes reused for different items ("Custom-Listing-ABD"
  * on 20 different parts, "GLB-001" on glove boxes of different cars), while
