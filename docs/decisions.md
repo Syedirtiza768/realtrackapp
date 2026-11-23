@@ -13,6 +13,10 @@ and the narrative log in [docs/context/DECISION_LOG.md](context/DECISION_LOG.md)
 this file for quick day-to-day entries; promote something to a full ADR only if it
 needs that level of ceremony.
 
+## 2026-11-24 — Fashion publishes use the Inventory API; a Trading publish leaves the draft offer behind
+
+A Trading publish (`AddFixedPriceItem`) creates a listing without an offer. If the SKU already has an unpublished draft offer, the draft keeps its old category and stays behind as a second record. The Inventory path updates that same offer and publishes it, so one offer carries the category and the listing. Fashion publishes therefore use the Inventory API (`shouldUseTradingApi(req, existingChannel)` in `backend/src/channels/ebay/ebay-publish.service.ts`). A fashion listing that exists only on Trading keeps the Trading path, so no second listing is created. Non-fashion routing is unchanged: `EBAY_LISTING_API_MODE` (default `trading`) and the FEBEST rule still decide. The same commit brings in the publish-mode switch that was uncommitted in the working copy. Deployed on 2026-11-23 as a one-file patch on the running image; this commit is its source.
+
 ## 2026-11-22 — Production is rebuilt from `main`; overlay-only hotfixes are ported first
 
 Production had become a stack of overlay images (each release `FROM` the previous live image
