@@ -1,4 +1,9 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Not, Repository } from 'typeorm';
 import { Store } from '../channels/entities/store.entity.js';
@@ -20,6 +25,21 @@ const FIRST_RUN_WINDOW_MS = 60 * 60_000;
 const LOOKBACK_MS = 10 * 60_000;
 /** An order that keeps failing holds the watermark back at most this long. */
 const MAX_RETRY_WINDOW_MS = 7 * 24 * 60 * 60_000;
+/**
+ * A store whose eBay login has expired is retried this often instead of on
+ * every poll — each attempt is a failed token refresh against eBay. It is
+ * retried at once when its eBay account is reconnected.
+ */
+export const AUTH_RETRY_MS = 60 * 60_000;
+
+/** The store's eBay login is gone (refresh token rejected or missing): only a reconnect fixes it. */
+export function isExpiredLoginError(err: unknown): boolean {
+  if (err instanceof UnauthorizedException) return true;
+  const message = err instanceof Error ? err.message : String(err);
+  return /authorization expired|token refresh failed|rejected the access token/i.test(
+    message,
+  );
+}
 
 /**
  * EbayOrderImportService — Pulls orders from eBay via Fulfillment API
@@ -34,6 +54,12 @@ const MAX_RETRY_WINDOW_MS = 7 * 24 * 60 * 60_000;
 @Injectable()
 export class EbayOrderImportService {
   private readonly logger = new Logger(EbayOrderImportService.name);
+  /** Stores whose eBay login failed: when it failed and when to try again. In memory only. */
+  private readonly loginExpired = new Map<
+    string,
+    { since: number; until: number }
+  >();
+  private lastSkippedKey = '';
 
   constructor(
     @InjectRepository(Store)
@@ -53,20 +79,52 @@ export class EbayOrderImportService {
   async importFromAllStores(): Promise<
     { storeId: string; imported: number; errors: number }[]
   > {
-    const stores = await this.resolveStoresToPoll();
+    const { stores, reconnectedAt } = await this.resolveStoresToPoll();
 
     const results: { storeId: string; imported: number; errors: number }[] = [];
+    const skipped: string[] = [];
 
     for (const store of stores) {
+      const now = Date.now();
+      const backoff = this.loginExpired.get(store.id);
+      if (
+        backoff &&
+        now < backoff.until &&
+        (reconnectedAt.get(store.id) ?? 0) <= backoff.since
+      ) {
+        skipped.push(store.storeName ?? store.id);
+        continue;
+      }
       try {
         const result = await this.importFromStore(store.id);
+        this.loginExpired.delete(store.id);
         results.push(result);
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
-        this.logger.error(
-          `Failed to import orders from store ${store.id}: ${msg}`,
-        );
+        if (isExpiredLoginError(err)) {
+          this.loginExpired.set(store.id, {
+            since: now,
+            until: now + AUTH_RETRY_MS,
+          });
+          this.logger.warn(
+            `Order poll: eBay login expired for store ${store.storeName ?? store.id} (${store.id}); skipping it until it is reconnected, retrying hourly. ${msg}`,
+          );
+        } else {
+          this.logger.error(
+            `Failed to import orders from store ${store.id}: ${msg}`,
+          );
+        }
         results.push({ storeId: store.id, imported: 0, errors: 1 });
+      }
+    }
+
+    const skippedKey = skipped.sort().join(', ');
+    if (skippedKey !== this.lastSkippedKey) {
+      this.lastSkippedKey = skippedKey;
+      if (skipped.length) {
+        this.logger.log(
+          `Order poll skips ${skipped.length} store(s) with an expired eBay login: ${skippedKey}`,
+        );
       }
     }
 
@@ -78,7 +136,11 @@ export class EbayOrderImportService {
    * account even when that store row is paused/suspended — sales still happen on
    * eBay and must reach Omni. Archived stores are never polled.
    */
-  private async resolveStoresToPoll(): Promise<Store[]> {
+  private async resolveStoresToPoll(): Promise<{
+    stores: Store[];
+    /** Latest update of an active connected account per primary store (ms). */
+    reconnectedAt: Map<string, number>;
+  }> {
     const active = await this.storeRepo.find({
       where: { channel: 'ebay', status: 'active' },
     });
@@ -86,6 +148,15 @@ export class EbayOrderImportService {
     const accounts = await this.connectedAccountRepo.find({
       where: { connectionStatus: 'active' },
     });
+    const reconnectedAt = new Map<string, number>();
+    for (const a of accounts) {
+      if (!a.primaryStoreId) continue;
+      const at = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+      reconnectedAt.set(
+        a.primaryStoreId,
+        Math.max(reconnectedAt.get(a.primaryStoreId) ?? 0, at),
+      );
+    }
     const missing = [
       ...new Set(
         accounts
@@ -93,11 +164,11 @@ export class EbayOrderImportService {
           .filter((id): id is string => !!id && !known.has(id)),
       ),
     ];
-    if (!missing.length) return active;
+    if (!missing.length) return { stores: active, reconnectedAt };
     const extra = await this.storeRepo.find({
       where: { id: In(missing), channel: 'ebay', status: Not('archived') },
     });
-    return [...active, ...extra];
+    return { stores: [...active, ...extra], reconnectedAt };
   }
 
   /**

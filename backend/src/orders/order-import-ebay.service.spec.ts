@@ -1,5 +1,10 @@
 import { In, Not } from 'typeorm';
-import { EbayOrderImportService } from './order-import-ebay.service';
+import { UnauthorizedException } from '@nestjs/common';
+import {
+  AUTH_RETRY_MS,
+  EbayOrderImportService,
+  isExpiredLoginError,
+} from './order-import-ebay.service';
 import type { EbayOrder } from '../channels/ebay/ebay-api.types';
 
 const HOUR = 60 * 60_000;
@@ -205,5 +210,90 @@ describe('EbayOrderImportService', () => {
       },
     });
     expect(results.map((r) => r.storeId)).toEqual(['store-1', 'store-paused']);
+  });
+
+  describe('stores whose eBay login has expired', () => {
+    const expired = new UnauthorizedException(
+      'eBay authorization expired — reconnect this store in Settings → eBay Integrations (invalid_grant)',
+    );
+    let now: number;
+    beforeEach(() => {
+      now = Date.parse('2026-11-24T10:00:00Z');
+      jest.spyOn(Date, 'now').mockImplementation(() => now);
+      storeRepo.find.mockResolvedValue([
+        { ...store, id: 'store-ok', storeName: 'OK' },
+        { ...store, id: 'store-dead', storeName: 'Dead' },
+      ]);
+      storeRepo.findOneBy.mockImplementation(({ id }: { id: string }) =>
+        Promise.resolve({ ...store, id }),
+      );
+      fulfillmentApi.getOrders.mockImplementation((storeId: string) =>
+        storeId === 'store-dead'
+          ? Promise.reject(expired)
+          : Promise.resolve({ orders: [], total: 0 }),
+      );
+    });
+    afterEach(() => jest.restoreAllMocks());
+
+    const polled = () =>
+      (fulfillmentApi.getOrders.mock.calls as Array<[string]>).map((c) => c[0]);
+
+    it('skips it on later polls and retries it after an hour', async () => {
+      await service.importFromAllStores();
+      expect(polled()).toEqual(['store-ok', 'store-dead']);
+
+      fulfillmentApi.getOrders.mockClear();
+      now += 60_000;
+      const results = await service.importFromAllStores();
+      expect(polled()).toEqual(['store-ok']);
+      expect(results.map((r) => r.storeId)).toEqual(['store-ok']);
+
+      fulfillmentApi.getOrders.mockClear();
+      now += AUTH_RETRY_MS;
+      await service.importFromAllStores();
+      expect(polled()).toEqual(['store-ok', 'store-dead']);
+    });
+
+    it('retries at once when its eBay account is reconnected', async () => {
+      await service.importFromAllStores();
+      fulfillmentApi.getOrders.mockClear();
+      now += 60_000;
+      accountRepo.find.mockResolvedValue([
+        { primaryStoreId: 'store-dead', updatedAt: new Date(now - 1_000) },
+      ]);
+      storeRepo.find.mockResolvedValueOnce([
+        { ...store, id: 'store-ok', storeName: 'OK' },
+        { ...store, id: 'store-dead', storeName: 'Dead' },
+      ]);
+
+      await service.importFromAllStores();
+
+      expect(polled()).toEqual(['store-ok', 'store-dead']);
+    });
+
+    it('keeps polling a store every time after other errors', async () => {
+      fulfillmentApi.getOrders.mockImplementation((storeId: string) =>
+        storeId === 'store-dead'
+          ? Promise.reject(new Error('eBay 500'))
+          : Promise.resolve({ orders: [], total: 0 }),
+      );
+      await service.importFromAllStores();
+      fulfillmentApi.getOrders.mockClear();
+      now += 60_000;
+
+      await service.importFromAllStores();
+
+      expect(polled()).toEqual(['store-ok', 'store-dead']);
+    });
+  });
+
+  it('recognises expired-login errors', () => {
+    expect(isExpiredLoginError(new UnauthorizedException('x'))).toBe(true);
+    expect(
+      isExpiredLoginError(
+        new Error('SellerPundit token refresh failed — re-sync stores'),
+      ),
+    ).toBe(true);
+    expect(isExpiredLoginError(new Error('eBay 500'))).toBe(false);
   });
 });

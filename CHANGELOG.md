@@ -1,11 +1,18 @@
 # Changelog
 
+## 2026-11-24 — Order poll skips stores whose eBay login has expired
+
+- Why: with the poll every minute, six stores with dead eBay logins failed on every pass: K. TOYOTA LEXUS NISSAN, K. Brit Auto Depot - UK, K. Euro Japan Auto Parts, K. Salvage Dismantlers - DE, VW & RR, Prime Wardrobe De. Each failure was a rejected token refresh against eBay plus an error log line, about 8,600 a day.
+- Changed (`orders/order-import-ebay.service.ts`): when a store's import fails because its eBay login is gone (`UnauthorizedException`, "authorization expired", "token refresh failed", "rejected the access token"), the poll skips that store and retries it once an hour (`AUTH_RETRY_MS`). It retries at once when the store's connected eBay account is active again with a newer `updated_at`, i.e. after a reconnect. Other errors (eBay 5xx, timeouts) are still retried on every pass. The skip list is in memory, so after a restart each dead store is tried once more. One warning is logged when a store enters the skip, and one summary line whenever the skipped set changes.
+- The rule follows the actual failure, not the account label. The Business & Industrial eBay store's account is `reconnect_required`, but its token still works and its orders still import, so it keeps being polled.
+- Tests: `order-import-ebay.service.spec.ts` (+4).
+
 ## 2026-11-24 — eBay orders are checked every minute (was every 5 minutes)
 
 - Why: eBay sale notifications never reach Omni (see the entry below), so the order poll is the only way a sale arrives. At `*/5` a sold part stayed live on the other stores for up to about 5 minutes (median about 140 s from sale to import).
 - Changed (production config only, operator go-ahead): `ORDER_IMPORT_CRON=* * * * *` on the backend. It is set in the compose override `/home/ubuntu/realtrackapp-order-poll-1min-20261124/compose-backend-order-poll-1min.yml`, on top of the live `fashion-inventory-20261124` config (same image, only this setting added). Rollback: `compose-args-backend.rollback.txt` in that directory.
 - Verified after the restart: one pass per minute (21:34–21:37 UTC), 4.0–5.1 s each, 13 connected stores, one Fulfillment `getOrders` request each. That is about 18,700 a day instead of about 3,700, outside the app's 5,000-a-day Trading allowance. Expected sale-to-takedown time is about 35 s on average and about 65 s at most. The code default stays `*/5`.
-- Not changed: the 8 disconnected stores are still polled and fail with "eBay authorization expired" on every pass (about 11,500 error lines a day at 1 minute). The backend container's json-file log has no size cap.
+- The disconnected stores that failed on every pass are skipped since the next entry (retried hourly). The backend container's json-file log has no size cap.
 
 ## 2026-11-24 — Fashion publishes use the Inventory API; publish-mode switch with tests
 
