@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-24 — eBay orders are checked every minute (was every 5 minutes)
+
+- Why: eBay sale notifications never reach Omni (see the entry below), so the order poll is the only way a sale arrives. At `*/5` a sold part stayed live on the other stores for up to about 5 minutes (median about 140 s from sale to import).
+- Changed (production config only, operator go-ahead): `ORDER_IMPORT_CRON=* * * * *` on the backend. It is set in the compose override `/home/ubuntu/realtrackapp-order-poll-1min-20261124/compose-backend-order-poll-1min.yml`, on top of the live `fashion-inventory-20261124` config (same image, only this setting added). Rollback: `compose-args-backend.rollback.txt` in that directory.
+- Verified after the restart: one pass per minute (21:34–21:37 UTC), 4.0–5.1 s each, 13 connected stores, one Fulfillment `getOrders` request each. That is about 18,700 a day instead of about 3,700, outside the app's 5,000-a-day Trading allowance. Expected sale-to-takedown time is about 35 s on average and about 65 s at most. The code default stays `*/5`.
+- Not changed: the 8 disconnected stores are still polled and fail with "eBay authorization expired" on every pass (about 11,500 error lines a day at 1 minute). The backend container's json-file log has no size cap.
+
 ## 2026-11-24 — eBay sale notifications never arrive; 30-day sweep ended 38 sold duplicates; read-only pool connections
 
 - Found: the eBay sale notifications subscribed on 2026-11-21 have never fired. `GetNotificationsUsage` (60 h) shows 0 delivered, queued, expired or errored for all 12 subscribed accounts, although they had about 50 sales in that window. Host nginx logged no POST from eBay to `/api/integrations/ebay/platform-notifications`, only our own curl tests. Preferences still read back as enabled (application URL on, `FixedPriceTransaction` / `AuctionCheckoutComplete` / `ItemSold` on). eBay's Platform Notifications guide says it sends them for "listings that your application has submitted": the `AppId` is attached to the listing by AddItem/RelistItem/ReviseItem. Most listings were created by other tools or on eBay, so Omni's app is never notified. Sales therefore reach Omni only through the 5-minute order poll: since 2026-11-21 the median sale-to-import time is about 140 s and the maximum about 290 s. The cross-store takedown follows 5 s after import.
