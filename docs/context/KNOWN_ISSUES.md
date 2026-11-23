@@ -303,6 +303,29 @@ Make/Model/Year, and `fitmentDataToCompatibilityPayload` omits `Submodel`.
 
 ## Medium Priority Issues
 
+### R30: Fashion size labels are not checked against eBay before publish
+
+**Type**: Validation gap
+**Severity**: Medium
+**Status**: Open — found during the Primewardrobeusa Fashion publish, 2026-11-23
+
+**Description**: Fashion sizes are written to eBay as the catalogue has them, and eBay rejects them
+only when the Inventory publish runs. On 2026-11-23 (UTC), 34 rows in batch `999ba901` failed on eBay's
+size rules. Each carried the message "The product aspects for this category no longer support custom
+values for Size", some with a detail such as "Regular is not a valid Size Type for the Size 36". In the
+26 rows reviewed so far, the size label was not one that eBay's Taxonomy accepts for the listing's Size
+Type in that category, for example a bare `42` where the list has `EU 42` or `IT 42`. Fifteen had the
+label changed: 13 then published, `AV21-5538` published after its category also moved to Skirts, and
+`AV20-5246` is held for a content review and has not been retried. The other 19 still need a decision:
+11 are held for a size or size-type decision and 8 have not been reviewed. A failed row creates no
+listing, so no data is lost; it needs a manual size decision and a new attempt.
+
+**Affected Areas**: the Fashion publish projection in `backend/src/verticals/verticals.service.ts`,
+which checks required aspects but not allowed values; `backend/src/fashion-batch-publish/`.
+**Suggested Fix**: validate the size against the category's Taxonomy values (the Size values allowed for
+each Size Type) before publish, and show the reason in the batch review. Record: the 2026-11-24
+"Fashion retry" and "Fashion publish: WebP photo fix, size labels" entries in `CHANGELOG.md`.
+
 ### R29: Some already-validated fitment may be wrong
 
 **Type**: Data quality

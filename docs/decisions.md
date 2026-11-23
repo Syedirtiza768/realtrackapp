@@ -17,6 +17,12 @@ needs that level of ceremony.
 
 A Trading publish (`AddFixedPriceItem`) creates a listing without an offer. If the SKU already has an unpublished draft offer, the draft keeps its old category and stays behind as a second record. The Inventory path updates that same offer and publishes it, so one offer carries the category and the listing. Fashion publishes therefore use the Inventory API (`shouldUseTradingApi(req, existingChannel)` in `backend/src/channels/ebay/ebay-publish.service.ts`). A fashion listing that exists only on Trading keeps the Trading path, so no second listing is created. Non-fashion routing is unchanged: `EBAY_LISTING_API_MODE` (default `trading`) and the FEBEST rule still decide. The same commit brings in the publish-mode switch that was uncommitted in the working copy. Deployed on 2026-11-23 as a one-file patch on the running image; this commit is its source.
 
+## 2026-11-24 — Fashion retry runs in groups of at most five, each checked on eBay before the next
+
+The failed rows of batch `999ba901` were retried through new `--ids` batches, not `--resume-batch`. Both are flags of the operations publish runner, which is not in the repository. `--resume-batch` selects only the unfinished rows of a batch and does not check holds. The failed rows were already finished, and after the pause the batch had no unfinished rows, so it would have retried nothing; if paused rows are reopened later, it would publish them without a hold check. `--ids` creates a new batch with exactly the listed rows and refuses any row that is on hold. Each group was launched detached in the backend container and checked on eBay (offer, listing, location, policies, quantity, size, photos, and the Browse buyer view). The next group started only after every row of the previous group had passed that check.
+
+Two rules applied to rows that still looked wrong. A size label was changed only to a value the category's Taxonomy accepts for Size Type Regular: to the regional label in the title where the title had one, and otherwise to an EU label with the operator's approval. A row whose offer category contradicts its title (`AV21-5538`: the offer was in Shorts, 11555, but the title is a skirt) was held out of the retry until the operator approved moving it to Skirts (63864). The row-level record is the 2026-11-24 "Fashion retry" entry in `CHANGELOG.md`.
+
 ## 2026-11-22 — Production is rebuilt from `main`; overlay-only hotfixes are ported first
 
 Production had become a stack of overlay images (each release `FROM` the previous live image

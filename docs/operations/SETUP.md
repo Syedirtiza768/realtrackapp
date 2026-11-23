@@ -231,6 +231,34 @@ production Compose override, and recreate only `frontend` with the `--no-deps`
 and `--no-build` options. Retain the prior image and override as the rollback
 point; record the active image and source in `docs/context/CURRENT_STATE.md`.
 
+For a backend fix, the rule is a whole-`dist` build from a commit on `main`
+(see the 2026-11-22 entry in `docs/decisions.md`). Three releases since then
+were patches on the running image instead:
+`xs-live-lookup-20261124-bc82e054`, `fashion-inventory-20261124` and
+`poll-skip-expired-20261124-f0daaf54`. That is a deviation from the rule, not
+a change to it, and each patch needs the operator's go-ahead. If a patch is
+used:
+
+1. Commit the source change to `main` first and build that commit. Copy only
+   the changed compiled files into an image built `FROM` the running image.
+   Edit the compiled live file by hand only when the source cannot be
+   committed yet: use an exact-block replacement that asserts exactly one
+   match, and commit the source in the same session.
+2. Diff the live file against the candidate: only the intended hunks may
+   differ. Run `node --check` and a behaviour smoke test in a one-off
+   container.
+3. Add a Compose override that sets only the backend `image`. The composed
+   config must differ from the current one only in that image line.
+4. Check the running image again just before recreating. If another session
+   has deployed since step 1, rebuild from the new running image. Then
+   recreate only the service, with the container's own Compose file list
+   plus the override:
+   `sudo docker compose -p realtrackapp <files> up -d --no-deps --no-build --pull never backend`.
+   Wait for the healthcheck.
+5. Rollback is the same command without the override. Keep the previous
+   image tag on the server, and record the image tag, source commit and
+   rollback in `CHANGELOG.md`.
+
 Production note (2026-08-21): the eBay inventory-location reconciliation fix
 was deployed with a backend-only Docker rebuild and the backend health endpoint
 was verified before retrying Superior Auto Parts publication.
