@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-24 — Publish-mode switch retired again; bundled New-condition photos repaired in git
+
+- `ebay-publish.service.ts`: the `EBAY_LISTING_API_MODE` switch and the FEBEST rule that `daba9296` brought back are removed again. `main` had retired them on 2026-10-06 (`6338a8f0`); the copy in the old working tree was stale code, not a new change. Every new non-fashion single-item listing uses the Trading API, and Fashion keeps its Inventory API rule. The deployed backend (`fashion-inventory-20261124` and later) already routes this way: its compiled routing has the Fashion rule and otherwise always chooses Trading. Production behaviour does not change. Tests updated.
+- `backend/assets/new-condition-listing-images/F1.webp`, `F2.webp` and `F3.webp` were truncated in git: each had its CRLF byte pairs stripped (7, 6 and 2 bytes short of its RIFF length), which made eBay Picture Services reject them. They are now the valid files, byte-identical to the S3 objects `5d6fa7…-F1.webp`, `4dab3c…-F2.webp` and `088aad…-F3.webp`. An image built from this commit names its upload keys after those digests, finds the objects already in S3 and reuses them, so it no longer depends on the objects overwritten on 2026-11-23. A new `.gitattributes` marks image and other binary files as binary.
+- Not deployed by this commit.
+
 ## 2026-11-24 — Order poll skips stores whose eBay login has expired
 
 - Why: with the poll every minute, six stores with dead eBay logins failed on every pass: K. TOYOTA LEXUS NISSAN, K. Brit Auto Depot - UK, K. Euro Japan Auto Parts, K. Salvage Dismantlers - DE, VW & RR, Prime Wardrobe De. Each failure was a rejected token refresh against eBay plus an error log line, about 8,600 a day.
@@ -17,7 +23,7 @@
 
 ## 2026-11-24 — Fashion publishes use the Inventory API; publish-mode switch with tests
 
-- `ebay-publish.service.ts`: `shouldUseTradingApi(req, existingChannel)` sends `vertical === 'fashion'` to the Inventory API. A fashion listing that exists only as a Trading listing keeps the Trading path. Non-fashion routing reads `EBAY_LISTING_API_MODE` (default `trading`) and the FEBEST rule.
+- `ebay-publish.service.ts`: `shouldUseTradingApi(req, existingChannel)` sends `vertical === 'fashion'` to the Inventory API. A fashion listing that exists only as a Trading listing keeps the Trading path. Non-fashion routing reads `EBAY_LISTING_API_MODE` (default `trading`) and the FEBEST rule. *Outdated 2026-11-24: that switch had been retired on 2026-10-06 and is removed again; non-fashion listings always use Trading. See "Publish-mode switch retired again".*
 - Tests: the routing cases are in `ebay-publish.service.spec.ts` ('Trading API selection').
 - Deployed on 2026-11-23 21:29 UTC as `realtrackapp-backend:fashion-inventory-20261124`, a one-file patch on the running image; this commit is its source. Reason: a Trading publish leaves an unpublished draft offer behind (see the decision log).
 
@@ -35,7 +41,7 @@
 - Changed: the three shared New-condition photo objects in S3 (`mhn/shared/new-condition-listing-images/429603…-F1.webp`, `b94f59…-F2.webp`, `7fe18e…-F3.webp`) now hold the bytes of the valid copies of the same photos (`5d6fa7…-F1.webp`, `4dab3c…-F2.webp`, `088aad…-F3.webp`, created 2026-10-10). They had been written from CRLF-stripped bundled files, so eBay Picture Services rejected every NEW-condition Inventory publish. Corrupted bytes backed up to `mhn/backups/20261124-corrupted-webp/`. Confirmed: `FA15-2108` published with four photos.
 - Changed: 15 Fashion catalogue products had `vertical_attributes.size` corrected so eBay accepts it: six to a regional label from the title, nine to an EU label (operator approved). Backup `fashion_fix_backup_20261124`. Approval status unchanged.
 - Paused and held: batch `999ba901`. The backend container was replaced at 20:18 UTC on 2026-11-23, which ended the runner. 21 rows held for a content review (`manual_review = true`), 41 rows paused, 9 interrupted rows marked failed. `FA9-1089-SU` was live on eBay while recorded as publishing; reconciled to published. Backup `fashion_pause_backup_20261124`.
-- Not changed: the code. Still open: the three bundled files in `backend/assets/new-condition-listing-images/` are truncated in git as well. Each is shorter than its RIFF header states (F1 by 7 bytes, F2 by 6, F3 by 2), so an image built from `main` bundles them again. Until they are replaced, NEW-condition publishes work only because the S3 objects under those keys were overwritten. Replace the three files with the valid copies and protect them from line-ending conversion (the repository has no `.gitattributes`), then rebuild the image. The runner scripts are not in the repository.
+- Not changed: the code. Still open: the three bundled files in `backend/assets/new-condition-listing-images/` are truncated in git as well. Each is shorter than its RIFF header states (F1 by 7 bytes, F2 by 6, F3 by 2), so an image built from `main` bundles them again. Until they are replaced, NEW-condition publishes work only because the S3 objects under those keys were overwritten. Replace the three files with the valid copies and protect them from line-ending conversion (the repository has no `.gitattributes`), then rebuild the image. The runner scripts are not in the repository. *Update 2026-11-24: the three files are replaced in git and `.gitattributes` is added (see "Publish-mode switch retired again"); the image is not rebuilt yet.*
 - Record: `output/lead-photo-ai-check-2026-11-23/README.md` on the operations machine. `output/` is gitignored, so this entry is the record in git.
 
 ## 2026-11-24 — eBay sale notifications never arrive; 30-day sweep ended 38 sold duplicates; read-only pool connections

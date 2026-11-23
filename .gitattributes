@@ -1,0 +1,18 @@
+# Binary files: never convert line endings or diff them as text.
+# The New-condition listing photos were once committed with their CRLF byte
+# pairs stripped, which broke them (fixed 2026-11-24).
+*.webp binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.xlsx binary
+*.docx binary
+*.zip binary
+*.tar binary
+*.dump binary
+*.woff binary
+*.woff2 binary
+*.ttf binary

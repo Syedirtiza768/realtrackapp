@@ -26,12 +26,12 @@ entries):
   by eBay as error 37.
 - Item-specific values are sanitized to eBay's 65-character aspect limit before
   publish.
-- All new standard fixed-price single-item listings use Trading API, retaining the seller SKU while identifying the listing by Item ID for Seller Hub management. `EBAY_LISTING_API_MODE` is retired and cannot route new listings through Inventory API. Existing Inventory offer-backed listings continue through Inventory API for in-place edits until migrated. The disabled multi-vertical variation pilot fails closed instead of creating Inventory API groups until Trading API variation support is ready; there are no published variant mappings in production as of 2026-10-06.
+- All new standard fixed-price single-item listings use Trading API, retaining the seller SKU while identifying the listing by Item ID for Seller Hub management. `EBAY_LISTING_API_MODE` is retired and cannot route new listings through Inventory API. Fashion listings are the exception: they use the Inventory API unless the listing already exists only on Trading (2026-11-24). Existing Inventory offer-backed listings continue through Inventory API for in-place edits until migrated. The disabled multi-vertical variation pilot fails closed instead of creating Inventory API groups until Trading API variation support is ready; there are no published variant mappings in production as of 2026-10-06.
 - `EbayMultiStoreListingService` checks the application-wide Trading API allowance through `EbayTradingQuotaService` before saving native-OAuth single or bulk publish targets. The existing organization target cap does not represent eBay's shared allowance: migration, enrichment, reads, revisions, and other organizations consume it too. Low allowance returns the reported reset time without producing a failed publish job. The Inventory-to-Trading migration checks the same allowance and reserves 1,000 calls for publishing before preflight, apply, and each batch.
 - Standard new Trading API fixed-price single-item listings keep the seller's
   value in `Item.SKU` while tracking the listing by `ItemID`, leaving eBay's
-  Custom Label editable after publish. Trading API is now the default for this
-  publishing path; `EBAY_LISTING_API_MODE=inventory` is an explicit override.
+  Custom Label editable after publish. Trading API is used on this publishing
+  path for every listing except Fashion; `EBAY_LISTING_API_MODE` is retired.
   Variation-family multi-SKU item groups still use the Inventory API. Existing
   Inventory API offers still use Inventory API for in-place edits. Existing
   listings created with ManageBySKU cannot change
@@ -46,8 +46,8 @@ entries):
   requires both `--apply` and `--confirm` to make live changes. Use
   `--item-id=<eBay Item ID>` to scope the preflight to one listing.
 - A publishing attempt that finds a channel with an Inventory API offer always
-  revises that offer through the Inventory API, even while
-  `EBAY_LISTING_API_MODE=trading`. It uses the channel's stored eBay SKU,
+  revises that offer through the Inventory API, even though new non-fashion
+  listings use Trading API. It uses the channel's stored eBay SKU,
   including a conflict-safe alias. Active offers are updated in place;
   `UNPUBLISHED` offers are updated and then published again using the same
   offer. Unknown offer states stop before writing to eBay to avoid duplicates.

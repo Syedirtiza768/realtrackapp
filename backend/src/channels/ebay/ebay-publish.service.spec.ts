@@ -122,17 +122,10 @@ function validRequest(overrides: Partial<PublishRequest> = {}): PublishRequest {
 /* ── Tests ── */
 
 describe('EbayPublishService', () => {
-  it('routes new non-fashion standard listings through the Trading API by default', () => {
+  it('routes every new non-fashion standard listing through the Trading API', () => {
     const service = Object.create(
       EbayPublishService.prototype,
     ) as EbayPublishService;
-    (
-      service as unknown as {
-        config: { get: (key: string, fallback: string) => string };
-      }
-    ).config = {
-      get: (_key: string, fallback: string) => fallback,
-    };
     expect(
       (
         service as unknown as { shouldUseTradingApi: (req: unknown) => boolean }
@@ -1102,31 +1095,19 @@ describe('EbayPublishService', () => {
   });
 
   describe('Trading API selection', () => {
-    it('defaults new listings to Trading API when no mode is configured', () => {
-      (svc as any).config = mockConfig();
-      expect(
-        (svc as any).shouldUseTradingApi(
-          validRequest({ aspects: { Brand: ['TRW'] } }),
-        ),
-      ).toBe(true);
-    });
-
-    it('routes FEBEST by brand even when the global mode is inventory', () => {
+    it('ignores the retired EBAY_LISTING_API_MODE for non-fashion listings', () => {
       (svc as any).config = mockConfig({ EBAY_LISTING_API_MODE: 'inventory' });
-      expect(
-        (svc as any).shouldUseTradingApi(
-          validRequest({ aspects: { Brand: ['FEBEST'] } }),
-        ),
-      ).toBe(true);
-      expect(
-        (svc as any).shouldUseTradingApi(
-          validRequest({ aspects: { Brand: ['TRW'] } }),
-        ),
-      ).toBe(false);
+      for (const brand of ['TRW', 'FEBEST']) {
+        expect(
+          (svc as any).shouldUseTradingApi(
+            validRequest({ aspects: { Brand: [brand] } }),
+            null,
+          ),
+        ).toBe(true);
+      }
     });
 
-    it('routes Fashion publishes to the Inventory API even when the global mode is trading', () => {
-      (svc as any).config = mockConfig({ EBAY_LISTING_API_MODE: 'trading' });
+    it('routes Fashion publishes to the Inventory API', () => {
       expect(
         (svc as any).shouldUseTradingApi(
           validRequest({ vertical: 'fashion', aspects: { Brand: ['IKKS'] } }),
@@ -1136,7 +1117,6 @@ describe('EbayPublishService', () => {
     });
 
     it('keeps a Fashion listing that exists only on Trading on the Trading path', () => {
-      (svc as any).config = mockConfig({ EBAY_LISTING_API_MODE: 'inventory' });
       const request = validRequest({ vertical: 'fashion', aspects: { Brand: ['IKKS'] } });
       expect(
         (svc as any).shouldUseTradingApi(request, { listingId: 'item-1', offerId: null }),

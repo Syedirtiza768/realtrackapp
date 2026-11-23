@@ -1097,22 +1097,12 @@ export class EbayPublishService {
     if (req.vertical === 'fashion') {
       return Boolean(existingChannel?.listingId) && !existingChannel?.offerId;
     }
-    const mode = this.config
-      .get<string>('EBAY_LISTING_API_MODE', 'trading')
-      .trim()
-      .toLowerCase();
-    const isFebest = Object.entries(req.aspects ?? {}).some(
-      ([name, values]) =>
-        /^(brand|manufacturer|hersteller)$/i.test(name.trim()) &&
-        (values ?? []).some(
-          (value) => String(value).trim().toLowerCase() === 'febest',
-        ),
-    );
-
-    // Trading API is the default so new listings remain Seller Hub-editable.
-    // Inventory API remains an explicit mode for controlled compatibility;
-    // existing offer-backed channels are routed through their owning API below.
-    return isFebest || mode === 'trading';
+    // Every other new single-item listing created by this publisher uses the
+    // Trading API so Seller Hub can edit it. EBAY_LISTING_API_MODE is retired
+    // (2026-10-06). Existing Inventory API offers are routed through their
+    // owning API before this check; maintenance and variation-family flows
+    // keep their dedicated Inventory API handling.
+    return true;
   }
 
   /**
@@ -1618,13 +1608,12 @@ export class EbayPublishService {
       );
     }
 
-    // Trading API listings are editable in Seller Hub. FEBEST always uses
-    // this path; the global switch remains available for a controlled
-    // account-wide migration/canary. Fashion is routed by the method above.
+    // New standard listings use Trading API so they remain editable in Seller
+    // Hub, except Fashion (see shouldUseTradingApi). Existing offer-backed
+    // channels returned through the branch above are revised by the Inventory
+    // API that created them.
     if (this.shouldUseTradingApi(req, existingChannel)) {
-      this.logger.log(
-        `Using eBay Trading API for ${req.aspects?.Brand?.[0] ?? 'configured mode'} SKU ${req.sku}`,
-      );
+      this.logger.log(`Using eBay Trading API for SKU ${req.sku}`);
       const tradingReq = account
         ? await this.enrichPoliciesFromMarketplace(account, store, req)
         : await this.enrichPoliciesFromStoreOnly(store, req);

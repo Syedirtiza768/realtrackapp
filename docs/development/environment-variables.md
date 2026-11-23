@@ -101,8 +101,7 @@ Source of truth: `.env.example` (copy to `.env`). Docker passes these via
 | `EBAY_PLATFORM_NOTIFICATION_URL` | _(unset)_ | Public **https** URL of `POST /api/integrations/ebay/platform-notifications`, for example `https://app.omnicoreholding.com/api/integrations/ebay/platform-notifications`. Sent to eBay as the app's `ApplicationURL` when an admin subscribes an account to sale notifications (`POST /api/integrations/ebay/accounts/:id/order-notifications`). eBay keeps one such URL per eBay app, shared by every seller on it. Forwarded by `docker-compose.yml`. Added 2026-11-18. |
 | `EBAY_ENVIRONMENT` | `SANDBOX` | `SANDBOX` or `PRODUCTION` |
 | `EBAY_SANDBOX` | — | Legacy override (takes precedence if set) |
-| `EBAY_LISTING_API_MODE` | retired | Ignored since 2026-10; new standard single-item listings always use Trading API. |
-| `EBAY_LISTING_API_MODE` | `trading` | Standard new single-item listings use Trading API `AddFixedPriceItem` by default and can be edited in Seller Hub. Set `inventory` to explicitly create listings through Inventory API on this path. Variation-family item groups and existing Inventory API offer-backed listings keep their existing flows. FEBEST always uses Trading API. Fashion listings use Inventory API; a fashion listing that exists only on Trading keeps Trading. |
+| `EBAY_LISTING_API_MODE` | retired | Ignored since 2026-10. New standard single-item listings use Trading API, except Fashion listings, which use Inventory API (2026-11-24). |
 | `EBAY_REDIRECT_URI` | eBay OAuth-enabled RuName | RuName passed to eBay; do not set this to the callback URL. Update the RuName’s Accept URL in the eBay Developer Portal to `https://app.omnicoreholding.com/api/integrations/ebay/oauth/callback`. |
 | `EBAY_DEFAULT_MERCHANT_LOCATION_KEY` | `AE_Dubai` | Key used when auto-provisioning an inventory location |
 | `EBAY_DEFAULT_INVENTORY_ADDRESS_LINE1` | `Dubai Warehouse` | Ship-from line 1 for auto-created locations |
