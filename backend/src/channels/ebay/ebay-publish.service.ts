@@ -122,6 +122,29 @@ function isEndedTradingRevisionFailure(error: unknown): boolean {
   return /ReviseFixedPriceItem failed \(291\)/i.test(message);
 }
 
+/**
+ * The shared New-condition photos F1, F2, F3 are auto-parts promo cards
+ * ("Quality Car Parts & Accessories"). They belong only on automotive
+ * listings. Fashion and Business & Industrial galleries are published as the
+ * seller supplied them; before 2026-11-24 every NEW listing got the cards,
+ * including PrimeWardrobe USA fashion listings.
+ *
+ * The vertical comes from the request, else from the catalog product (the
+ * direct publish endpoint does not set one); a request with neither is a
+ * legacy automotive publish. A store whose only enabled vertical is fashion
+ * never gets the cards, whatever the request says.
+ */
+export function shouldAppendNewConditionImages(
+  req: Pick<PublishRequest, 'condition' | 'vertical'>,
+  store?: { verticalConfig?: Record<string, unknown> | null } | null,
+  catalogVertical?: string | null,
+): boolean {
+  if (req.condition !== 'NEW') return false;
+  const vertical = req.vertical ?? catalogVertical ?? 'automotive';
+  if (vertical !== 'automotive') return false;
+  return !isDedicatedFashionStore(store?.verticalConfig);
+}
+
 function appendImageUrlsAtEnd(
   imageUrls: string[],
   trailingImageUrls: string[],
@@ -1204,7 +1227,11 @@ export class EbayPublishService {
 
     // Process stores in parallel (eBay rate limits are per-app, so serial may be safer at scale)
     for (const storeId of req.storeIds) {
-      const result = await this.publishToStore(storeId, normalizedReq);
+      const result = await this.publishToStore(
+        storeId,
+        normalizedReq,
+        catalogForText?.vertical ?? listing?.vertical ?? null,
+      );
       results.push(result);
     }
 
@@ -1466,6 +1493,7 @@ export class EbayPublishService {
   private async publishToStore(
     storeId: string,
     req: PublishRequest,
+    catalogVertical: string | null = null,
   ): Promise<PublishResult> {
     const store = await this.storeRepo.findOneBy({ id: storeId });
     if (!store) {
@@ -1491,7 +1519,11 @@ export class EbayPublishService {
         storeId,
         req.imageUrls,
       );
-      const appendNewConditionImages = req.condition === 'NEW';
+      const appendNewConditionImages = shouldAppendNewConditionImages(
+        req,
+        store,
+        catalogVertical,
+      );
       if (appendNewConditionImages) {
         const requiredSourceImages =
           await this.ebayMedia.getNewConditionImageUrls();
@@ -1523,7 +1555,20 @@ export class EbayPublishService {
           hostedRequiredImages,
         );
       } else {
-        hostedImageUrls = hostedListingImages;
+        // A gallery copied from a listing that already carried the cards
+        // (or an old backfilled image field) must not send them again.
+        hostedImageUrls =
+          await this.ebayMedia.removeNewConditionImages(hostedListingImages);
+        if (hostedImageUrls.length < hostedListingImages.length) {
+          this.logger.warn(
+            `Removed ${hostedListingImages.length - hostedImageUrls.length} New-condition card image(s) from ${req.sku} on "${store.storeName}"`,
+          );
+        }
+        if (!hostedImageUrls.length) {
+          throw new Error(
+            'Listing has no photos other than the shared New-condition cards; add product photos before publishing',
+          );
+        }
       }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);

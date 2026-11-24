@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-11-24 — Auto-parts New-condition photos kept off fashion listings
+
+- Why: F1 to F3 in `backend/assets/new-condition-listing-images` are shared "Quality Car Parts & Accessories" promo cards. `EbayPublishService.publishToStore` appended them to every listing with condition `NEW`, whatever its vertical. Once the 2026-11-24 WebP repair let the upload succeed, fashion listings on Primewardrobeusa and The Fashion Story got them too: the cards were first hosted on 2026-11-23 20:11 UTC for Primewardrobeusa and on 2026-11-24 00:35 UTC for The Fashion Story.
+- `ebay-publish.service.ts`: new `shouldAppendNewConditionImages(req, store, catalogVertical)`. The cards are appended only when the condition is `NEW` and the vertical is automotive. The vertical comes from the request, else the catalog product, else the listing record, and defaults to automotive (legacy publishes set none). A store whose only enabled vertical is fashion never gets them, whatever the request says.
+- `ebay-media-api.service.ts`: new `removeNewConditionImages(imageUrls)` (and `ebayPictureKey`). For every listing that must not carry the cards, it strips their S3 source URLs and any eBay-hosted copy, matched by eBay Picture Services key through `ebay_hosted_images`, so a gallery copied from a listing that already had them does not send them again. A gallery left with no other photo fails the publish with a clear message.
+- `scripts/backfill-new-condition-images.ts`: the backfill skips non-automotive catalog, listing and published-listing rows, and published listings on fashion-only stores.
+- Tests: `ebay-publish.service.spec.ts` (New-condition cases).
+- Live cleanup (operations, not code): on 2026-11-24 around 11:00 UTC the three cards were removed from the 17 live listings that carried them (8 on Primewardrobeusa, 9 on The Fashion Story) with an Inventory API inventory-item PUT, and each listing was checked afterwards through the Browse API.
+- Not deployed by this commit.
+
 ## 2026-11-24 — Publish-mode switch retired again; bundled New-condition photos repaired in git
 
 - `ebay-publish.service.ts`: the `EBAY_LISTING_API_MODE` switch and the FEBEST rule that `daba9296` brought back are removed again. `main` had retired them on 2026-10-06 (`6338a8f0`); the copy in the old working tree was stale code, not a new change. Every new non-fashion single-item listing uses the Trading API, and Fashion keeps its Inventory API rule. The deployed backend (`fashion-inventory-20261124` and later) already routes this way: its compiled routing has the Fashion rule and otherwise always chooses Trading. Production behaviour does not change. Tests updated.

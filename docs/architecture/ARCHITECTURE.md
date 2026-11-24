@@ -183,8 +183,20 @@ selection so redundant galleries do not return to the application view. This
 does not revise already-live eBay offers; existing live galleries require an
 explicit, separately audited marketplace update.
 
-For any eBay listing whose condition is exactly New, the publish boundary
-appends three shared WebP assets in F1, F2, F3 order. The JPEG source files are
+For an automotive eBay listing whose condition is exactly New, the publish
+boundary appends three shared WebP assets in F1, F2, F3 order. F1 to F3 are
+auto-parts promo cards, so `shouldAppendNewConditionImages` in
+`backend/src/channels/ebay/ebay-publish.service.ts` allows them only when the
+vertical (from the request, else the catalog product, else the listing record,
+defaulting to automotive) is automotive and the store is not fashion-only (its
+only enabled vertical is fashion). Fashion and Business & Industrial listings
+never get them. For every listing that must not carry them,
+`EbayMediaApiService.removeNewConditionImages` strips the cards' S3 source URLs
+and any eBay-hosted copy (matched by eBay Picture Services key through
+`ebay_hosted_images`) from the gallery before publish, so a gallery copied from
+a listing that already had the cards does not send them again; a gallery left
+with no other photo fails the publish. (Until 2026-11-24 every New listing got
+the cards, fashion included.) The JPEG source files are
 converted once; content-addressed S3 keys make the uploaded assets reusable
 across listings, while eBay Picture Services URLs are cached per store. The
 gallery keeps the required images last and within eBay's 24-image limit. The

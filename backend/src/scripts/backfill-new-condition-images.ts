@@ -287,6 +287,13 @@ async function main(): Promise<void> {
                   condition_label AS "conditionLabel", image_urls AS "imageUrls"
              FROM catalog_products
             WHERE vertical_validation_status IS DISTINCT FROM 'deleted'
+              -- F1-F3 are auto-parts cards: never add them to fashion or B&I rows.
+              AND COALESCE(vertical, 'automotive') = 'automotive'
+              AND NOT EXISTS (
+                SELECT 1 FROM listing_records listing
+                 WHERE listing."customLabelSku" = catalog_products.sku
+                   AND listing.vertical IS NOT NULL
+                   AND listing.vertical <> 'automotive')
               AND (condition_id IS NOT NULL OR condition_label IS NOT NULL)
               AND (condition_id ILIKE '%new%' OR condition_label ILIKE '%new%'
                    OR condition_id ~ '^[[:space:]]*1000([[:space:]]*-.*)?$')
@@ -297,6 +304,7 @@ async function main(): Promise<void> {
                   "itemPhotoUrl" AS "itemPhotoUrl"
              FROM listing_records
             WHERE "deletedAt" IS NULL
+              AND COALESCE(vertical, 'automotive') = 'automotive'
               AND "conditionId" IS NOT NULL
               AND ("conditionId" ILIKE '%new%'
                    OR "conditionId" ~ '^[[:space:]]*1000([[:space:]]*-.*)?$')
@@ -310,27 +318,33 @@ async function main(): Promise<void> {
                   epl.image_urls AS "imageUrls"
              FROM ebay_published_listings epl
              LEFT JOIN LATERAL (
-               SELECT product.condition_id, product.condition_label
+               SELECT product.condition_id, product.condition_label, product.vertical
                  FROM catalog_products product
                 WHERE product.id = epl.catalog_product_id OR product.sku = epl.sku
                 ORDER BY (product.id = epl.catalog_product_id) DESC NULLS LAST
                 LIMIT 1
              ) cp ON TRUE
              LEFT JOIN LATERAL (
-               SELECT listing."conditionId"
+               SELECT listing."conditionId", listing.vertical
                  FROM listing_records listing
                 WHERE listing."customLabelSku" = epl.sku
                   AND listing."deletedAt" IS NULL
                 ORDER BY listing."updatedAt" DESC NULLS LAST
                 LIMIT 1
              ) lr ON TRUE
-            WHERE epl.condition ILIKE '%new%'
+            WHERE COALESCE(cp.vertical, lr.vertical, 'automotive') = 'automotive'
+              -- A fashion-only store never gets the cards, whatever its rows say.
+              AND NOT EXISTS (
+                SELECT 1 FROM stores store
+                 WHERE store.id = epl.store_id
+                   AND store.vertical_config -> 'enabledVerticals' = '["fashion"]'::jsonb)
+              AND (epl.condition ILIKE '%new%'
                OR lr."conditionId" ILIKE '%new%'
                OR cp.condition_id ILIKE '%new%'
                OR cp.condition_label ILIKE '%new%'
                OR epl.condition ~ '^[[:space:]]*1000([[:space:]]*-.*)?$'
                OR lr."conditionId" ~ '^[[:space:]]*1000([[:space:]]*-.*)?$'
-               OR cp.condition_id ~ '^[[:space:]]*1000([[:space:]]*-.*)?$'
+               OR cp.condition_id ~ '^[[:space:]]*1000([[:space:]]*-.*)?$')
             ORDER BY epl.updated_at DESC NULLS LAST, epl.id`,
         ),
       ])) as [CatalogImageRow[], ListingImageRow[], PublishedListingImageRow[]];

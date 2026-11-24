@@ -333,6 +333,12 @@ cd backend
 npm run ebay:backfill-new-condition-images
 ```
 
+The backfill only touches automotive rows: catalog products, listing records
+and published listings whose vertical is set to something other than
+`automotive` are skipped, as are published listings on a fashion-only store
+(one whose only enabled vertical is fashion). F1 to F3 are auto-parts promo
+cards and must never be added to fashion or Business & Industrial galleries.
+
 Review the application row counts before applying. The apply mode uploads
 missing shared WebP objects once, preserves the existing gallery order,
 appends F1, F2, F3, and writes a JSON backup under `backend/output/` before

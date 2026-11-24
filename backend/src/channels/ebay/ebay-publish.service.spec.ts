@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import type { Repository } from 'typeorm';
 import {
   EbayPublishService,
+  shouldAppendNewConditionImages,
   type PublishRequest,
 } from './ebay-publish.service.js';
 import { conflictSafeSkuFor } from './ebay-sku.util.js';
@@ -92,6 +93,20 @@ function mockEbayMediaApi() {
       .fn()
       .mockImplementation((_storeId: string, imageUrls: string[]) =>
         Promise.resolve(imageUrls.map((url) => `https://i.ebayimg.com/hosted${url}`)),
+      ),
+    getNewConditionImageUrls: jest
+      .fn()
+      .mockResolvedValue([
+        'https://s3.example.com/shared/new-condition-listing-images/a-F1.webp',
+        'https://s3.example.com/shared/new-condition-listing-images/b-F2.webp',
+        'https://s3.example.com/shared/new-condition-listing-images/c-F3.webp',
+      ]),
+    removeNewConditionImages: jest
+      .fn()
+      .mockImplementation((imageUrls: string[]) =>
+        Promise.resolve(
+          imageUrls.filter((url) => !url.includes('/new-condition-listing-images/')),
+        ),
       ),
   };
 }
@@ -885,6 +900,117 @@ describe('EbayPublishService', () => {
       expect(offer.listingDuration).toBe('GTC');
       expect(offer.format).toBe('FIXED_PRICE');
       expect(offer.pricingSummary.price.value).toBe('49.99');
+    });
+  });
+
+  describe('New-condition cards at the publish boundary', () => {
+    const store = (verticalConfig: Record<string, unknown> | null) => ({
+      id: 'store-1',
+      storeName: 'My Store',
+      verticalConfig,
+      config: { marketplace: 'EBAY_US', locationKey: 'default-loc' },
+      fulfillmentPolicyId: 'fp-1',
+      paymentPolicyId: 'pp-1',
+      returnPolicyId: 'rp-1',
+    });
+
+    it('publishes a NEW fashion listing without the cards and strips copied ones', async () => {
+      storeRepo.findOneBy = jest.fn().mockResolvedValue(store(null));
+      connectedAccountRepo.findOne = jest.fn().mockResolvedValue(null);
+      listingRepo.findOne = jest.fn().mockResolvedValue({ cBrand: 'Ralph Lauren' });
+
+      const results = await svc.publish(
+        validRequest({
+          condition: 'NEW',
+          vertical: 'fashion',
+          imageUrls: [
+            'https://img.example.com/shirt.jpg',
+            'https://s3.example.com/shared/new-condition-listing-images/a-F1.webp',
+          ],
+        }),
+      );
+
+      expect(results[0].success).toBe(true);
+      expect(ebayMedia.getNewConditionImageUrls).not.toHaveBeenCalled();
+      expect(
+        inventoryApi.createOrReplaceItem.mock.calls[0][2].product.imageUrls,
+      ).toEqual(['https://i.ebayimg.com/hostedhttps://img.example.com/shirt.jpg']);
+    });
+
+    it('never requests the cards on a fashion-only store, even with no vertical', async () => {
+      storeRepo.findOneBy = jest
+        .fn()
+        .mockResolvedValue(store({ enabledVerticals: ['fashion'] }));
+      await (svc as any)
+        .publishToStore('store-1', validRequest({ condition: 'NEW' }))
+        .catch(() => undefined);
+      expect(ebayMedia.getNewConditionImageUrls).not.toHaveBeenCalled();
+      expect(ebayMedia.removeNewConditionImages).toHaveBeenCalled();
+    });
+
+    it('uses the catalog or listing vertical passed by publish()', async () => {
+      storeRepo.findOneBy = jest.fn().mockResolvedValue(store(null));
+      await (svc as any)
+        .publishToStore('store-1', validRequest({ condition: 'NEW' }), 'fashion')
+        .catch(() => undefined);
+      expect(ebayMedia.getNewConditionImageUrls).not.toHaveBeenCalled();
+    });
+
+    it('still appends the cards to a NEW automotive listing on a legacy store', async () => {
+      storeRepo.findOneBy = jest.fn().mockResolvedValue(store(null));
+      await (svc as any)
+        .publishToStore('store-1', validRequest({ condition: 'NEW' }))
+        .catch(() => undefined);
+      expect(ebayMedia.getNewConditionImageUrls).toHaveBeenCalled();
+      expect(ebayMedia.removeNewConditionImages).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('shouldAppendNewConditionImages', () => {
+    const fashionStore = { verticalConfig: { enabledVerticals: ['fashion'] } };
+    const mixedStore = {
+      verticalConfig: { enabledVerticals: ['automotive', 'fashion'] },
+    };
+
+    it('appends the auto-parts cards to NEW automotive listings', () => {
+      expect(
+        shouldAppendNewConditionImages({ condition: 'NEW', vertical: 'automotive' }, null),
+      ).toBe(true);
+      // Legacy requests with no vertical anywhere are automotive.
+      expect(shouldAppendNewConditionImages({ condition: 'NEW' }, { verticalConfig: null })).toBe(
+        true,
+      );
+    });
+
+    it('never appends them to fashion or business & industrial listings', () => {
+      expect(
+        shouldAppendNewConditionImages({ condition: 'NEW', vertical: 'fashion' }, mixedStore),
+      ).toBe(false);
+      expect(
+        shouldAppendNewConditionImages(
+          { condition: 'NEW', vertical: 'business_industrial' },
+          null,
+        ),
+      ).toBe(false);
+    });
+
+    it('uses the catalog vertical when the request has none', () => {
+      expect(shouldAppendNewConditionImages({ condition: 'NEW' }, mixedStore, 'fashion')).toBe(
+        false,
+      );
+    });
+
+    it('never appends them on a fashion-only store', () => {
+      expect(shouldAppendNewConditionImages({ condition: 'NEW' }, fashionStore)).toBe(false);
+    });
+
+    it('skips non-NEW conditions', () => {
+      expect(
+        shouldAppendNewConditionImages(
+          { condition: 'USED_EXCELLENT', vertical: 'automotive' },
+          null,
+        ),
+      ).toBe(false);
     });
   });
 

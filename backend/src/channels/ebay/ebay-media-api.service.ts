@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import FormData from 'form-data';
-import { Repository } from 'typeorm';
+import { ILike, Repository } from 'typeorm';
 import { EbayHostedImage } from '../../integrations/ebay/entities/ebay-hosted-image.entity.js';
 import { StorageService } from '../../storage/storage.service.js';
 import { EbayAuthService } from './ebay-auth.service.js';
@@ -29,6 +29,12 @@ const IMAGE_UPLOAD_MAX_ATTEMPTS = 3;
 const IMAGE_UPLOAD_RETRY_DELAYS_MS = [500, 1_500];
 const NEW_CONDITION_IMAGE_FILES = ['F1.webp', 'F2.webp', 'F3.webp'] as const;
 const NEW_CONDITION_IMAGE_DIRECTORY = 'new-condition-listing-images';
+
+/** eBay Picture Services image key: the `<key>` in `.../z/<key>/...` or `.../g/<key>/...`. */
+export function ebayPictureKey(url: string): string | null {
+  const match = /\/(?:g|z)\/([^/?#]+)\//.exec(url ?? '');
+  return match ? match[1] : null;
+}
 
 /**
  * Uploads listing images to eBay Picture Services (EPS).
@@ -139,6 +145,33 @@ export class EbayMediaApiService {
       );
     }
     return [...(await this.newConditionImageUrlsPromise)];
+  }
+
+  /**
+   * Remove the shared New-condition photos (F1-F3, auto-parts cards) from an
+   * image list: their S3 source URLs, and any eBay-hosted copy of them, which
+   * is recognised by its Picture Services key in `ebay_hosted_images` (the key
+   * stays the same across size variants such as `$_57.JPG` or `s-l1600.webp`).
+   * Used for listings that must not carry the cards, so a gallery copied from
+   * a listing that already had them does not send them to eBay again.
+   */
+  async removeNewConditionImages(imageUrls: string[]): Promise<string[]> {
+    const marker = `/${NEW_CONDITION_IMAGE_DIRECTORY}/`;
+    const withoutSources = imageUrls.filter((url) => !url.includes(marker));
+    if (!withoutSources.some((url) => ebayPictureKey(url))) return withoutSources;
+    const hostedCards = await this.hostedImageRepo.find({
+      select: { hostedUrl: true },
+      where: { sourceUrl: ILike(`%${marker}%`) },
+    });
+    const cardKeys = new Set(
+      hostedCards
+        .map((row) => ebayPictureKey(row.hostedUrl))
+        .filter((key): key is string => Boolean(key)),
+    );
+    return withoutSources.filter((url) => {
+      const key = ebayPictureKey(url);
+      return !key || !cardKeys.has(key);
+    });
   }
 
   private async ensureNewConditionImageUrls(): Promise<string[]> {
