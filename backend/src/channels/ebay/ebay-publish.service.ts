@@ -81,6 +81,7 @@ import {
   partsAccessoriesReturnPolicyGuidance,
   pickPolicyIdForMarketplace,
   pickReturnPolicyIdForListing,
+  type ReturnPolicyPickOptions,
   readPolicyGeoSite,
 } from '../../integrations/ebay/services/ebay-business-policy.util.js';
 import { SellerpunditTokenSyncService } from '../../integrations/sellerpundit/sellerpundit-token-sync.service.js';
@@ -2864,19 +2865,24 @@ export class EbayPublishService {
     // eBay's June 2025 rule covers Parts & Accessories. The category-range check
     // also matches apparel IDs, so Fashion listings must never trigger it (it
     // would block New items or switch the seller to a free-returns policy).
-    const paReturnRequired =
-      req.vertical !== 'fashion' &&
-      listingRequiresPartsAccessoriesReturnPolicy(
-        marketplaceId,
-        req.categoryId,
-        req.condition,
-      );
+    // Passing the vertical exempts Fashion here and in every return-policy pick.
+    const paReturnRequired = listingRequiresPartsAccessoriesReturnPolicy(
+      marketplaceId,
+      req.categoryId,
+      req.condition,
+      req.vertical,
+    );
+    const returnPick = {
+      vertical: req.vertical,
+      preferredPolicyId: req.returnPolicyId,
+    };
 
     const synced = await this.resolvePoliciesFromSyncedTable(
       account.id,
       marketplaceId,
       req.categoryId,
       req.condition,
+      returnPick,
     );
 
     // Resolve profile NAMES → policy IDs using the synced ebay_business_policies
@@ -2902,6 +2908,7 @@ export class EbayPublishService {
       req.requestedReturnPolicyName,
       req.categoryId,
       req.condition,
+      returnPick,
     );
 
     const resolvedFulfillment = coalesceValidPolicyId(
@@ -2944,6 +2951,7 @@ export class EbayPublishService {
           requestedFulfillmentPolicyName: req.requestedFulfillmentPolicyName,
           requestedPaymentPolicyName: req.requestedPaymentPolicyName,
           requestedReturnPolicyName: req.requestedReturnPolicyName,
+          returnPick,
         })
       : {};
 
@@ -3164,6 +3172,7 @@ export class EbayPublishService {
     marketplaceId: string,
     categoryId?: string,
     condition?: string,
+    returnPick?: ReturnPolicyPickOptions,
   ): Promise<{
     fulfillmentPolicyId?: string;
     paymentPolicyId?: string;
@@ -3197,6 +3206,7 @@ export class EbayPublishService {
           marketplaceId,
           categoryId,
           condition,
+          returnPick,
         ) ?? undefined,
     };
   }
@@ -3217,6 +3227,7 @@ export class EbayPublishService {
     name: string | null | undefined,
     categoryId?: string,
     condition?: string,
+    returnPick?: ReturnPolicyPickOptions,
   ): Promise<string | undefined> {
     const trimmed = name?.trim();
     if (!trimmed) return undefined;
@@ -3249,6 +3260,7 @@ export class EbayPublishService {
             marketplaceId,
             categoryId,
             condition,
+            returnPick,
           )
         : pickPolicyIdForMarketplace(candidates, marketplaceId);
 
@@ -3260,12 +3272,14 @@ export class EbayPublishService {
     marketplaceId: string,
     categoryId?: string,
     condition?: string,
+    returnPick?: ReturnPolicyPickOptions,
   ): Promise<string | undefined> {
     const synced = await this.resolvePoliciesFromSyncedTable(
       ebayAccountId,
       marketplaceId,
       categoryId,
       condition,
+      returnPick,
     );
     return synced.returnPolicyId;
   }
@@ -3281,6 +3295,7 @@ export class EbayPublishService {
       requestedFulfillmentPolicyName?: string;
       requestedPaymentPolicyName?: string;
       requestedReturnPolicyName?: string;
+      returnPick?: ReturnPolicyPickOptions;
     },
   ): Promise<{
     fulfillmentPolicyId?: string;
@@ -3367,6 +3382,7 @@ export class EbayPublishService {
           marketplaceId,
           options?.categoryId,
           options?.condition,
+          options?.returnPick,
         ),
       );
 
@@ -3901,6 +3917,10 @@ export class EbayPublishService {
           : `Publish rejected business policies for offer ${offerId} — refreshing from eBay Account API and retrying`,
       );
 
+      const retryReturnPick = {
+        vertical: req.vertical,
+        preferredPolicyId: req.returnPolicyId,
+      };
       const refreshed = await this.refreshPoliciesFromEbayApi(store, account, {
         persist: true,
         categoryId: req.categoryId,
@@ -3908,16 +3928,16 @@ export class EbayPublishService {
         requestedFulfillmentPolicyName: req.requestedFulfillmentPolicyName,
         requestedPaymentPolicyName: req.requestedPaymentPolicyName,
         requestedReturnPolicyName: req.requestedReturnPolicyName,
+        returnPick: retryReturnPick,
       });
 
       let returnPolicyId: string | undefined;
-      const paReturnRequired =
-        req.vertical !== 'fashion' &&
-        listingRequiresPartsAccessoriesReturnPolicy(
-          marketplaceId,
-          req.categoryId,
-          req.condition,
-        );
+      const paReturnRequired = listingRequiresPartsAccessoriesReturnPolicy(
+        marketplaceId,
+        req.categoryId,
+        req.condition,
+        req.vertical,
+      );
 
       if (paReturnIssue && !paReturnRequired) {
         throw new BadRequestException(
@@ -3948,6 +3968,7 @@ export class EbayPublishService {
             marketplaceId,
             req.categoryId,
             req.condition,
+            retryReturnPick,
           ));
       }
 

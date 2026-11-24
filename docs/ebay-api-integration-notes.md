@@ -63,6 +63,11 @@ seller-paid rules only when `listingRequiresPartsAccessoriesReturnPolicy()` is t
 (marketplace/category scope **and** condition `NEW` / `NEW_OTHER`). Policy sync and
 publish (`pickReturnPolicyIdForListing`) prefer compliant policies for New/New Other;
 used Motors listings use the normal default (e.g. buyer-paid 30-day policy).
+**Fashion is exempt** (since 2026-11-24): the category-range check also matches
+apparel IDs, so callers pass the listing's `vertical` and `fashion` is never in
+P&A scope. A return policy ID that is already chosen (explicit override, Fashion
+marketplace default, or the builder's pick) is passed as `preferredPolicyId` and
+kept when eligible; the builder does not forward an explicit ID's name.
 If none exists, `EbayPaReturnPolicyService.ensureCompliantReturnPolicy` runs at
 publish time: pick a compliant policy, **upgrade** the closest match (returns
 accepted, 30+ days, buyer-paid shipping → seller-paid via Account API

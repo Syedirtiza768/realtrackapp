@@ -142,7 +142,7 @@ READY:
 | `MEASUREMENT_UNITS` | Imported measurements need a cm/inches confirmation | Reviewer, per listing |
 | `CONDITION_MISSING` | No eBay condition; the builder does not infer one | Reviewer, per listing |
 | `POLICY_MISSING` | Store policies not synced or mapped | Store settings |
-| `RETURN_POLICY` | New-condition listings need a 30-day return policy with seller-paid returns | eBay Seller Hub, then re-sync policies |
+| `RETURN_POLICY` | New-condition listings need a 30-day return policy with seller-paid returns. Not raised for Fashion listings: they are outside the P&A return rule (2026-11-11 for this blocker, 2026-11-24 for the policy pick) | eBay Seller Hub, then re-sync policies |
 | `MERCHANT_LOCATION`, `IMAGE_REQUIRED`, `LISTING_BUILD` | Other builder blockers | Depends on the message |
 | `BUILD_CHECK_FAILED` | The check itself errored | Retry the item |
 

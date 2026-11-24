@@ -205,6 +205,123 @@ describe('ebay-business-policy.util', () => {
     ).toBe(true);
   });
 
+  describe('Fashion return policies (P&A category-range exemption)', () => {
+    // Synthetic IDs. The store's own policy accepts no domestic returns; the
+    // account's eBay default is a 30-day seller-paid (P&A-compliant) policy.
+    const storePolicy = {
+      ebayPolicyId: '300000000001',
+      isDefault: false,
+      geoSite: 'EBAY_US',
+      rawPayload: {
+        returnsAccepted: false,
+        returnPeriod: { value: 30, unit: 'DAY' },
+        returnShippingCostPayer: 'BUYER',
+      },
+    };
+    const accountDefault = {
+      ebayPolicyId: '300000000002',
+      isDefault: true,
+      geoSite: 'EBAY_US',
+      rawPayload: {
+        returnsAccepted: true,
+        returnPeriod: { value: 30, unit: 'DAY' },
+        returnShippingCostPayer: 'SELLER',
+      },
+    };
+
+    it.each(['63863', '185101', '57990', '53159'])(
+      'does not apply the P&A rule to a New Fashion listing in category %s',
+      (categoryId) => {
+        expect(
+          listingRequiresPartsAccessoriesReturnPolicy(
+            'EBAY_US',
+            categoryId,
+            'NEW',
+          ),
+        ).toBe(true);
+        expect(
+          listingRequiresPartsAccessoriesReturnPolicy(
+            'EBAY_US',
+            categoryId,
+            'NEW',
+            'fashion',
+          ),
+        ).toBe(false);
+        // Name resolution of the store's policy (single candidate) no longer
+        // rejects it for not being P&A-compliant.
+        expect(
+          pickReturnPolicyIdForListing([storePolicy], 'EBAY_US', categoryId, 'NEW', {
+            vertical: 'fashion',
+          }),
+        ).toBe('300000000001');
+        expect(
+          pickReturnPolicyIdForListing([storePolicy], 'EBAY_US', categoryId, 'NEW'),
+        ).toBeNull();
+      },
+    );
+
+    it('keeps the preferred (explicit / marketplace-default) policy for Fashion', () => {
+      expect(
+        pickReturnPolicyIdForListing(
+          [accountDefault, storePolicy],
+          'EBAY_US',
+          '63863',
+          'NEW',
+          { vertical: 'fashion', preferredPolicyId: '300000000001' },
+        ),
+      ).toBe('300000000001');
+      // Without a preference the geo-site default still wins.
+      expect(
+        pickReturnPolicyIdForListing(
+          [accountDefault, storePolicy],
+          'EBAY_US',
+          '63863',
+          'NEW',
+          { vertical: 'fashion' },
+        ),
+      ).toBe('300000000002');
+    });
+
+    it('ignores a preferred policy that is not an eligible candidate', () => {
+      expect(
+        pickReturnPolicyIdForListing(
+          [accountDefault, storePolicy],
+          'EBAY_US',
+          '63863',
+          'NEW',
+          { vertical: 'fashion', preferredPolicyId: '399999999999' },
+        ),
+      ).toBe('300000000002');
+    });
+
+    it('keeps the P&A rule for auto parts even with a preferred non-compliant policy', () => {
+      for (const vertical of [undefined, 'automotive', 'business_industrial']) {
+        expect(
+          listingRequiresPartsAccessoriesReturnPolicy(
+            'EBAY_US',
+            '33684',
+            'NEW',
+            vertical,
+          ),
+        ).toBe(true);
+        expect(
+          pickReturnPolicyIdForListing(
+            [accountDefault, storePolicy],
+            'EBAY_US',
+            '33684',
+            'NEW',
+            { vertical, preferredPolicyId: '300000000001' },
+          ),
+        ).toBe('300000000002');
+        expect(
+          pickReturnPolicyIdForListing([storePolicy], 'EBAY_US', '33684', 'NEW', {
+            vertical,
+          }),
+        ).toBeNull();
+      }
+    });
+  });
+
   it('picks return policy upgrade candidate (30+ days, buyer-paid)', () => {
     const items = [
       {

@@ -213,12 +213,35 @@ export function conditionRequiresMandatoryPaFreeReturn(
   return MANDATORY_PA_FREE_RETURN_CONDITIONS.has(mapped);
 }
 
-/** Full listing-level check: P&A marketplace/category scope + New/New Other condition. */
+/**
+ * Product verticals whose listings are never eBay Parts & Accessories.
+ *
+ * The P&A scope check is a category-ID range (`>= 33000`), which also matches
+ * apparel categories such as 63863, 185101, 57990 and 53159. Fashion listings
+ * must not get the P&A return rule: it would reject a Fashion store's own
+ * return policy (e.g. a UAE policy that accepts no domestic returns) for New
+ * items and swap in the account's 30-day seller-paid policy.
+ */
+const VERTICALS_EXEMPT_FROM_PA_RETURN_RULE = new Set(['fashion']);
+
+export function verticalIsExemptFromPartsAccessoriesReturnRule(
+  vertical: string | null | undefined,
+): boolean {
+  return Boolean(vertical && VERTICALS_EXEMPT_FROM_PA_RETURN_RULE.has(vertical));
+}
+
+/**
+ * Full listing-level check: P&A marketplace/category scope + New/New Other
+ * condition. Pass the listing's product vertical so Fashion is exempt; omit
+ * it (legacy callers) to keep the category-range behaviour.
+ */
 export function listingRequiresPartsAccessoriesReturnPolicy(
   marketplaceId: string,
   categoryId?: string | null,
   condition?: string | null,
+  vertical?: string | null,
 ): boolean {
+  if (verticalIsExemptFromPartsAccessoriesReturnRule(vertical)) return false;
   return (
     marketplaceRequiresPartsAccessoriesReturnPolicy(
       marketplaceId,
@@ -406,11 +429,24 @@ export function buildPaCompliantReturnPolicyRequest(
   };
 }
 
+export interface ReturnPolicyPickOptions {
+  /** Listing product vertical; `fashion` is exempt from the P&A return rule. */
+  vertical?: string | null;
+  /**
+   * Policy ID the caller already chose (an explicit override, the marketplace
+   * default, or the builder's pick). Returned as-is when it is among the
+   * eligible candidates, so re-resolving by name cannot swap it for another
+   * policy that shares the name.
+   */
+  preferredPolicyId?: string | null;
+}
+
 export function pickReturnPolicyIdForListing(
   items: ReturnPolicyPickCandidate[],
   marketplaceId: string,
   categoryId?: string | null,
   condition?: string | null,
+  options?: ReturnPolicyPickOptions,
 ): string | null {
   const valid = items.filter(
     (x) =>
@@ -419,16 +455,25 @@ export function pickReturnPolicyIdForListing(
   );
   if (!valid.length) return null;
 
+  const preferredId = options?.preferredPolicyId?.trim();
+  const preferredIn = (pool: ReturnPolicyPickCandidate[]) =>
+    preferredId
+      ? pool.find((x) => x.ebayPolicyId === preferredId)?.ebayPolicyId
+      : undefined;
+
   const requiresPa = listingRequiresPartsAccessoriesReturnPolicy(
     marketplaceId,
     categoryId,
     condition,
+    options?.vertical,
   );
   if (requiresPa) {
     const compliant = valid.filter((x) =>
       isPartsAccessoriesCompliantReturnPolicy(x.rawPayload ?? {}),
     );
     if (compliant.length) {
+      const preferred = preferredIn(compliant);
+      if (preferred) return preferred;
       const prefs = geoSitePreferenceForMarketplace(marketplaceId);
       for (const geo of prefs) {
         const match =
@@ -443,7 +488,7 @@ export function pickReturnPolicyIdForListing(
     return null;
   }
 
-  return pickPolicyIdForMarketplace(valid, marketplaceId);
+  return preferredIn(valid) ?? pickPolicyIdForMarketplace(valid, marketplaceId);
 }
 
 export function pickPolicyIdForMarketplace(

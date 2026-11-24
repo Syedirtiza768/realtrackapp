@@ -34,6 +34,7 @@ import { CatalogPublishResolverService } from './catalog-publish-resolver.servic
 
 import { mapToEbayConditionEnum } from '../../../channels/ebay/ebay-listing-condition.util.js';
 import {
+  coalesceValidPolicyId,
   listingRequiresPartsAccessoriesReturnPolicy,
   partsAccessoriesReturnPolicyGuidance,
   pickPolicyIdForMarketplace,
@@ -462,6 +463,7 @@ export class ListingBuilderService {
           params.marketplaceId,
           categoryId,
           condition,
+          { vertical },
         );
       }
       return pickPolicyIdForMarketplace(
@@ -508,9 +510,17 @@ export class ListingBuilderService {
     }
 
     const returnRows = policyRows.filter((r) => r.policyType === 'return');
+    // A Fashion store's marketplace default return policy is the store's own
+    // agreed policy (e.g. UAE stock: no domestic returns). Keep it instead of
+    // re-picking the account's eBay default for the geo site. Other verticals
+    // keep the geo / P&A-compliant pick below unchanged.
+    const keepFashionMarketplaceDefaultReturn =
+      vertical === 'fashion' &&
+      Boolean(coalesceValidPolicyId(mpRow?.defaultReturnPolicyId));
     if (
       !explicitReturnPolicy &&
       !requestedReturnPolicyName &&
+      !keepFashionMarketplaceDefaultReturn &&
       returnRows.length
     ) {
       const compliantReturnId = pickReturnPolicyIdForListing(
@@ -518,16 +528,17 @@ export class ListingBuilderService {
         params.marketplaceId,
         categoryId,
         condition,
+        { vertical },
       );
       if (compliantReturnId) {
         returnPolicyId = compliantReturnId;
       } else if (
         // Fashion categories fall inside the P&A ID range check but are not P&A.
-        vertical !== 'fashion' &&
         listingRequiresPartsAccessoriesReturnPolicy(
           params.marketplaceId,
           categoryId,
           condition,
+          vertical,
         )
       ) {
         blockingErrors.push(partsAccessoriesReturnPolicyGuidance());
@@ -727,12 +738,11 @@ export class ListingBuilderService {
           )?.name
         : requestedFulfillmentPolicyName,
 
+      // An explicit return policy ID is sent on its own. Forwarding its name
+      // made the publish service re-resolve the name and, when that failed or
+      // matched another policy, replace the ID with the marketplace default.
       requestedReturnPolicyName: explicitReturnPolicy
-        ? policyRows.find(
-            (row) =>
-              row.policyType === 'return' &&
-              row.ebayPolicyId === returnPolicyId,
-          )?.name
+        ? undefined
         : requestedReturnPolicyName,
 
       requestedPaymentPolicyName: explicitPaymentPolicy
