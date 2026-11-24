@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-24 — One-photo fashion listings given their full galleries (operations)
+
+- 3,630 active listings on Primewardrobeusa and The Fashion Story had a single photo. Each got the rest of its SKU's gallery from the live Artistic Haul listing (the account SellerPundit manages; the logged-in SellerPundit catalogue only holds `AVP-` SKUs), only after a perceptual-hash check that the gallery contains the listing's current photo. Seller branding was removed: Artistic Haul company cards, "How we verify items" cards, size-guide charts, framed 800x800 badge photos and placeholders, by reference-hash matching plus two independent vision passes. The product's own logos and labels stay.
+- Result: 3,630 listings revised with 0 failures, about 27,400 photos added; a fresh sweep of all 11,289 active listings found every planned gallery exactly as planned, no one-photo listing and no auto-parts card. Record: `docs/operations/FASHION_CARD_CLEANUP_AND_PHOTO_FILL_2026-11-24.md`. No code change.
+
 ## 2026-11-24 — Auto-parts New-condition photos kept off fashion listings
 
 - Why: F1 to F3 in `backend/assets/new-condition-listing-images` are shared "Quality Car Parts & Accessories" promo cards. `EbayPublishService.publishToStore` appended them to every listing with condition `NEW`, whatever its vertical. Once the 2026-11-24 WebP repair let the upload succeed, fashion listings on Primewardrobeusa and The Fashion Story got them too: the cards were first hosted on 2026-11-23 20:11 UTC for Primewardrobeusa and on 2026-11-24 00:35 UTC for The Fashion Story.
