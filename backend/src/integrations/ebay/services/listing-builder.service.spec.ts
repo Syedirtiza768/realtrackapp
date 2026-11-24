@@ -757,4 +757,195 @@ describe('ListingBuilderService', () => {
 
     expect(result.publishRequest.currency).toBe('EUR');
   });
+
+  describe('Fashion return policy', () => {
+    // Synthetic IDs. STORE_RETURN accepts no domestic returns (the store's
+    // agreed policy); ACCOUNT_DEFAULT is the account's 30-day seller-paid
+    // eBay default, which the P&A category-range rule used to force.
+    const STORE_RETURN = '30000000001';
+    const ACCOUNT_DEFAULT = '30000000002';
+    const OTHER_RETURN = '30000000003';
+    const returnRow = (
+      ebayPolicyId: string,
+      name: string,
+      isDefault: boolean,
+      payer: 'BUYER' | 'SELLER',
+      returnsAccepted: boolean,
+    ) => ({
+      policyType: 'return',
+      name,
+      ebayPolicyId,
+      isDefault,
+      rawPayload: {
+        marketplaceId: 'EBAY_US',
+        returnsAccepted,
+        returnPeriod: { value: 30, unit: 'DAY' },
+        returnShippingCostPayer: payer,
+      },
+    });
+
+    const resolveFashion = (listingRecord: Record<string, unknown> = {}) =>
+      publishResolver.resolve.mockResolvedValue({
+        snapshot: {
+          catalogProductId: 'cp-f',
+          listingRecordId: 'lr-f',
+          sku: 'FASHION-001',
+          title: 'Womens Linen Dress',
+          description: '<p>Dress</p>',
+          price: 40,
+          quantity: 1,
+          categoryId: '63861',
+          imageUrls: ['https://img.example.com/f.jpg'],
+          vertical: 'fashion',
+        },
+        listingRecord,
+        catalogProduct: { vertical: 'fashion' },
+        warnings: [],
+      });
+
+    beforeEach(() => {
+      mpRepo.findOne = jest.fn().mockResolvedValue({
+        defaultFulfillmentPolicyId: '10000000001',
+        defaultPaymentPolicyId: '10000000002',
+        defaultReturnPolicyId: STORE_RETURN,
+        defaultInventoryLocationKey: 'loc-uae',
+      });
+      policyRepo.find = jest
+        .fn()
+        .mockResolvedValue([
+          returnRow(ACCOUNT_DEFAULT, '30 days seller paid', true, 'SELLER', true),
+          returnRow(STORE_RETURN, 'UAE stock returns', false, 'BUYER', false),
+          returnRow(OTHER_RETURN, 'Other returns', false, 'BUYER', true),
+        ]);
+    });
+
+    it.each(['63863', '185101', '57990', '53159'])(
+      'keeps the marketplace-default return policy for a New item in category %s',
+      async (categoryId) => {
+        resolveFashion();
+        overrideRepo.findOne = jest
+          .fn()
+          .mockResolvedValue({ categoryIdOverride: categoryId });
+
+        const result = await svc.build({
+          catalogProductId: 'cp-f',
+          ebayAccountId: 'acct-f',
+          marketplaceId: 'EBAY_US',
+          listingRecordId: 'lr-f',
+          storeId: 'store-f',
+          vertical: 'fashion',
+        });
+
+        expect(result.publishRequest.condition).toBe('NEW');
+        expect(result.publishRequest.categoryId).toBe(categoryId);
+        expect(result.publishRequest.returnPolicyId).toBe(STORE_RETURN);
+        expect(result.publishRequest.requestedReturnPolicyName).toBeUndefined();
+        expect(result.blockingErrors).toEqual([]);
+      },
+    );
+
+    it('sends an explicit returnPolicyId override without its name', async () => {
+      resolveFashion({ returnProfileName: 'Other returns' });
+      overrideRepo.findOne = jest.fn().mockResolvedValue({
+        categoryIdOverride: '63863',
+        policyOverrides: { returnPolicyId: STORE_RETURN },
+      });
+
+      const result = await svc.build({
+        catalogProductId: 'cp-f',
+        ebayAccountId: 'acct-f',
+        marketplaceId: 'EBAY_US',
+        listingRecordId: 'lr-f',
+        storeId: 'store-f',
+        vertical: 'fashion',
+      });
+
+      expect(result.publishRequest.returnPolicyId).toBe(STORE_RETURN);
+      // No name, so the publish service cannot re-resolve and replace the ID.
+      expect(result.publishRequest.requestedReturnPolicyName).toBeUndefined();
+      expect(result.blockingErrors).toEqual([]);
+    });
+
+    it('sends a queued params.policyOverrides returnPolicyId unchanged', async () => {
+      resolveFashion();
+      overrideRepo.findOne = jest
+        .fn()
+        .mockResolvedValue({ categoryIdOverride: '185101' });
+
+      const result = await svc.build({
+        catalogProductId: 'cp-f',
+        ebayAccountId: 'acct-f',
+        marketplaceId: 'EBAY_US',
+        listingRecordId: 'lr-f',
+        storeId: 'store-f',
+        vertical: 'fashion',
+        policyOverrides: { returnPolicyId: OTHER_RETURN },
+      });
+
+      expect(result.publishRequest.returnPolicyId).toBe(OTHER_RETURN);
+      expect(result.publishRequest.requestedReturnPolicyName).toBeUndefined();
+    });
+
+    it('resolves a named store return policy for a New Fashion item', async () => {
+      resolveFashion({ returnProfileName: 'UAE stock returns' });
+      mpRepo.findOne = jest.fn().mockResolvedValue({
+        defaultFulfillmentPolicyId: '10000000001',
+        defaultPaymentPolicyId: '10000000002',
+        defaultReturnPolicyId: ACCOUNT_DEFAULT,
+        defaultInventoryLocationKey: 'loc-uae',
+      });
+      overrideRepo.findOne = jest
+        .fn()
+        .mockResolvedValue({ categoryIdOverride: '63863' });
+
+      const result = await svc.build({
+        catalogProductId: 'cp-f',
+        ebayAccountId: 'acct-f',
+        marketplaceId: 'EBAY_US',
+        listingRecordId: 'lr-f',
+        storeId: 'store-f',
+        vertical: 'fashion',
+      });
+
+      expect(result.publishRequest.returnPolicyId).toBe(STORE_RETURN);
+      expect(result.publishRequest.requestedReturnPolicyName).toBe(
+        'UAE stock returns',
+      );
+      expect(result.warnings).not.toContainEqual(
+        expect.stringContaining('UAE stock returns'),
+      );
+    });
+
+    it('still picks the P&A-compliant policy for a New auto part in the same store data', async () => {
+      publishResolver.resolve.mockResolvedValue({
+        snapshot: {
+          catalogProductId: 'cp-a',
+          listingRecordId: 'lr-a',
+          sku: 'AUTO-001',
+          title: 'Brake Pad Set',
+          description: '<p>Pads</p>',
+          brand: 'TRW',
+          price: 49.99,
+          quantity: 1,
+          categoryId: '33564',
+          conditionId: '1000',
+          imageUrls: ['https://img.example.com/a.jpg'],
+        },
+        listingRecord: {},
+        catalogProduct: { fitmentData: [], fitmentRows: [] },
+        warnings: [],
+      });
+
+      const result = await svc.build({
+        catalogProductId: 'cp-a',
+        ebayAccountId: 'acct-f',
+        marketplaceId: 'EBAY_US',
+        listingRecordId: 'lr-a',
+        storeId: 'store-f',
+      });
+
+      expect(result.publishRequest.vertical).toBe('automotive');
+      expect(result.publishRequest.returnPolicyId).toBe(ACCOUNT_DEFAULT);
+    });
+  });
 });

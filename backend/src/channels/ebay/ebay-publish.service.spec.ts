@@ -1092,6 +1092,128 @@ describe('EbayPublishService', () => {
         ),
       ).rejects.toThrow(/Missing Shipping Policy/);
     });
+
+    describe('Fashion return policy (no P&A category-range rule)', () => {
+      // Synthetic IDs: STORE_RETURN accepts no domestic returns; the account's
+      // eBay default ACCOUNT_DEFAULT is 30-day seller-paid (P&A-compliant).
+      const STORE_RETURN = '30000000001';
+      const ACCOUNT_DEFAULT = '30000000002';
+      const returnRows = [
+        {
+          policyType: 'return',
+          name: '30 days seller paid',
+          ebayPolicyId: ACCOUNT_DEFAULT,
+          isDefault: true,
+          rawPayload: {
+            marketplaceId: 'EBAY_US',
+            returnsAccepted: true,
+            returnPeriod: { value: 30, unit: 'DAY' },
+            returnShippingCostPayer: 'SELLER',
+          },
+        },
+        {
+          policyType: 'return',
+          name: 'UAE stock returns',
+          ebayPolicyId: STORE_RETURN,
+          isDefault: false,
+          rawPayload: {
+            marketplaceId: 'EBAY_US',
+            returnsAccepted: false,
+            returnPeriod: { value: 30, unit: 'DAY' },
+            returnShippingCostPayer: 'BUYER',
+          },
+        },
+      ];
+      const fashionRequest = (overrides: Partial<PublishRequest> = {}) =>
+        validRequest({
+          vertical: 'fashion',
+          categoryId: '63863',
+          condition: 'NEW',
+          fulfillmentPolicyId: '10000000001',
+          paymentPolicyId: '10000000002',
+          merchantLocationKey: 'loc-1',
+          ...overrides,
+        });
+
+      beforeEach(() => {
+        mpRepo.findOne = jest.fn().mockResolvedValue({
+          enabled: true,
+          defaultInventoryLocationKey: 'loc-1',
+          defaultFulfillmentPolicyId: '10000000001',
+          defaultPaymentPolicyId: '10000000002',
+          defaultReturnPolicyId: ACCOUNT_DEFAULT,
+        });
+        policyRepo.find = jest.fn().mockResolvedValue(returnRows);
+      });
+
+      it.each(['63863', '185101', '57990', '53159'])(
+        'resolves the named store policy for a New item in category %s',
+        async (categoryId) => {
+          const result = await (svc as any).enrichPoliciesFromMarketplace(
+            account,
+            store,
+            fashionRequest({
+              categoryId,
+              returnPolicyId: STORE_RETURN,
+              requestedReturnPolicyName: 'UAE stock returns',
+            }),
+          );
+
+          expect(result.returnPolicyId).toBe(STORE_RETURN);
+          expect(
+            (svc as any).paReturnPolicy.ensureCompliantReturnPolicy,
+          ).not.toHaveBeenCalled();
+        },
+      );
+
+      it('sends an explicit return policy ID (no name) unchanged', async () => {
+        const result = await (svc as any).enrichPoliciesFromMarketplace(
+          account,
+          store,
+          fashionRequest({ returnPolicyId: STORE_RETURN }),
+        );
+
+        expect(result.returnPolicyId).toBe(STORE_RETURN);
+      });
+
+      it('keeps the requested ID when an eBay policy refresh re-picks', async () => {
+        (svc as any).sellAccount = {
+          listFulfillmentPolicies: jest.fn().mockResolvedValue([]),
+          listPaymentPolicies: jest.fn().mockResolvedValue([]),
+          listReturnPolicies: jest.fn().mockResolvedValue(
+            returnRows.map((r) => ({
+              ebayPolicyId: r.ebayPolicyId,
+              isDefault: r.isDefault,
+              name: r.name,
+              raw: r.rawPayload,
+            })),
+          ),
+        };
+
+        const refreshed = await (svc as any).refreshPoliciesFromEbayApi(
+          store,
+          account,
+          {
+            categoryId: '63863',
+            condition: 'NEW',
+            returnPick: { vertical: 'fashion', preferredPolicyId: STORE_RETURN },
+          },
+        );
+        expect(refreshed.returnPolicyId).toBe(STORE_RETURN);
+
+        // Auto parts keep the P&A-compliant pick for a New item.
+        const autoParts = await (svc as any).refreshPoliciesFromEbayApi(
+          store,
+          account,
+          {
+            categoryId: '33564',
+            condition: 'NEW',
+            returnPick: { preferredPolicyId: STORE_RETURN },
+          },
+        );
+        expect(autoParts.returnPolicyId).toBe(ACCOUNT_DEFAULT);
+      });
+    });
   });
 
   describe('Trading API selection', () => {

@@ -78,6 +78,7 @@ export class SellerpunditListingAdapter {
       marketplaceId,
       req.categoryId,
       req.condition,
+      req.vertical,
     );
     if (compliantReturnId) {
       returnPolicyId = compliantReturnId;
@@ -88,6 +89,7 @@ export class SellerpunditListingAdapter {
         marketplaceId,
         req.categoryId,
         req.condition,
+        req.vertical,
       )
     ) {
       if (!returnPolicyId) {
@@ -342,6 +344,7 @@ export class SellerpunditListingAdapter {
     marketplaceId: string,
     categoryId?: string,
     condition?: string | null,
+    vertical?: string | null,
   ): Promise<string | undefined> {
     const rows = await this.policyRepo.find({
       where: { ebayAccountId, marketplaceId, policyType: 'return' },
@@ -358,6 +361,7 @@ export class SellerpunditListingAdapter {
         marketplaceId,
         categoryId,
         condition,
+        { vertical },
       ) ?? undefined
     );
   }
