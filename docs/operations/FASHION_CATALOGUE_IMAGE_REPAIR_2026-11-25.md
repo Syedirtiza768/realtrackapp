@@ -48,3 +48,23 @@ changed by this run. Restore a row by copying `image_urls` back from the backup.
 - Live eBay listings were not changed by this run. Where a live eBay listing still shows the old
   photos, a separate eBay revision is needed.
 - Credentials: the backend's AWS key was printed in session output during this run. Rotate it.
+
+## Approval of self-check passes (2026-11-25)
+
+- 2,808 draft fashion products that passed the self-check (app text-compliance rules, title, price,
+  category, description, at least two photos) were approved through the app's own review action
+  (`FashionListingsService.review`), recorded under `fashionadmin@realtrack.local` with authenticity
+  confirmed as that reviewer's sign-off. Result: 2,808 approved, 0 failed; approved products 5,954 to 8,762.
+- Not part of the self-check: vision check (needs OpenRouter credits), the eBay category/aspect
+  check at publish time, and the authenticity judgement itself.
+- The 80 failing drafts were left as drafts (brand mismatches, missing descriptions or prices,
+  and 2 counterfeit-term blocks). The SKU list is in the self-check output.
+
+## Incident: production write failures (2026-11-25, caused by a read-only check)
+
+- A read-only self-check ran through the database pooler (transaction pooling), leaving read-only
+  settings on pooled connections. The backend's writes failed for about 1 hour (about 70 errors/hour,
+  order imports failing).
+- Fixed by `RECONNECT` on the pooler's admin console (authorised by the user). Write errors stopped
+  at the next poll.
+- Rule: read-only checks connect straight to Postgres, never through the pooler.
