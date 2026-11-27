@@ -13,6 +13,11 @@ and the narrative log in [docs/context/DECISION_LOG.md](context/DECISION_LOG.md)
 this file for quick day-to-day entries; promote something to a full ADR only if it
 needs that level of ceremony.
 
+## 2026-11-27 — Inventory listing text lives on the offer; a 25019 retry must not drop price
+**Decision:** To change the description of a live Inventory-API listing, write both the inventory item (`PUT /sell/inventory/v1/inventory_item/{sku}`) and the offer's `listingDescription` (`PUT /sell/inventory/v1/offer/{offerId}`). Verify on the public Browse API, not on the inventory read-back.
+**Why:** A new inventory-item description was accepted (204) but the live text did not change; the offer's `listingDescription` is what eBay shows. An offer PUT on a listing in a markdown sale fails with 25019; the retry without `pricingSummary` succeeded but cleared the offer's stored price on 142 Primewardrobeusa offers (the live price was unchanged). Restore those prices after the markdown ends (list in `docs/operations/SKU_ENRICHMENT_2026-11-27.md`).
+**Revisit when:** eBay changes which field drives the listing text, or the markdown on those listings ends (restore the prices then).
+
 ## 2026-11-24 — The shared New-condition photos (F1 to F3) are automotive-only
 
 F1 to F3 are auto-parts promo cards ("Quality Car Parts & Accessories"), not neutral condition photos. They were added for the auto-parts stores, and the publish code appended them to every `NEW` listing because, at the time, only auto parts were published. When fashion publishing started and the 2026-11-24 WebP repair made the upload work, they appeared on fashion listings on Primewardrobeusa and The Fashion Story, where they are wrong and misleading. The rule is now: append them only to automotive New listings (vertical from the request, catalog product or listing record, defaulting to automotive for legacy publishes), never on a fashion-only store, and strip any copy, including eBay-hosted ones, from every other gallery before publish. The gate lives in `shouldAppendNewConditionImages` in `backend/src/channels/ebay/ebay-publish.service.ts`; the backfill script follows the same rule. Business & Industrial is excluded for the same reason. The 17 affected live listings were cleaned up by hand on 2026-11-24 (see `CHANGELOG.md`).
