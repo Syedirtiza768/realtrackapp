@@ -135,6 +135,14 @@ export function isDedicatedFashionStore(value: unknown): boolean {
   return enabledVerticals.length === 1 && enabledVerticals[0] === 'fashion';
 }
 
+/** Whether a store's vertical config enables the given product vertical. */
+export function storeSupportsVertical(
+  value: unknown,
+  vertical: ProductVertical,
+): boolean {
+  return normalizeVerticalConfig(value).enabledVerticals.includes(vertical);
+}
+
 function normalizeAttributeKey(key: string): string {
   const trimmed = key.trim();
   if (trimmed.startsWith('_')) return trimmed;

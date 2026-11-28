@@ -20,7 +20,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { useUploadPipelineFile, type PipelineUploadProfileInput } from '../../lib/pipelineApi';
-import type { ProductVertical } from '../../lib/verticalsApi';
+import { storeSupportsVertical, type ProductVertical } from '../../lib/verticalsApi';
 import {
   PIPELINE_GRIDX_REQUIRED_HEADERS,
   PIPELINE_GRIDX_SAMPLE_PATH,
@@ -172,10 +172,16 @@ const BulkUploadCard = forwardRef<BulkUploadHandle, { onJobCreated: (jobId: stri
       staleTime: 60_000,
     });
 
-    const activeStores = stores.filter((s) => s.status === 'active');
+    // Only offer stores that sell the selected vertical, so an automotive
+    // upload can never be pointed at a fashion-only store.
+    const activeStores = stores.filter(
+      (s) => s.status === 'active' && storeSupportsVertical(s.verticalConfig, vertical),
+    );
 
     const selectedTeamId = teamId || teams[0]?.id || '';
-    const selectedStoreId = storeId || activeStores[0]?.id || '';
+    const selectedStoreId = activeStores.some((s) => s.id === storeId)
+      ? storeId
+      : activeStores[0]?.id || '';
     const selectedStore = activeStores.find((s) => s.id === selectedStoreId) ?? null;
     const marketplace: PipelineMarketplaceCode | null = selectedStore
       ? ebayMarketplaceIdToPipelineCode(
@@ -354,7 +360,7 @@ const BulkUploadCard = forwardRef<BulkUploadHandle, { onJobCreated: (jobId: stri
                 className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800"
               >
                 {activeStores.length === 0 ? (
-                  <option value="">No active eBay stores</option>
+                  <option value="">No active eBay stores for this vertical</option>
                 ) : (
                   activeStores.map((s: Store) => (
                     <option key={s.id} value={s.id}>
@@ -392,7 +398,11 @@ const BulkUploadCard = forwardRef<BulkUploadHandle, { onJobCreated: (jobId: stri
               <span className="font-medium text-slate-600 dark:text-slate-300">Product vertical</span>
               <select
                 value={vertical}
-                onChange={(e) => setVertical(e.target.value as ProductVertical)}
+                onChange={(e) => {
+                  setVertical(e.target.value as ProductVertical);
+                  setStoreId('');
+                  setProfiles(EMPTY_PROFILE_SELECTION);
+                }}
                 className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800"
               >
                 <option value="automotive">Automotive</option>

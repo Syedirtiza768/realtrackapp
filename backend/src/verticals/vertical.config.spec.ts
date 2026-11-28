@@ -1,6 +1,7 @@
 import {
   attributesFromImportRow,
   normalizeVerticalConfig,
+  storeSupportsVertical,
   validateVerticalAttributes,
 } from './vertical.config.js';
 
@@ -11,6 +12,24 @@ describe('vertical configuration', () => {
       defaultVertical: 'automotive',
       workflows: {},
     });
+  });
+
+  it('treats a store with no config as automotive-only', () => {
+    expect(storeSupportsVertical(null, 'automotive')).toBe(true);
+    expect(storeSupportsVertical(null, 'fashion')).toBe(false);
+  });
+
+  it('rejects an automotive upload to a fashion-only store', () => {
+    const fashionOnly = { enabledVerticals: ['fashion'], defaultVertical: 'fashion' };
+    expect(storeSupportsVertical(fashionOnly, 'fashion')).toBe(true);
+    expect(storeSupportsVertical(fashionOnly, 'automotive')).toBe(false);
+  });
+
+  it('allows a store that enables several verticals', () => {
+    const mixed = { enabledVerticals: ['automotive', 'fashion'], defaultVertical: 'automotive' };
+    expect(storeSupportsVertical(mixed, 'automotive')).toBe(true);
+    expect(storeSupportsVertical(mixed, 'fashion')).toBe(true);
+    expect(storeSupportsVertical(mixed, 'business_industrial')).toBe(false);
   });
 
   it('does not allow a disabled default vertical', () => {

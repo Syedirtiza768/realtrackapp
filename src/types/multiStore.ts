@@ -3,6 +3,8 @@
  *  and demo simulation systems.
  * ────────────────────────────────────────────────────────── */
 
+import type { VerticalConfig } from '../lib/verticalsApi';
+
 // ─── Stores ───
 
 export interface Store {
@@ -27,6 +29,8 @@ export interface Store {
   paymentPolicyId?: string | null;
   returnPolicyId?: string | null;
   locationKey?: string | null;
+  /** Product verticals this store sells; null means legacy automotive-only. */
+  verticalConfig?: VerticalConfig | null;
   /** Enriched fields from the filtered stores endpoint */
   marketplaceLabel?: string;
   fulfillmentPolicyName?: string | null;

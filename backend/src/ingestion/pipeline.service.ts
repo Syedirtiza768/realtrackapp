@@ -57,6 +57,7 @@ import {
   DEFAULT_PRODUCT_VERTICAL,
   type ProductVertical,
 } from '../verticals/vertical.types.js';
+import { storeSupportsVertical } from '../verticals/vertical.config.js';
 
 const SINGLE_LISTING_DEFAULT_PRICE = 100;
 const SINGLE_LISTING_DEFAULT_QUANTITY = 1;
@@ -353,6 +354,11 @@ export class PipelineService {
     ) {
       throw new BadRequestException(
         `Store "${store.storeName}" does not belong to marketplace ${marketplace}`,
+      );
+    }
+    if (!storeSupportsVertical(store.verticalConfig, vertical)) {
+      throw new BadRequestException(
+        `Store "${store.storeName}" is not enabled for the ${vertical} vertical`,
       );
     }
     if (user) {
