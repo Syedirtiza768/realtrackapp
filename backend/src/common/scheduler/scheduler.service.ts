@@ -10,6 +10,7 @@ import { SellerpunditPolicySyncService } from '../../integrations/sellerpundit/s
 import { SellerpunditTokenSyncService } from '../../integrations/sellerpundit/sellerpundit-token-sync.service.js';
 import { SellerpunditAuthService } from '../../integrations/sellerpundit/sellerpundit-auth.service.js';
 import { EbayPolicySyncService } from '../../integrations/ebay/services/ebay-policy-sync.service.js';
+import { EbayAccountTokenService } from '../../integrations/ebay/services/ebay-account-token.service.js';
 import { ConnectedEbayAccount } from '../../integrations/ebay/entities/connected-ebay-account.entity.js';
 import { EbayCategoryKeywordAuditService } from '../../channels/ebay/ebay-category-keyword-audit.service.js';
 
@@ -45,6 +46,7 @@ export class SchedulerService {
     private readonly spTokenSync: SellerpunditTokenSyncService,
     private readonly spAuth: SellerpunditAuthService,
     private readonly nativePolicySync: EbayPolicySyncService,
+    private readonly ebayTokens: EbayAccountTokenService,
     private readonly categoryKeywordAudit: EbayCategoryKeywordAuditService,
     @Optional()
     private readonly priceMonitor?: PriceMonitorService,
@@ -450,5 +452,39 @@ export class SchedulerService {
         );
       },
     );
+  }
+
+  /* ─── Native OAuth: access-token keep-alive every 20 minutes ───
+   * eBay access tokens last 2 hours. They were refreshed only when a call
+   * needed one (policy sync runs every 8 hours), so an idle account's token
+   * expired and its scheduled work failed until someone reconnected it.
+   * getValidAccessToken refreshes only inside its 30-minute buffer, so this
+   * refreshes each token about once per 1.5 hours. A refresh that fails
+   * marks the account reconnect_required inside EbayAccountTokenService. */
+
+  @Cron('*/20 * * * *', { name: 'ebay-token-keepalive' })
+  async scheduleEbayTokenKeepAlive(): Promise<void> {
+    await this.leader.runIfLeader('ebay-token-keepalive', 1100, async () => {
+      const accounts = await this.accountRepo.find({
+        where: { connectionSource: 'native_oauth', connectionStatus: 'active' },
+      });
+      let refreshed = 0;
+      let failed = 0;
+      for (const account of accounts) {
+        try {
+          await this.ebayTokens.getValidAccessToken(account.id);
+          refreshed++;
+        } catch (e) {
+          failed++;
+          const msg = e instanceof Error ? e.message : String(e);
+          this.logger.warn(
+            `eBay token keep-alive failed for account ${account.id} (${account.accountDisplayName ?? account.ebayUserId}): ${msg}`,
+          );
+        }
+      }
+      this.logger.debug(
+        `eBay token keep-alive: ${refreshed} checked, ${failed} failed`,
+      );
+    });
   }
 }
