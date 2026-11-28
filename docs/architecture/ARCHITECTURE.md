@@ -229,6 +229,12 @@ pipeline view surfaces gaps. Existing image URLs are retained. A listing with
 no source image in its catalog or Image Drive remains explicitly missing rather
 than receiving an unrelated or fabricated image.
 
+## Frontend load path (2026-11-28)
+
+- **Code splitting.** `src/App.tsx` loads every route screen with `React.lazy`. The entry bundle holds the router, `AuthProvider`, `BrandingProvider`, `QueryProvider`, `Shell`, `ProtectedRoute` and `LandingPage`. Nested `Suspense` boundaries inside the Auto Parts, Fashion, Business & Industrial and Parts Search shells keep the sidebar mounted during a page load. Entry bundle: 330 KB raw / 99 KB gzip (it was 2.53 MB / 648 KB). `xlsx` loads only with the pages that import it.
+- **Auth bootstrap.** `AuthContext.refreshSession()` starts `GET /api/rbac/roles/sidebar-config/me` together with `GET /api/auth/me`. `ProtectedRoute` shows its spinner until both settle, so a signed-in visit costs one round trip instead of two.
+- **Transport.** The host nginx TLS listener (`/etc/nginx/sites-enabled/app.omnicoreholding.com`) did not enable HTTP/2 before 2026-11-28, and `/api/` responses are sent with `Cache-Control: no-store`. From the measuring workstation (round-trip time about 0.28 s), a new connection spent about 0.6 s on TCP and TLS handshakes, so HTTP/2 would remove the per-asset connection cost. Enabled on `app.omnicoreholding.com` on 2026-11-28 with `http2 on;` (verified: ALPN `h2`, `/api/health` 200 over HTTP/2). See `docs/context/CURRENT_STATE.md`.
+
 ## Backend Modules (23)
 
 Registered in `backend/src/app.module.ts`: `auth`, `rbac`, `listings`, `health`, `storage`, `ingestion`, `catalog-import`, `fitment`, `channels`, `inventory`, `orders`, `dashboard`, `settings`, `notifications`, `common/scheduler`, `common/feature-flags`, `automation`, `templates`, `motors-intelligence`, `common/openai`, `pricing-intelligence`, `integrations/ebay`, `client-settings`. Note: `listing-optimization` is imported transitively via `ingestion`, and `sellerpundit` is imported transitively via `integrations/ebay`.

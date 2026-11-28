@@ -1,5 +1,14 @@
 # Testing
 
+## Performance pass (2026-11-28)
+
+- `npm run build` in the repo root (`tsc -b && vite build`) passes. The entry chunk is 329.9 kB raw / 98.7 kB gzip (it was 2.53 MB / 648 KB).
+- `npm run build` in `backend/` (`nest build`) passes.
+- `npx jest --runInBand --runTestsByPath src/catalog/catalog-workspace.service.spec.ts src/published-listings/published-listings.spec.ts src/published-listings/published-listings-response.util.spec.ts` in `backend/`: 3 suites, 26 tests pass.
+- Browser smoke test with the Vite dev server, against a throwaway stub on port 4191 (not in the repo) that returns a signed-in user and sidebar config. The landing page, the three login routes and the Auto Parts shell with its dashboard render through their lazy chunks with no runtime error. The stub is not a real backend, so no data path ran end to end.
+- The image-drive folder SQL (lateral subquery, `json_agg`, soft-delete filter, four thumbnails, `ORDER BY name`) was executed on PostgreSQL 16 with the production column names and returned the expected rows.
+- Not run in this pass: the TypeORM-generated SQL for published-listings counts, the listings summary aggregate and the published-listings summary aggregate have no database test. Run them against a restored copy before deploying.
+
 ## Fashion source catalogue import
 
 Focused regression coverage includes `backend/src/catalog-import/catalog-import.service.spec.ts`, `backend/src/catalog-import/catalog-product.service.spec.ts`, `backend/src/verticals/fashion-catalog-export.spec.ts`, `backend/src/verticals/fashion.config.spec.ts`, `backend/src/verticals/fashion-image-analysis.service.spec.ts`, and `backend/src/verticals/fashion-capture-reliability.spec.ts`. Run `cd backend; npm test -- --runInBand --runTestsByPath src/catalog-import/catalog-import.service.spec.ts src/catalog-import/catalog-product.service.spec.ts src/verticals/fashion-catalog-export.spec.ts src/verticals/fashion.config.spec.ts src/verticals/fashion-image-analysis.service.spec.ts src/verticals/fashion-capture-reliability.spec.ts` after importer or source-field changes; the current main-based run passes 33 tests. A clean backend/frontend build also checks the import, editor, and publish flow.

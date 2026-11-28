@@ -13,10 +13,26 @@ and the narrative log in [docs/context/DECISION_LOG.md](context/DECISION_LOG.md)
 this file for quick day-to-day entries; promote something to a full ADR only if it
 needs that level of ceremony.
 
+## 2026-11-28 — Whole-organisation counts are cached 60 s; the Primemotive cursor is not
+
+Published-listings totals and summaries are full passes over `ebay_published_listings` (1.39M rows; one organisation holds about 90 % of them), and each page view or window focus repeated them. The service now caches those reads for 60 seconds, keyed by the SQL text and its bound parameters. The parameters carry the organisation and store scope, so two scopes never share an entry.
+
+The `afterId` cursor used by the Primemotive feed is deliberately not cached. That feed derives `hasMore` from the same count, and a stale total would end a page run early. The cost is that totals can lag by up to a minute after a sync. The UI accepts that, and the sync itself runs every 15 minutes.
+
+## 2026-11-28 — Route screens are lazy chunks; the shell and auth guard stay eager
+
+The entry bundle carried every screen, so each visit downloaded 2.53 MB of JavaScript (648 KB gzip) before rendering. Each route screen is now a `React.lazy` chunk in `src/App.tsx`. Nested `Suspense` boundaries sit inside the Auto Parts, Fashion, Business & Industrial and Parts Search shells, so the sidebar stays on screen while a page loads. The shell, providers, `ProtectedRoute` and the landing page stay eager, so the guard and the first screen need no extra request. Route paths and permissions are unchanged.
+
+Accepted cost: the first visit to a screen downloads its chunk (typically 5–60 KB gzip plus shared chunks). Chunks are content-hashed and cached for a year by the frontend container.
+
 ## 2026-11-27 — Inventory listing text lives on the offer; a 25019 retry must not drop price
 **Decision:** To change the description of a live Inventory-API listing, write both the inventory item (`PUT /sell/inventory/v1/inventory_item/{sku}`) and the offer's `listingDescription` (`PUT /sell/inventory/v1/offer/{offerId}`). Verify on the public Browse API, not on the inventory read-back.
 **Why:** A new inventory-item description was accepted (204) but the live text did not change; the offer's `listingDescription` is what eBay shows. An offer PUT on a listing in a markdown sale fails with 25019; the retry without `pricingSummary` succeeded but cleared the offer's stored price on 142 Primewardrobeusa offers (the live price was unchanged). Restore those prices after the markdown ends (list in `docs/operations/SKU_ENRICHMENT_2026-11-27.md`).
 **Revisit when:** eBay changes which field drives the listing text, or the markdown on those listings ends (restore the prices then).
+
+## 2026-11-26 — A store's vertical config is checked before an upload, not just in the picker
+
+Store `vertical_config` decides which product verticals a store sells. Stores with no config are automotive-only (legacy). Fashion-only stores have `enabledVerticals = ["fashion"]`. The Pipeline store picker and the upload endpoint now both check the selected vertical against that config (`storeSupportsVertical` in `backend/src/verticals/vertical.config.ts`). The server check is the one that matters, because the picker can be stale. The stores endpoint also drops stores whose eBay login is not active, so after the filter the automotive list is empty until those accounts are reconnected. That is expected, not a bug. The record is in the 2026-11-26 "Pipeline shows only the eBay stores" entry in `CHANGELOG.md`.
 
 ## 2026-11-24 — The shared New-condition photos (F1 to F3) are automotive-only
 
@@ -31,6 +47,25 @@ A Trading publish (`AddFixedPriceItem`) creates a listing without an offer. If t
 The failed rows of batch `999ba901` were retried through new `--ids` batches, not `--resume-batch`. Both are flags of the operations publish runner, which is not in the repository. `--resume-batch` selects only the unfinished rows of a batch and does not check holds. The failed rows were already finished, and after the pause the batch had no unfinished rows, so it would have retried nothing; if paused rows are reopened later, it would publish them without a hold check. `--ids` creates a new batch with exactly the listed rows and refuses any row that is on hold. Each group was launched detached in the backend container and checked on eBay (offer, listing, location, policies, quantity, size, photos, and the Browse buyer view). The next group started only after every row of the previous group had passed that check.
 
 Two rules applied to rows that still looked wrong. A size label was changed only to a value the category's Taxonomy accepts for Size Type Regular: to the regional label in the title where the title had one, and otherwise to an EU label with the operator's approval. A row whose offer category contradicts its title (`AV21-5538`: the offer was in Shorts, 11555, but the title is a skirt) was held out of the retry until the operator approved moving it to Skirts (63864). The row-level record is the 2026-11-24 "Fashion retry" entry in `CHANGELOG.md`.
+
+## 2026-11-22 — Typed catalog search keeps its exact results; only the speed changes
+
+The typed catalog search took about 12 s (search page) and 17 s (facets) on Fashion. The cheaper fixes changed what users see:
+- ranking on title or SKU only would reorder every typed search;
+- dropping `vertical_attributes` from the document would drop matches.
+
+Instead, the document and its trigram count are stored by a trigger and indexed (migration `1792000000002`). Two pieces of arithmetic keep results byte-identical:
+- the fuzzy match only checks rows whose trigram count can still reach 0.15;
+- the relevance page only scores rows whose score upper bound can still reach the page.
+
+Both bounds come from pg_trgm's formula c / (|q| + |doc| − c). Adversarial review checked them by exhaustive float4 enumeration. They were also compared against the old SQL on a production copy (760 page checks, 0 differences).
+
+Accepted costs:
+- About 0.6 ms of trigger work per insert or document-changing update (unchanged documents skip it).
+- About 50 MB of GIN index per 22k Fashion rows.
+- One- or two-character queries still scan, about 1.5 s.
+
+Operational rules: never disable `catalog_products` triggers; revert with `migration:revert -t none`.
 
 ## 2026-11-22 — Production is rebuilt from `main`; overlay-only hotfixes are ported first
 
