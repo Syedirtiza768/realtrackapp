@@ -84,8 +84,10 @@ describe('PublishedListingsHealthService', () => {
 describe('Primemotive snapshot UUID cursor', () => {
   const nil = '00000000-0000-0000-0000-000000000000';
   function setupCursor() {
-    const qb = { andWhere: jest.fn().mockReturnThis(), orderBy: jest.fn().mockReturnThis(), skip: jest.fn().mockReturnThis(),
-      take: jest.fn().mockReturnThis(), getManyAndCount: jest.fn().mockResolvedValue([[{id:'00000000-0000-4000-8000-000000000001'}],2]) };
+    const qb = { andWhere: jest.fn().mockReturnThis(), orderBy: jest.fn().mockReturnThis(), select: jest.fn().mockReturnThis(),
+      clone: jest.fn().mockReturnThis(), offset: jest.fn().mockReturnThis(), limit: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([{id:'00000000-0000-4000-8000-000000000001'}]),
+      getRawOne: jest.fn().mockResolvedValue({ cnt: '2' }), getQueryAndParameters: jest.fn(() => ['select listings', [] as unknown[]]) };
     const service = new PublishedListingsService({} as never,{} as never,{} as never,{} as never,{} as never,{} as never,
       {getAccessibleStoreIds:()=>Promise.resolve(new Set<string>())} as never,{} as never,{} as never);
     jest.spyOn(service as unknown as {buildListQuery:()=>Promise<typeof qb>},'buildListQuery').mockResolvedValue(qb);
@@ -96,13 +98,41 @@ describe('Primemotive snapshot UUID cursor', () => {
     const result=await service.list('org',{} as never,{afterId:nil,limit:1},{requirePublishedActiveRecord:true});
     expect(qb.andWhere).toHaveBeenCalledWith('l.id > :afterId',{afterId:nil});
     expect(qb.orderBy).toHaveBeenCalledWith('l.id','ASC');
-    expect(qb.skip).toHaveBeenCalledWith(0);
+    expect(qb.offset).toHaveBeenCalledWith(0);
     expect(result).toMatchObject({nextId:'00000000-0000-4000-8000-000000000001',hasMore:true});
+  });
+  it('caches the whole-organisation count across repeated page requests', async()=>{
+    const {qb,service}=setupCursor();
+    await service.list('org',{} as never,{page:1,limit:1});
+    await service.list('org',{} as never,{page:2,limit:1});
+    expect(qb.getRawOne).toHaveBeenCalledTimes(1);
+    expect(qb.offset).toHaveBeenNthCalledWith(2,1);
   });
   it('rejects cursor use on unscoped feeds and mixed offset/sort requests',async()=>{
     const {service}=setupCursor();
     await expect(service.list('org',{} as never,{afterId:nil})).rejects.toThrow('afterId requires');
     await expect(service.list('org',{} as never,{afterId:nil,page:2},{requirePublishedActiveRecord:true})).rejects.toThrow('afterId requires');
+  });
+});
+
+describe('PublishedListingsService summary', () => {
+  it('counts every status in one scoped pass and caches it for repeated reads', async()=>{
+    const aggregate = { where: jest.fn().mockReturnThis(), andWhere: jest.fn().mockReturnThis(), clone: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(), addSelect: jest.fn().mockReturnThis(),
+      getQueryAndParameters: jest.fn(() => ['select summary', ['org'] as unknown[]]),
+      getRawOne: jest.fn().mockResolvedValue({ total: '10', active: '6', ended: '2', outOfStock: '1', withWarnings: '3' }) };
+    const lastSync = { select: jest.fn().mockReturnThis(), where: jest.fn().mockReturnThis(), getRawOne: jest.fn().mockResolvedValue({ max: null }) };
+    const createQueryBuilder = jest.fn()
+      .mockReturnValueOnce(aggregate).mockReturnValueOnce(lastSync)
+      .mockReturnValueOnce(aggregate).mockReturnValueOnce(lastSync);
+    const service = new PublishedListingsService({ createQueryBuilder } as never,{} as never,{} as never,{} as never,{} as never,{} as never,
+      {getAccessibleStoreIds:()=>Promise.resolve(new Set<string>(['store-1']))} as never,{} as never,{} as never);
+    const first = await service.getSummary('org',{storeAccessAll:true} as never);
+    expect(first).toMatchObject({total:10,active:6,ended:2,outOfStock:1,withWarnings:3,lastSyncedAt:null});
+    expect(aggregate.addSelect).toHaveBeenCalledWith("COUNT(*) FILTER (WHERE l.listing_status = 'active')",'active');
+    expect(aggregate.addSelect).toHaveBeenCalledWith('COUNT(*) FILTER (WHERE jsonb_array_length(l.health_flags) > 0)','withWarnings');
+    await service.getSummary('org',{storeAccessAll:true} as never);
+    expect(aggregate.getRawOne).toHaveBeenCalledTimes(1);
   });
 });
 

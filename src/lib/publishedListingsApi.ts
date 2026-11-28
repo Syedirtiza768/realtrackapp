@@ -86,18 +86,19 @@ function buildQuery(params: Record<string, string | number | undefined>): string
   return s ? `?${s}` : '';
 }
 
-export async function fetchPublishedListings(query: PublishedListingsQuery = {}) {
+export async function fetchPublishedListings(query: PublishedListingsQuery = {}, signal?: AbortSignal) {
   return fetchWithAuth<{
     items: PublishedListing[];
     total: number;
     page: number;
     limit: number;
-  }>(`${API}/published-listings${buildQuery(query as Record<string, string | number | undefined>)}`);
+  }>(`${API}/published-listings${buildQuery(query as Record<string, string | number | undefined>)}`, { signal });
 }
 
-export async function fetchPublishedListingSummary(organizationId?: string, ebayAccountId?: string) {
+export async function fetchPublishedListingSummary(organizationId?: string, ebayAccountId?: string, signal?: AbortSignal) {
   return fetchWithAuth<PublishedListingsSummary>(
     `${API}/published-listings/summary${buildQuery({ organizationId, ebayAccountId })}`,
+    { signal },
   );
 }
 
@@ -182,17 +183,25 @@ export async function refreshAllCompetitorPricing(body: {
   );
 }
 
-export function usePublishedListings(query: PublishedListingsQuery) {
+// These endpoints are heavy on large organisations. A focus or retry refetch would
+// repeat the full query, so both hooks refetch only when their key changes.
+export function usePublishedListings(query: PublishedListingsQuery, enabled = true) {
   return useQuery({
     queryKey: ['published-listings', query],
-    queryFn: () => fetchPublishedListings(query),
+    queryFn: ({ signal }) => fetchPublishedListings(query, signal),
+    enabled,
+    retry: false,
+    refetchOnWindowFocus: false,
   });
 }
 
-export function usePublishedListingSummary(organizationId?: string, ebayAccountId?: string) {
+export function usePublishedListingSummary(organizationId?: string, ebayAccountId?: string, enabled = true) {
   return useQuery({
     queryKey: ['published-listings-summary', organizationId, ebayAccountId],
-    queryFn: () => fetchPublishedListingSummary(organizationId, ebayAccountId),
+    queryFn: ({ signal }) => fetchPublishedListingSummary(organizationId, ebayAccountId, signal),
+    enabled,
+    retry: false,
+    refetchOnWindowFocus: false,
   });
 }
 

@@ -100,7 +100,7 @@ export default function PublishedListingsPage() {
     return () => clearTimeout(t);
   }, [search]);
 
-  const { data: workspace } = useQuery({
+  const { data: workspace, isFetched: workspaceFetched } = useQuery({
     queryKey: ['ebay-workspace'],
     queryFn: getEbayWorkspace,
   });
@@ -140,8 +140,9 @@ export default function PublishedListingsPage() {
     [organizationId, page, debouncedSearch, ebayAccountId, storeId, statusFilter, sortBy],
   );
 
-  const { data, isLoading, isFetching, refetch } = usePublishedListings(query);
-  const { data: summary } = usePublishedListingSummary(organizationId, ebayAccountId || undefined);
+  // Wait for the workspace lookup so the first request already carries its organisation.
+  const { data, isLoading, isFetching, refetch } = usePublishedListings(query, workspaceFetched);
+  const { data: summary } = usePublishedListingSummary(organizationId, ebayAccountId || undefined, workspaceFetched);
   const syncMutation = useSyncPublishedListings();
   const bulkMutation = useBulkPublishedListings();
 
@@ -354,7 +355,7 @@ export default function PublishedListingsPage() {
           </div>
         </CardHeader>
         <CardContent className="p-0">
-          {isLoading ? (
+          {isLoading || !workspaceFetched ? (
             <div className="flex justify-center py-16">
               <Loader2 className="animate-spin text-slate-400" size={32} />
             </div>

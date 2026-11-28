@@ -6,7 +6,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Brackets, In } from 'typeorm';
+import { Repository, Brackets, In, SelectQueryBuilder } from 'typeorm';
 import { User } from '../../auth/entities/user.entity.js';
 import { ChannelWebhookLog } from '../../channels/entities/channel-webhook-log.entity.js';
 import { Store } from '../../channels/entities/store.entity.js';
@@ -47,6 +47,11 @@ const STORE_SYNC_STALE_AFTER_HOURS = Math.max(
   Number(process.env.PUBLISHED_LISTINGS_SYNC_STALE_AFTER_HOURS ?? 24) || 24,
 );
 const STORE_SYNC_STALE_MS = STORE_SYNC_STALE_AFTER_HOURS * 60 * 60 * 1000;
+
+// Whole-organisation counts and summaries are cached briefly. Each is a pass over
+// ebay_published_listings, and the published state only moves with the sync.
+const PUBLISHED_READ_CACHE_TTL_MS = 60_000;
+const PUBLISHED_READ_CACHE_MAX_ENTRIES = 200;
 
 export interface PublishedListingStoreSummary {
   storeId: string;
@@ -206,7 +211,14 @@ export class PublishedListingsService {
       if (!constraints.requirePublishedActiveRecord || page !== 1 || query.sortBy || query.sortDir) throw new BadRequestException('afterId requires the dedicated Primemotive feed without page/sort overrides');
       qb.andWhere('l.id > :afterId', { afterId: query.afterId }).orderBy('l.id', 'ASC');
     }
-    const [items, total] = await qb.skip(query.afterId ? 0 : offset).take(limit).getManyAndCount();
+    // offset/limit rather than skip/take: with a join, skip/take wraps the query in a
+    // DISTINCT subquery. The account join is many-to-one, so the rows are identical.
+    const countQb = qb.clone().orderBy().select('COUNT(*)', 'cnt');
+    const [items, total] = await Promise.all([
+      qb.clone().offset(query.afterId ? 0 : offset).limit(limit).getMany(),
+      // The Primemotive cursor reports hasMore from this count, so it is never cached.
+      query.afterId ? this.countRows(countQb) : this.cachedRead(countQb, (count) => this.countRows(count)),
+    ]);
     const cursor = query.afterId ? { nextId: items.at(-1)?.id ?? query.afterId, hasMore: total > items.length } : {};
     if (query.includeCatalogData !== 'true') {
       return { items, total, page, limit, ...cursor };
@@ -467,6 +479,32 @@ export class PublishedListingsService {
       }
     }
     return out;
+  }
+
+  private readonly readCache = new Map<string, { expiresAt: number; value: Promise<unknown> }>();
+
+  /** Runs `read` once per SQL text and bound parameters within the TTL. The parameters carry the organisation and store scope, so scopes never share a cache entry. */
+  private cachedRead<T>(
+    qb: SelectQueryBuilder<EbayPublishedListing>,
+    read: (query: SelectQueryBuilder<EbayPublishedListing>) => Promise<T>,
+  ): Promise<T> {
+    const key = JSON.stringify(qb.getQueryAndParameters());
+    const now = Date.now();
+    const hit = this.readCache.get(key);
+    if (hit && hit.expiresAt > now) return hit.value as Promise<T>;
+    if (this.readCache.size >= PUBLISHED_READ_CACHE_MAX_ENTRIES) {
+      for (const [cacheKey, entry] of this.readCache) if (entry.expiresAt <= now) this.readCache.delete(cacheKey);
+      if (this.readCache.size >= PUBLISHED_READ_CACHE_MAX_ENTRIES) this.readCache.clear();
+    }
+    const value = read(qb);
+    value.catch(() => this.readCache.delete(key));
+    this.readCache.set(key, { expiresAt: now + PUBLISHED_READ_CACHE_TTL_MS, value });
+    return value;
+  }
+
+  private async countRows(qb: SelectQueryBuilder<EbayPublishedListing>): Promise<number> {
+    const row = await qb.getRawOne<{ cnt: string }>();
+    return Number(row?.cnt) || 0;
   }
 
   private async buildListQuery(
@@ -931,23 +969,23 @@ export class PublishedListingsService {
       qb.andWhere('l.ebayAccountId = :ebayAccountId', { ebayAccountId });
     }
 
-    const total = await qb.getCount();
-    const active = await qb
-      .clone()
-      .andWhere("l.listingStatus = 'active'")
-      .getCount();
-    const ended = await qb
-      .clone()
-      .andWhere("l.listingStatus = 'ended'")
-      .getCount();
-    const outOfStock = await qb
-      .clone()
-      .andWhere("l.listingStatus = 'out_of_stock'")
-      .getCount();
-    const withWarnings = await qb
-      .clone()
-      .andWhere('jsonb_array_length(l.health_flags) > 0')
-      .getCount();
+    // One pass over the scoped rows instead of five full counts.
+    const counts = await this.cachedRead(
+      qb
+        .clone()
+        .select('COUNT(*)', 'total')
+        .addSelect("COUNT(*) FILTER (WHERE l.listing_status = 'active')", 'active')
+        .addSelect("COUNT(*) FILTER (WHERE l.listing_status = 'ended')", 'ended')
+        .addSelect("COUNT(*) FILTER (WHERE l.listing_status = 'out_of_stock')", 'outOfStock')
+        .addSelect('COUNT(*) FILTER (WHERE jsonb_array_length(l.health_flags) > 0)', 'withWarnings'),
+      (aggregate) =>
+        aggregate.getRawOne<{ total: string; active: string; ended: string; outOfStock: string; withWarnings: string }>(),
+    );
+    const total = Number(counts?.total) || 0;
+    const active = Number(counts?.active) || 0;
+    const ended = Number(counts?.ended) || 0;
+    const outOfStock = Number(counts?.outOfStock) || 0;
+    const withWarnings = Number(counts?.withWarnings) || 0;
 
     const lastRow = await this.listingRepo
       .createQueryBuilder('l')
