@@ -257,6 +257,10 @@
 | `status` | varchar | draft, active, discontinued |
 | `createdAt` | timestamptz | Auto-generated |
 | `updatedAt` | timestamptz | Auto-generated |
+| `search_text` | text | Typed-search document, trigger-maintained (2026-11-22) |
+| `search_trgm_count` | integer | Distinct trigrams in `search_text`, trigger-maintained (2026-11-22) |
+
+*Outdated as of 2026-11-22: several rows above (`name`, `images`, `attributes`, `status`) do not match the current entity. The source of truth is `backend/src/catalog-import/entities/catalog-product.entity.ts` and [architecture/DATABASE_SCHEMA.md](architecture/DATABASE_SCHEMA.md).*
 
 #### `catalog_imports` (CatalogImport)
 

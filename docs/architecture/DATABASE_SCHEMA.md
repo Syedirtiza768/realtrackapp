@@ -149,6 +149,17 @@ Grouped by module:
 
 Index `idx_catalog_products_org_vertical_created` on `(organization_id, vertical, "createdAt" DESC, id)` (migration `1792000000000-CatalogProductsOrgVerticalCreatedIndex`, created on production with `CONCURRENTLY` on 2026-11-22). It serves the catalog list's default sort, counts, facets and summary. See [CATALOG_WORKSPACE.md](CATALOG_WORKSPACE.md).
 
+Typed-search columns (migration `1792000000002-CatalogProductsSearchText`, 2026-11-22):
+- `search_text` (text) is the search document: `concat_ws(' ', sku, title, brand, mpn, category_id, category_name, description, part_type, source_file, location, vertical_attributes::text)`.
+- `search_trgm_count` (integer) is its number of distinct pg_trgm trigrams.
+- Both are maintained by the BEFORE INSERT OR UPDATE trigger `trg_catalog_products_search_text` (function `catalog_products_search_text_update()`). The application never writes them.
+- `idx_catalog_products_search_text_trgm` is a GIN `gin_trgm_ops` index on `search_text`.
+- `idx_catalog_products_search_trgm_count` is on `(organization_id, vertical, search_trgm_count)`.
+- The migration opts out of its transaction, backfills in batches of 500, and builds both indexes `CONCURRENTLY`. Revert it with `migration:revert -t none`.
+- `catalog_products` triggers must never be disabled.
+
+See [CATALOG_WORKSPACE.md](CATALOG_WORKSPACE.md) "Typed search".
+
 | Column | Type | Notes |
 |--------|------|-------|
 | `id` | uuid | PK |

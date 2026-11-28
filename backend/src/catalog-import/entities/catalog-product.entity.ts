@@ -306,4 +306,28 @@ export class CatalogProduct {
     select: false,
   })
   searchVector!: string | null;
+
+  /* ── Catalog workspace typed search (managed by DB trigger) ──
+   * trg_catalog_products_search_text keeps both columns current on every
+   * insert and update (migration 1792000000002). The application never writes
+   * them and does not load them. */
+  @Column({
+    name: 'search_text',
+    type: 'text',
+    nullable: true,
+    select: false,
+    insert: false,
+    update: false,
+  })
+  searchText!: string | null;
+
+  @Column({
+    name: 'search_trgm_count',
+    type: 'int',
+    nullable: true,
+    select: false,
+    insert: false,
+    update: false,
+  })
+  searchTrgmCount!: number | null;
 }

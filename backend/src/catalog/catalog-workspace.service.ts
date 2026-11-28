@@ -126,7 +126,33 @@ export type CatalogFacetsResponse = {
   priceRange: { min: number | null; max: number | null };
 };
 
-const SEARCH_SOURCE = `concat_ws(' ', p.sku, p.title, p.brand, p.mpn, p.category_id, p.category_name, p.description, p.part_type, p.source_file, p.location, cast(p.vertical_attributes as text))`;
+/**
+ * The typed-search document: concat_ws(' ', sku, title, brand, mpn,
+ * category_id, category_name, description, part_type, source_file, location,
+ * vertical_attributes::text), stored by trg_catalog_products_search_text
+ * (migration 1792000000002) and indexed with gin_trgm_ops.
+ */
+const SEARCH_SOURCE = `p.search_text`;
+/** Distinct pg_trgm trigrams in SEARCH_SOURCE, stored by the same trigger. */
+const SEARCH_TRGM_COUNT = `p.search_trgm_count`;
+/** Minimum similarity for a fuzzy (non-substring) typed-search match. */
+const SEARCH_SIMILARITY_THRESHOLD = 0.15;
+
+/**
+ * Largest document trigram count that can still reach the similarity
+ * threshold for the query bound to `param`.
+ *
+ * pg_trgm computes similarity(a, b) = c / (|A| + |B| - c), where |A| and |B|
+ * are the distinct trigram counts and c the shared ones (c <= min). The value
+ * is therefore at most min(|A|, |B|) / max(|A|, |B|), so a row with
+ * |doc| > |q| / 0.15 cannot pass `similarity > 0.15`. The bound is computed in
+ * integers (|q| * 20 / 3) so the planner can use the
+ * (organization_id, vertical, search_trgm_count) index, and it allows one extra
+ * trigram: similarity returns float4, and at the exact bound (for example
+ * 3 / 20) float4 rounding lands just above 0.15.
+ */
+const searchTrgmBound = (param: string) =>
+  `(coalesce(array_length(show_trgm(:${param}), 1), 0) * 20) / 3 + 1`;
 const SAFE_PRICE = `p.price`;
 const SAFE_QTY = `coalesce(p.quantity, 0)`;
 const LIVE_PUBLICATION_STATUSES = new Set(['published', 'active', 'out_of_stock']);
@@ -304,11 +330,18 @@ export class CatalogWorkspaceService {
     const offset = dto.offset ?? 0;
     const qb = this.baseQuery(vertical, dto, scope);
     this.applySearchAndFilters(qb, vertical, dto, scope);
-    this.applySort(qb, dto.sort, Boolean(dto.q?.trim()));
-    const [products, total] = await qb
-      .skip(offset)
-      .take(limit)
-      .getManyAndCount();
+    const q = dto.q?.trim();
+    let products: CatalogProduct[];
+    let total: number;
+    if (q && (dto.sort ?? 'relevance') === 'relevance') {
+      ({ products, total } = await this.relevancePage(qb, q, offset, limit));
+    } else {
+      this.applySort(qb, dto.sort, Boolean(q));
+      [products, total] = await qb
+        .skip(offset)
+        .take(limit)
+        .getManyAndCount();
+    }
     const items = await this.hydrateItems(products, scope, vertical);
     return {
       vertical,
@@ -943,14 +976,13 @@ export class CatalogWorkspaceService {
     const q = dto.q?.trim();
     if (q) {
       const contains = `%${this.escapeLike(q)}%`;
+      // Same matches as `ILIKE OR similarity > 0.15` over the full document;
+      // the trigram-count bound only skips rows that cannot pass the
+      // similarity test (see searchTrgmBound), so both arms can use an index.
       qb.andWhere(
-        `(${SEARCH_SOURCE} ILIKE :catalogContains ESCAPE '\\' OR similarity(${SEARCH_SOURCE}, :catalogSearch) > 0.15)`,
+        `(${SEARCH_SOURCE} ILIKE :catalogContains ESCAPE '\\' OR (${SEARCH_TRGM_COUNT} <= ${searchTrgmBound('catalogSearch')} AND similarity(${SEARCH_SOURCE}, :catalogSearch) > ${SEARCH_SIMILARITY_THRESHOLD}))`,
         { catalogContains: contains, catalogSearch: q },
       );
-      qb.addSelect(
-        `CASE WHEN lower(coalesce(p.sku, '')) = lower(:catalogExact) THEN 100 ELSE similarity(${SEARCH_SOURCE}, :catalogSearch) END`,
-        'catalogRelevance',
-      ).setParameter('catalogExact', q);
     }
     this.inFilter(qb, 'p.brand', dto.brands, 'catalogBrands');
     const categories = split(dto.categories);
@@ -1077,10 +1109,10 @@ export class CatalogWorkspaceService {
     sort: CatalogSort | undefined,
     hasQuery: boolean,
   ) {
+    // Relevance with a typed query is ranked by relevancePage(); without a
+    // query "relevance" has nothing to rank and falls through to updatedAt.
     const resolved = sort ?? (hasQuery ? 'relevance' : 'newest');
-    if (resolved === 'relevance' && hasQuery)
-      qb.orderBy('"catalogRelevance"', 'DESC');
-    else if (resolved === 'title_asc')
+    if (resolved === 'title_asc')
       qb.orderBy('p.title', 'ASC', 'NULLS LAST');
     else if (resolved === 'title_desc')
       qb.orderBy('p.title', 'DESC', 'NULLS LAST');
@@ -1093,6 +1125,98 @@ export class CatalogWorkspaceService {
     else if (resolved === 'newest') qb.orderBy('p.createdAt', 'DESC');
     else qb.orderBy('p.updatedAt', 'DESC');
     qb.addOrderBy('p.id', 'ASC');
+  }
+
+  /**
+   * One page of a typed search in relevance order, plus the total.
+   *
+   * Relevance is CASE WHEN lower(coalesce(sku, '')) = lower(q) THEN 100 ELSE
+   * similarity(SEARCH_SOURCE, q) END, ordered DESC with id ASC as tie-break.
+   * Computing similarity costs about 0.5 ms per Fashion row, so a broad term
+   * matching 15k rows used to cost about 8 s just to order the page.
+   *
+   * This returns exactly the same page by computing the score only where it
+   * can matter. Each match has an upper bound on its score:
+   * min(|q|, |doc|) / max(|q|, |doc|) trigrams (100 for an exact SKU). Exact
+   * scores are computed for the `head` rows with the highest bounds. Let kth be
+   * the K-th best of those, where K = offset + limit. The true K-th best score
+   * over all matches is at least kth, so a row whose bound is below kth cannot
+   * reach the page. Every other row (bound >= kth) is scored as well. The
+   * 1.000001 factor covers float4 rounding in similarity(). If the head holds
+   * fewer than K rows, every match is scored. A bound of 0 (no trigrams on
+   * either side, e.g. a query of only punctuation) is exactly pg_trgm's score,
+   * so those rows are not compared at all.
+   */
+  private async relevancePage(
+    qb: SelectQueryBuilder<CatalogProduct>,
+    q: string,
+    offset: number,
+    limit: number,
+  ): Promise<{ products: CatalogProduct[]; total: number }> {
+    const matches = qb
+      .clone()
+      .select('p.id', 'id')
+      .addSelect(`lower(coalesce(p.sku, '')) = lower(:catalogSearch)`, 'sku_exact')
+      .addSelect(SEARCH_TRGM_COUNT, 'nd');
+    const [innerSql, innerParams] = matches.getQueryAndParameters();
+    const params: unknown[] = [...(innerParams as unknown[])];
+    const bind = (value: unknown) => {
+      params.push(value);
+      return `$${params.length}`;
+    };
+    const k = Math.max(offset + limit, 1);
+    const query = bind(q);
+    // ub = 0 means the query or the document has no trigrams, where pg_trgm
+    // returns exactly 0 without comparing anything, so it is not computed.
+    const score = (alias: string) =>
+      `CASE WHEN ${alias}.sku_exact THEN 100 WHEN ${alias}.ub = 0 THEN 0::real ELSE similarity(p.search_text, ${query}) END`;
+    const sql = `
+      WITH m AS MATERIALIZED (${innerSql}),
+      nq AS (SELECT coalesce(array_length(show_trgm(${query}), 1), 0) AS n),
+      b AS MATERIALIZED (
+        SELECT m.id, m.sku_exact,
+          CASE WHEN m.sku_exact THEN 100::float8
+               WHEN m.nd IS NULL THEN 1::float8
+               WHEN nq.n = 0 OR m.nd = 0 THEN 0::float8
+               ELSE least(nq.n, m.nd)::float8 / greatest(nq.n, m.nd) END AS ub
+        FROM m CROSS JOIN nq
+      ),
+      head AS MATERIALIZED (
+        SELECT id, sku_exact, ub FROM b ORDER BY ub DESC, id LIMIT ${bind(k + 250)}
+      ),
+      head_r AS MATERIALIZED (
+        SELECT h.id, ${score('h')} AS r
+        FROM head h JOIN catalog_products p ON p.id = h.id
+      ),
+      kth AS (SELECT r FROM head_r ORDER BY r DESC LIMIT 1 OFFSET ${bind(k - 1)}),
+      tail_r AS (
+        SELECT b.id, ${score('b')} AS r
+        FROM b JOIN catalog_products p ON p.id = b.id
+        WHERE NOT EXISTS (SELECT 1 FROM head WHERE head.id = b.id)
+          AND b.ub * 1.000001 >= coalesce((SELECT r FROM kth), -1)
+      ),
+      ranked AS (SELECT id, r FROM head_r UNION ALL SELECT id, r FROM tail_r)
+      SELECT (SELECT count(*) FROM m)::int AS total,
+        coalesce((
+          SELECT json_agg(pg.id ORDER BY pg.r DESC, pg.id ASC)
+          FROM (SELECT id, r FROM ranked ORDER BY r DESC, id ASC
+                OFFSET ${bind(offset)} LIMIT ${bind(limit)}) pg
+        ), '[]'::json) AS ids`;
+    const [row] = await this.productRepo.query<
+      Array<{ total: number; ids: string[] }>
+    >(sql, params);
+    const ids = row?.ids ?? [];
+    const total = Number(row?.total ?? 0);
+    if (!ids.length) return { products: [], total };
+    const loaded = await this.productRepo
+      .createQueryBuilder('p')
+      .where('p.id IN (:...relevanceIds)', { relevanceIds: ids })
+      .getMany();
+    const byId = new Map(loaded.map((product) => [product.id, product]));
+    const products = ids
+      .map((id) => byId.get(id))
+      .filter((product): product is CatalogProduct => Boolean(product));
+    return { products, total };
   }
 
   private inFilter(

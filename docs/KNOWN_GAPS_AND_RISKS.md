@@ -315,6 +315,27 @@ const listings = await this.listingRepo.find({
 
 ---
 
+### R16: Typed search depends on `catalog_products` triggers (2026-11-22)
+
+**Status**: Accepted
+**Likelihood**: Low
+**Impact**: Medium
+
+**Issue**: The typed catalog search reads `search_text` and `search_trgm_count`. The trigger `trg_catalog_products_search_text` fills those columns. Rows written with triggers disabled have no search document and are missing from typed search:
+- `ALTER TABLE ... DISABLE TRIGGER`
+- `session_replication_role = replica`, used by some bulk loads and restores
+
+Separately, a Postgres, Alpine/musl or locale upgrade can change how pg_trgm splits words, which leaves the stored trigram counts stale.
+
+**Mitigation**:
+- Never disable triggers on `catalog_products`. After a raw restore, run the backfill step of migration `1792000000002`.
+- After an image or locale upgrade, set `search_trgm_count = NULL` in batches (the trigger recomputes it) and `REINDEX CONCURRENTLY idx_catalog_products_search_text_trgm`.
+- Drift check, which must return 0: `SELECT count(*) FROM catalog_products WHERE search_text IS DISTINCT FROM concat_ws(' ', sku, title, brand, mpn, category_id, category_name, description, part_type, source_file, location, vertical_attributes::text)`.
+
+**Remaining cost**: one- and two-character queries have no indexable trigram and scan the organisation's rows (about 1.5 s on Fashion).
+
+---
+
 ### R13: Uncommitted Working Tree
 
 **Status**: Needs triage  

@@ -20,6 +20,13 @@ describe('CatalogWorkspaceService', () => {
       setParameters: jest.fn().mockReturnThis(),
       select: jest.fn().mockReturnThis(),
       addSelect: jest.fn().mockReturnThis(),
+      clone: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      addOrderBy: jest.fn().mockReturnThis(),
+      skip: jest.fn().mockReturnThis(),
+      take: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([]),
+      getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
       getOne: jest.fn().mockResolvedValue(undefined),
       getQueryAndParameters: jest.fn(() => ['select 1', [] as unknown[]]),
     };
@@ -84,6 +91,63 @@ describe('CatalogWorkspaceService', () => {
     await expect(
       service.search(user, 'business_industrial', { teamIds: 'team-foreign' }),
     ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('matches typed search on the stored document with an index-friendly similarity bound', async () => {
+    const { service, queryBuilder } = makeService({ manageAllTeams: true });
+    await service.search(user, 'fashion', { q: ' dress ', sort: 'title_asc' });
+    const predicate = (
+      queryBuilder.andWhere.mock.calls as Array<[string, Record<string, unknown>?]>
+    ).find(([sql]) => sql.includes('ILIKE :catalogContains'));
+    expect(predicate).toBeDefined();
+    const [sql, params] = predicate as [string, Record<string, unknown>];
+    expect(sql).toContain('p.search_text ILIKE :catalogContains');
+    expect(sql).toContain(
+      'p.search_trgm_count <= (coalesce(array_length(show_trgm(:catalogSearch), 1), 0) * 20) / 3 + 1',
+    );
+    expect(sql).toContain('similarity(p.search_text, :catalogSearch) > 0.15');
+    expect(sql).not.toContain('concat_ws');
+    expect(params).toEqual({ catalogContains: '%dress%', catalogSearch: 'dress' });
+    // A non-relevance sort keeps the plain paged query.
+    expect(queryBuilder.orderBy).toHaveBeenCalledWith('p.title', 'ASC', 'NULLS LAST');
+    expect(queryBuilder.getManyAndCount).toHaveBeenCalled();
+  });
+
+  it('ranks a typed search with the bounded exact relevance query and keeps its order', async () => {
+    const { service, queryBuilder, productRepo } = makeService({
+      manageAllTeams: true,
+    });
+    queryBuilder.getQueryAndParameters.mockReturnValue([
+      'select inner',
+      ['org-2', 'fashion'],
+    ]);
+    productRepo.query.mockResolvedValue([{ total: 7, ids: ['b', 'a'] }]);
+    queryBuilder.getMany.mockResolvedValue([{ id: 'a' }, { id: 'b' }]);
+    jest
+      .spyOn(service as never, 'hydrateItems')
+      .mockImplementation((async (products: unknown) => products) as never);
+    const result = await service.search(user, 'fashion', {
+      q: 'dress',
+      offset: 10,
+      limit: 5,
+    });
+    expect(result.total).toBe(7);
+    expect(result.items.map((item) => item.id)).toEqual(['b', 'a']);
+    expect(queryBuilder.getManyAndCount).not.toHaveBeenCalled();
+    expect(queryBuilder.addSelect).toHaveBeenCalledWith(
+      `lower(coalesce(p.sku, '')) = lower(:catalogSearch)`,
+      'sku_exact',
+    );
+    const [sql, params] = productRepo.query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('WITH m AS MATERIALIZED (select inner)');
+    expect(sql).toContain(
+      'CASE WHEN h.sku_exact THEN 100 WHEN h.ub = 0 THEN 0::real ELSE similarity(p.search_text, $3) END',
+    );
+    expect(sql).toContain('WHEN nq.n = 0 OR m.nd = 0 THEN 0::float8');
+    expect(sql).toContain('b.ub * 1.000001 >= coalesce((SELECT r FROM kth), -1)');
+    expect(sql).toContain('json_agg(pg.id ORDER BY pg.r DESC, pg.id ASC)');
+    // inner params, then q, head size (K + 250), K - 1, offset, limit.
+    expect(params).toEqual(['org-2', 'fashion', 'dress', 265, 14, 10, 5]);
   });
 
   it('omits marketplace facets when the caller has no accessible stores', async () => {
