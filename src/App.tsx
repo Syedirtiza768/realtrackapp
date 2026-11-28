@@ -1,95 +1,105 @@
-import SingleListingPipeline from './components/listings/SingleListingPipeline';
+import { lazy, Suspense, type ReactNode } from 'react';
 import { BrowserRouter as Router, Routes, Route, Outlet, Link, Navigate, useLocation } from 'react-router-dom';
+import { Loader2 } from 'lucide-react';
 import Shell from './components/layout/Shell';
 import { AuthProvider } from './components/auth/AuthContext';
 import { BrandingProvider } from './contexts/BrandingContext';
 import { QueryProvider } from './lib/queryProvider';
-
-// Pages
-import Dashboard from './components/dashboard/Dashboard';
-
-import ListingEditor from './components/listings/ListingEditor';
-import RevisionHistory from './components/listings/RevisionHistory';
-
-import FitmentManager from './components/fitment/FitmentManager';
-
-import CatalogManager from './components/catalog/CatalogManager';
-import BulkActionsPage from './components/catalog/BulkActionsPage';
-import CatalogImportDashboard from './components/catalog-import/CatalogImportDashboard';
-import CatalogMotorsFiltersPage from './components/catalog-import/CatalogMotorsFiltersPage';
-import EbayPublishWizardPage from './components/catalog/EbayPublishWizardPage';
-import CatalogProductDetail from './components/catalog/CatalogProductDetail';
-import IngestionManager from './components/ingestion/IngestionManager';
-import OrdersPage from './components/orders/OrdersPage';
-import SettingsPage from './components/settings/SettingsPage';
-import EbayStoresSettingsPage from './components/settings/EbayStoresSettingsPage';
-import EbayPolicyMappingPage from './components/settings/EbayPolicyMappingPage';
-import EbayStoreDetailPage from './components/settings/EbayStoreDetailPage';
-import NotificationsPage from './components/notifications/NotificationsPage';
-import SkuDetailPage from './components/sku/SkuDetailPage';
-import AutomationRulesPage from './components/automation/AutomationRulesPage';
-import TemplateManagerPage from './components/templates/TemplateManagerPage';
-import AuditTrailPage from './components/audit/AuditTrailPage';
-import MotorsDashboard from './components/motors/MotorsDashboard';
-import MotorsProductDetail from './components/motors/MotorsProductDetail';
-import ReviewQueue from './components/motors/ReviewQueue';
-import AIUploadWizard from './components/motors/AIUploadWizard';
-import PipelinePage from './components/pipeline/PipelinePage';
-import EbayPreviewPage from './components/preview/EbayPreviewPage';
-import InventoryManager from './components/inventory/InventoryManager';
-import StockWorkspace from './components/stock/StockWorkspace';
-import InventoryListingEditor from './components/inventory/InventoryListingEditor';
-import LoginPage from './components/auth/LoginPage';
-import RegisterPage from './components/auth/RegisterPage';
-import ForgotPasswordPage from './components/auth/ForgotPasswordPage';
 import ProtectedRoute from './components/auth/ProtectedRoute';
-import EbayOAuthCallback from './components/channels/EbayOAuthCallback';
-import PrivacyPolicy from './components/legal/PrivacyPolicy';
-import VinListingsPage from './components/fitment/VinListingsPage';
-import ClientSettingsPage from './components/settings/ClientSettingsPage';
-import UsersAdminPage from './components/settings/UsersAdminPage';
-import TeamsAdminPage from './components/settings/TeamsAdminPage';
-import PermissionsPage from './components/settings/PermissionsPage';
-import AiRoutingDashboardPage from './components/settings/AiRoutingDashboardPage';
-import PublishedListingsPage from './components/published-listings/PublishedListingsPage';
-import PublishedListingDetailPage from './components/published-listings/PublishedListingDetailPage';
-import ImageDrivePage from './components/image-drive/ImageDrivePage';
 import LandingPage from './components/landing/LandingPage';
-import FashionLoginPage from './components/fashion/FashionLoginPage';
-import FashionShell from './components/fashion/FashionShell';
-import FashionDashboardPage from './components/fashion/FashionDashboardPage';
-import FashionCatalogPage from './components/fashion/FashionCatalogPage';
-import FashionImportPage from './components/fashion/FashionImportPage';
-import FashionReviewPage from './components/fashion/FashionReviewPage';
-import FashionStoresPage from './components/fashion/FashionStoresPage';
-import FashionUsersPage from './components/fashion/FashionUsersPage';
-import FashionListingEditorPage from './components/fashion/FashionListingEditorPage';
-import FashionIncidentsPage from './components/fashion/FashionIncidentsPage';
-import FashionSettingsPage from './components/fashion/FashionSettingsPage';
-import FashionPasswordPage from './components/fashion/FashionPasswordPage';
-import FashionCapturePage from './components/fashion/FashionCapturePage';
-import FashionIntakePage from './components/fashion/FashionIntakePage';
-import FashionActivityReportPage from './components/fashion/FashionActivityReportPage';
+
+// Every route screen is a separate chunk so a visit downloads only the code it renders.
+// The shell, providers, auth guard and landing page stay in the entry bundle.
+const Dashboard = lazy(() => import('./components/dashboard/Dashboard'));
+
+const ListingEditor = lazy(() => import('./components/listings/ListingEditor'));
+const RevisionHistory = lazy(() => import('./components/listings/RevisionHistory'));
+const SingleListingPipeline = lazy(() => import('./components/listings/SingleListingPipeline'));
+
+const FitmentManager = lazy(() => import('./components/fitment/FitmentManager'));
+
+const CatalogManager = lazy(() => import('./components/catalog/CatalogManager'));
+const BulkActionsPage = lazy(() => import('./components/catalog/BulkActionsPage'));
+const CatalogImportDashboard = lazy(() => import('./components/catalog-import/CatalogImportDashboard'));
+const CatalogMotorsFiltersPage = lazy(() => import('./components/catalog-import/CatalogMotorsFiltersPage'));
+const EbayPublishWizardPage = lazy(() => import('./components/catalog/EbayPublishWizardPage'));
+const CatalogProductDetail = lazy(() => import('./components/catalog/CatalogProductDetail'));
+const IngestionManager = lazy(() => import('./components/ingestion/IngestionManager'));
+const OrdersPage = lazy(() => import('./components/orders/OrdersPage'));
+const SettingsPage = lazy(() => import('./components/settings/SettingsPage'));
+const EbayStoresSettingsPage = lazy(() => import('./components/settings/EbayStoresSettingsPage'));
+const EbayPolicyMappingPage = lazy(() => import('./components/settings/EbayPolicyMappingPage'));
+const EbayStoreDetailPage = lazy(() => import('./components/settings/EbayStoreDetailPage'));
+const NotificationsPage = lazy(() => import('./components/notifications/NotificationsPage'));
+const SkuDetailPage = lazy(() => import('./components/sku/SkuDetailPage'));
+const AutomationRulesPage = lazy(() => import('./components/automation/AutomationRulesPage'));
+const TemplateManagerPage = lazy(() => import('./components/templates/TemplateManagerPage'));
+const AuditTrailPage = lazy(() => import('./components/audit/AuditTrailPage'));
+const MotorsDashboard = lazy(() => import('./components/motors/MotorsDashboard'));
+const MotorsProductDetail = lazy(() => import('./components/motors/MotorsProductDetail'));
+const ReviewQueue = lazy(() => import('./components/motors/ReviewQueue'));
+const AIUploadWizard = lazy(() => import('./components/motors/AIUploadWizard'));
+const PipelinePage = lazy(() => import('./components/pipeline/PipelinePage'));
+const EbayPreviewPage = lazy(() => import('./components/preview/EbayPreviewPage'));
+const InventoryManager = lazy(() => import('./components/inventory/InventoryManager'));
+const StockWorkspace = lazy(() => import('./components/stock/StockWorkspace'));
+const InventoryListingEditor = lazy(() => import('./components/inventory/InventoryListingEditor'));
+const LoginPage = lazy(() => import('./components/auth/LoginPage'));
+const RegisterPage = lazy(() => import('./components/auth/RegisterPage'));
+const ForgotPasswordPage = lazy(() => import('./components/auth/ForgotPasswordPage'));
+const EbayOAuthCallback = lazy(() => import('./components/channels/EbayOAuthCallback'));
+const PrivacyPolicy = lazy(() => import('./components/legal/PrivacyPolicy'));
+const VinListingsPage = lazy(() => import('./components/fitment/VinListingsPage'));
+const ClientSettingsPage = lazy(() => import('./components/settings/ClientSettingsPage'));
+const UsersAdminPage = lazy(() => import('./components/settings/UsersAdminPage'));
+const TeamsAdminPage = lazy(() => import('./components/settings/TeamsAdminPage'));
+const PermissionsPage = lazy(() => import('./components/settings/PermissionsPage'));
+const AiRoutingDashboardPage = lazy(() => import('./components/settings/AiRoutingDashboardPage'));
+const PublishedListingsPage = lazy(() => import('./components/published-listings/PublishedListingsPage'));
+const PublishedListingDetailPage = lazy(() => import('./components/published-listings/PublishedListingDetailPage'));
+const ImageDrivePage = lazy(() => import('./components/image-drive/ImageDrivePage'));
+const FashionLoginPage = lazy(() => import('./components/fashion/FashionLoginPage'));
+const FashionShell = lazy(() => import('./components/fashion/FashionShell'));
+const FashionDashboardPage = lazy(() => import('./components/fashion/FashionDashboardPage'));
+const FashionCatalogPage = lazy(() => import('./components/fashion/FashionCatalogPage'));
+const FashionImportPage = lazy(() => import('./components/fashion/FashionImportPage'));
+const FashionReviewPage = lazy(() => import('./components/fashion/FashionReviewPage'));
+const FashionStoresPage = lazy(() => import('./components/fashion/FashionStoresPage'));
+const FashionUsersPage = lazy(() => import('./components/fashion/FashionUsersPage'));
+const FashionListingEditorPage = lazy(() => import('./components/fashion/FashionListingEditorPage'));
+const FashionIncidentsPage = lazy(() => import('./components/fashion/FashionIncidentsPage'));
+const FashionSettingsPage = lazy(() => import('./components/fashion/FashionSettingsPage'));
+const FashionPasswordPage = lazy(() => import('./components/fashion/FashionPasswordPage'));
+const FashionCapturePage = lazy(() => import('./components/fashion/FashionCapturePage'));
+const FashionIntakePage = lazy(() => import('./components/fashion/FashionIntakePage'));
+const FashionActivityReportPage = lazy(() => import('./components/fashion/FashionActivityReportPage'));
 // Fashion "Publish next N" pipeline: batch progress + compliance review queue.
-import FashionBatchesPage from './components/fashion/batch/FashionBatchesPage';
-import FashionComplianceReviewPage from './components/fashion/batch/FashionComplianceReviewPage';
-import BusinessIndustrialLoginPage from './components/business-industrial/BusinessIndustrialLoginPage';
-import BusinessIndustrialShell from './components/business-industrial/BusinessIndustrialShell';
-import BusinessIndustrialDashboardPage from './components/business-industrial/BusinessIndustrialDashboardPage';
-import BusinessIndustrialCatalogWorkspacePage from './components/business-industrial/BusinessIndustrialCatalogWorkspacePage';
-import BusinessIndustrialListingsPage from './components/business-industrial/BusinessIndustrialListingsPage';
-import BusinessIndustrialImportPage from './components/business-industrial/BusinessIndustrialImportPage';
-import BusinessIndustrialImageIntakeWorkspacePage from './components/business-industrial/BusinessIndustrialImageIntakeWorkspacePage';
-import BusinessIndustrialReviewPage from './components/business-industrial/BusinessIndustrialReviewPage';
-import BusinessIndustrialStoresPage from './components/business-industrial/BusinessIndustrialStoresPage';
-import BusinessIndustrialIncidentsPage from './components/business-industrial/BusinessIndustrialIncidentsPage';
-import BusinessIndustrialUsersPage from './components/business-industrial/BusinessIndustrialUsersPage';
-import PartsSearchShell from './components/parts-search/PartsSearchShell';
-import PartsSearchHomePage from './components/parts-search/PartsSearchHomePage';
-import PartsSearchResultsPage from './components/parts-search/PartsSearchResultsPage';
-import PartsSearchPartPage from './components/parts-search/PartsSearchPartPage';
-import PartsSearchDemandPage from './components/parts-search/PartsSearchDemandPage';
-import type { ReactNode } from 'react';
+const FashionBatchesPage = lazy(() => import('./components/fashion/batch/FashionBatchesPage'));
+const FashionComplianceReviewPage = lazy(() => import('./components/fashion/batch/FashionComplianceReviewPage'));
+const BusinessIndustrialLoginPage = lazy(() => import('./components/business-industrial/BusinessIndustrialLoginPage'));
+const BusinessIndustrialShell = lazy(() => import('./components/business-industrial/BusinessIndustrialShell'));
+const BusinessIndustrialDashboardPage = lazy(() => import('./components/business-industrial/BusinessIndustrialDashboardPage'));
+const BusinessIndustrialCatalogWorkspacePage = lazy(() => import('./components/business-industrial/BusinessIndustrialCatalogWorkspacePage'));
+const BusinessIndustrialListingsPage = lazy(() => import('./components/business-industrial/BusinessIndustrialListingsPage'));
+const BusinessIndustrialImportPage = lazy(() => import('./components/business-industrial/BusinessIndustrialImportPage'));
+const BusinessIndustrialImageIntakeWorkspacePage = lazy(() => import('./components/business-industrial/BusinessIndustrialImageIntakeWorkspacePage'));
+const BusinessIndustrialReviewPage = lazy(() => import('./components/business-industrial/BusinessIndustrialReviewPage'));
+const BusinessIndustrialStoresPage = lazy(() => import('./components/business-industrial/BusinessIndustrialStoresPage'));
+const BusinessIndustrialIncidentsPage = lazy(() => import('./components/business-industrial/BusinessIndustrialIncidentsPage'));
+const BusinessIndustrialUsersPage = lazy(() => import('./components/business-industrial/BusinessIndustrialUsersPage'));
+const PartsSearchShell = lazy(() => import('./components/parts-search/PartsSearchShell'));
+const PartsSearchHomePage = lazy(() => import('./components/parts-search/PartsSearchHomePage'));
+const PartsSearchResultsPage = lazy(() => import('./components/parts-search/PartsSearchResultsPage'));
+const PartsSearchPartPage = lazy(() => import('./components/parts-search/PartsSearchPartPage'));
+const PartsSearchDemandPage = lazy(() => import('./components/parts-search/PartsSearchDemandPage'));
+
+function RouteFallback() {
+    return (
+        <div className="flex min-h-[40vh] items-center justify-center text-slate-500 dark:text-slate-400">
+            <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+    );
+}
 
 function AutoPartsRoutes() {
     const { pathname, search, hash } = useLocation();
@@ -105,7 +115,7 @@ function AutoPartsRoutes() {
         </ProtectedRoute>
     );
 
-    return <Routes>
+    return <Suspense fallback={<RouteFallback />}><Routes>
         <Route index element={protect('dashboard.view', <Dashboard />)} />
         <Route path="listings/new" element={protect('listings.create', <SingleListingPipeline />)} />
         <Route path="listings/:id/edit" element={protect('listings.update', <ListingEditor />)} />
@@ -148,7 +158,7 @@ function AutoPartsRoutes() {
         <Route path="image-drive" element={protect('image_drive.view', <ImageDrivePage />)} />
         <Route path="preview" element={protect('listings.view', <EbayPreviewPage />)} />
         <Route path="*" element={<div className="p-10 text-center text-slate-500 dark:text-slate-400">Auto Parts page not found</div>} />
-    </Routes>;
+    </Routes></Suspense>;
 }
 
 function LegacyAutoPartsRedirect() {
@@ -168,6 +178,7 @@ function App() {
         <AuthProvider>
         <BrandingProvider>
         <Router>
+            <Suspense fallback={<RouteFallback />}>
             <Routes>
                 {/* Omni Core's root is public; protected workspaces remain vertical-specific. */}
                 <Route path="/" element={<LandingPage />} />
@@ -202,7 +213,7 @@ function App() {
                     (dashboard.view) so exactly the Auto Parts users can open it. */}
                 <Route path="/parts-search" element={
                     <ProtectedRoute permissions={['dashboard.view']} loginPath="/parts-search/login">
-                        <PartsSearchShell><Outlet /></PartsSearchShell>
+                        <PartsSearchShell><Suspense fallback={<RouteFallback />}><Outlet /></Suspense></PartsSearchShell>
                     </ProtectedRoute>
                 }>
                     <Route index element={<PartsSearchHomePage />} />
@@ -215,7 +226,7 @@ function App() {
                 {/* Fashion routes use a separate shell and permission boundary. */}
                 <Route path="/fashion" element={
                     <ProtectedRoute permissions={['fashion.access']} loginPath="/fashion/login">
-                        <FashionShell><Outlet /></FashionShell>
+                        <FashionShell><Suspense fallback={<RouteFallback />}><Outlet /></Suspense></FashionShell>
                     </ProtectedRoute>
                 }>
                    <Route index element={<ProtectedRoute permissions={['fashion.dashboard.view']} loginPath="/fashion/login"><FashionDashboardPage /></ProtectedRoute>} />
@@ -247,7 +258,7 @@ function App() {
                     child screen renders inside its shell at the vertical URL. */}
                 <Route path="/business-industrial" element={
                     <ProtectedRoute permissions={['business_industrial.access']} loginPath="/business-industrial/login">
-                        <BusinessIndustrialShell><Outlet /></BusinessIndustrialShell>
+                        <BusinessIndustrialShell><Suspense fallback={<RouteFallback />}><Outlet /></Suspense></BusinessIndustrialShell>
                     </ProtectedRoute>
                 }>
                    <Route index element={<ProtectedRoute permissions={['business_industrial.dashboard.view']} loginPath="/business-industrial/login"><BusinessIndustrialDashboardPage /></ProtectedRoute>} />
@@ -265,6 +276,7 @@ function App() {
                 </Route>
                 <Route path="*" element={<LegacyAutoPartsRedirect />} />
             </Routes>
+            </Suspense>
         </Router>
         </BrandingProvider>
         </AuthProvider>

@@ -177,6 +177,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     try {
+      // Requested alongside /auth/me so the two round trips overlap instead of queueing.
+      const sidebarRequest = fetchWithAuth<{ visibleModules: string[] }>(
+        `${API}/rbac/roles/sidebar-config/me`,
+      ).catch(() => null);
       const data = await fetchWithAuth<MeResponse>(`${API}/auth/me`);
       setUser(data.user);
       persistUser(data.user);
@@ -195,14 +199,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         persistSidebarModules([]);
         return;
       }
-      // Fetch sidebar module visibility
-      try {
-        const sidebar = await fetchWithAuth<{ visibleModules: string[] }>(
-          `${API}/rbac/roles/sidebar-config/me`,
-        );
+      const sidebar = await sidebarRequest;
+      if (sidebar) {
         setSidebarModules(sidebar.visibleModules);
         persistSidebarModules(sidebar.visibleModules);
-      } catch {
+      } else {
         // Sidebar config fetch failed; use empty (all modules visible by default)
         setSidebarModules([]);
         persistSidebarModules([]);
