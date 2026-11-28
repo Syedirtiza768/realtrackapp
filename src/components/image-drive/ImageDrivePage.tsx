@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   FolderPlus,
@@ -59,6 +59,12 @@ export default function ImageDrivePage() {
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  // The search runs after typing pauses, not once per keystroke.
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearchQuery(searchQuery), 300);
+    return () => window.clearTimeout(timer);
+  }, [searchQuery]);
   const [isSearching, setIsSearching] = useState(false);
   const [sortBy, setSortBy] = useState<SortOption>('name');
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
@@ -88,9 +94,9 @@ export default function ImageDrivePage() {
   });
 
   const { data: searchResults, isLoading: searchLoading } = useQuery({
-    queryKey: ['image-drive-search', searchQuery],
-    queryFn: () => searchDrive(searchQuery, 1, 100),
-    enabled: isSearching && searchQuery.trim().length >= 2,
+    queryKey: ['image-drive-search', debouncedSearchQuery],
+    queryFn: () => searchDrive(debouncedSearchQuery, 1, 100),
+    enabled: isSearching && debouncedSearchQuery.trim().length >= 2,
   });
 
   const sortedFolders = [...folders].sort((a, b) => {

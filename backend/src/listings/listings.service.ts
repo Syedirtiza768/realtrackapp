@@ -929,34 +929,25 @@ export class ListingsService {
       return { totalRecords: 0, uniqueSkus: 0, files: 0 };
     }
 
-    // totalRecords
-    const qb = this.listingRepo.createQueryBuilder('r');
-    if (storeFilter) qb.andWhere(storeFilter.sql, storeFilter.params);
-    if (verticalFilter) qb.andWhere(verticalFilter.sql, verticalFilter.params);
-    const totalRecords = await qb.getCount();
-
-    // uniqueSkus
-    const skuQb = this.listingRepo
+    // The three figures come from one pass over the scoped rows (they were three scans).
+    const aggregate = this.listingRepo
       .createQueryBuilder('r')
-      .select('COUNT(DISTINCT r.customLabelSku)', 'uniqueSkus');
-    if (storeFilter) skuQb.where(storeFilter.sql, storeFilter.params);
+      .select('COUNT(*)', 'totalRecords')
+      .addSelect('COUNT(DISTINCT r.customLabelSku)', 'uniqueSkus')
+      .addSelect('COUNT(DISTINCT r.sourceFileName)', 'files');
+    if (storeFilter) aggregate.where(storeFilter.sql, storeFilter.params);
     if (verticalFilter)
-      skuQb.andWhere(verticalFilter.sql, verticalFilter.params);
-    const uniqueRow = await skuQb.getRawOne<{ uniqueSkus: string }>();
-
-    // files
-    const fileQb = this.listingRepo
-      .createQueryBuilder('r')
-      .select('COUNT(DISTINCT r.sourceFileName)', 'files');
-    if (storeFilter) fileQb.where(storeFilter.sql, storeFilter.params);
-    if (verticalFilter)
-      fileQb.andWhere(verticalFilter.sql, verticalFilter.params);
-    const fileRow = await fileQb.getRawOne<{ files: string }>();
+      aggregate.andWhere(verticalFilter.sql, verticalFilter.params);
+    const row = await aggregate.getRawOne<{
+      totalRecords: string;
+      uniqueSkus: string;
+      files: string;
+    }>();
 
     return {
-      totalRecords,
-      uniqueSkus: Number(uniqueRow?.uniqueSkus ?? 0),
-      files: Number(fileRow?.files ?? 0),
+      totalRecords: Number(row?.totalRecords ?? 0),
+      uniqueSkus: Number(row?.uniqueSkus ?? 0),
+      files: Number(row?.files ?? 0),
     };
   }
 

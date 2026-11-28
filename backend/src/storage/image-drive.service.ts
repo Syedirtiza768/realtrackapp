@@ -69,35 +69,40 @@ export class ImageDriveService {
   // ─── Folder operations ───────────────────────────────────────
 
   async listFolders(): Promise<DriveFolderEntry[]> {
-    const folders = await this.folderRepo.find({
-      order: { name: 'ASC' },
-    });
+    // One statement. The former loop ran one asset query per folder (about 3,300
+    // sequential round trips on production). The lateral subquery keeps the same
+    // rules: live assets only, oldest first, four thumbnails per folder.
+    const rows = await this.folderRepo.query<
+      Array<
+        Omit<DriveFolderEntry, 'thumbnailUrls'> & {
+          thumbs: Array<[string | null, string]>;
+        }
+      >
+    >(
+      `SELECT f.id, f.name, f.s3_prefix AS "s3Prefix",
+              f.linked_part_number AS "linkedPartNumber",
+              f.file_count AS "fileCount", f.total_size_bytes AS "totalSizeBytes",
+              f.created_at AS "createdAt", f.updated_at AS "updatedAt", t.thumbs
+       FROM image_drive_folders f
+       LEFT JOIN LATERAL (
+         SELECT COALESCE(json_agg(json_build_array(a.s3_key_thumb, a.cdn_url) ORDER BY a.created_at), '[]') AS thumbs
+         FROM (
+           SELECT s3_key_thumb, cdn_url, created_at
+           FROM image_drive_assets
+           WHERE folder_id = f.id AND deleted_at IS NULL
+           ORDER BY created_at ASC
+           LIMIT 4
+         ) a
+       ) t ON true
+       ORDER BY f.name ASC`,
+    );
 
-    const entries: DriveFolderEntry[] = [];
-    for (const folder of folders) {
-      const thumbs = await this.assetRepo.find({
-        where: { folderId: folder.id },
-        order: { createdAt: 'ASC' },
-        take: 4,
-        withDeleted: false,
-      });
-
-      entries.push({
-        id: folder.id,
-        name: folder.name,
-        s3Prefix: folder.s3Prefix,
-        linkedPartNumber: folder.linkedPartNumber,
-        fileCount: folder.fileCount,
-        totalSizeBytes: folder.totalSizeBytes,
-        createdAt: folder.createdAt,
-        updatedAt: folder.updatedAt,
-        thumbnailUrls: thumbs.map((t) =>
-          t.s3KeyThumb ? this.storageService.getCdnUrl(t.s3KeyThumb) : t.cdnUrl,
-        ),
-      });
-    }
-
-    return entries;
+    return rows.map(({ thumbs, ...folder }) => ({
+      ...folder,
+      thumbnailUrls: thumbs.map(([s3Key, cdnUrl]) =>
+        s3Key ? this.storageService.getCdnUrl(s3Key) : cdnUrl,
+      ),
+    }));
   }
 
   async createFolder(
