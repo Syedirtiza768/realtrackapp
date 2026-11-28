@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-28 — Released: origin/main `286f89a9` is live (backend `main-286f89a9-20261128`, frontend `main-286f89a9-20261128`)
+
+- Production now runs origin/main `286f89a9`. Both images are overlays on the previous live images, with the same compose file list plus one image override. Rollback images are kept: `realtrackapp-backend:token-keepalive-20261127` and `realtrackapp-frontend:pipeline-fix-20261126`. Details and verification: `docs/context/CURRENT_STATE.md`.
+- Brought onto main as `286f89a9`: commit `2f862686` (eBay native OAuth access-token keepalive every 20 minutes). It had been live as an overlay since 2026-11-27 but was missing from main, so a deploy of main would have removed it.
+
 ## 2026-11-28 — Page load and data-fetch performance pass (frontend bundle, auth bootstrap, catalog search)
 
 - Why: production timings were far too high. The main JavaScript bundle was 2.53 MB (648 KB gzip) and every visit downloaded all of it before the app rendered. From the server's 7-day slow-request log (requests of 2 s or more): Fashion catalog search averaged 54 s (max 154 s), its facets 54 s, its suggest 20 s (17 calls), its summary 7 s; `GET /api/published-listings` took 237 s once and its summary 50 s; `GET /api/listings/search` averaged 19 s; image-drive folders averaged 4.6 s. Measured from a workstation outside AWS at a round-trip time of about 0.28 s, a new HTTPS connection took about 0.6 s of TCP and TLS handshakes, 0.85 s to first byte.
